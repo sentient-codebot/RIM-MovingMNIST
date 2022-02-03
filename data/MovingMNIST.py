@@ -74,9 +74,9 @@ class MovingMNIST(data.Dataset):
             return new_data
 
         if self.train:
-            data = self.train_data[index, :]
+            data = self.train_data[index, :]/255.
         else:
-            data = self.test_data[index, :]
+            data = self.test_data[index, :]/255.
 
         if self.transform is not None:
             data = _transform_time(seq)

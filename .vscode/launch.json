@@ -58,7 +58,7 @@
             ]
         },
         {
-            "name": "train bball mini (cuda)",
+            "name": "train mmnist mini (cuda)",
             "type": "python",
             "request": "launch",
             "program": "${file}",
@@ -108,9 +108,9 @@
                 "--batch_size",
                 "16",
                 "--epochs",
-                "2",
+                "10",
                 "--should_resume",
-                "False",
+                "True",
                 "--batch_frequency_to_log_heatmaps",
                 "1",
                 "--model_persist_frequency",

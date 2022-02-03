@@ -49,7 +49,8 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args)
         hidden = hidden.detach()
         optimizer.zero_grad()
         loss = 0.
-        with autograd.detect_anomaly():
+        # with autograd.detect_anomaly():
+        if True:
             for frame in range(data.shape[1]-1):
                 output, hidden = model(data[:, frame, :, :, :], hidden)
 
