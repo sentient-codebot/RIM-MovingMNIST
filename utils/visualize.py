@@ -44,10 +44,12 @@ def main():
     data = torch.rand((64,51,1,64,64))
     pred = torch.rand((64,50,1,64,64))
     error = torch.randn((100,1)) + torch.arange(100).unsqueeze(1)
-    # plot_frames(pred, data, 10, 20, 6)
+    _t = torch.load('./../data.pt')
+    _t = _t.unsqueeze(2)
+    plot_frames(_t, _t, 0, 18, 6)
     # plot_curve(error)
-    epoch_losses = torch.load('../epoch_losses.pt')
-    plot_curve(epoch_losses)
+    # epoch_losses = torch.load('../epoch_losses.pt')
+    # plot_curve(epoch_losses)
 
 
 if __name__ == "__main__":

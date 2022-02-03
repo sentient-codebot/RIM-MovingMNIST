@@ -34,10 +34,8 @@ def get_grad_norm(model):
     total_norm = total_norm ** 0.5
     return total_norm
 
-epoch_loss_log = VectorLog(args.folder_log, "epoch_loss")
 def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args):
     grad_norm_log = VectorLog(args.folder_log, "grad_norm")
-    
 
     model.train()
 
@@ -47,11 +45,19 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args)
 
         start_time = time()
         data = data.to(args.device)
+        data = data.unsqueeze(2).float()
         hidden = hidden.detach()
         optimizer.zero_grad()
         loss = 0.
-        with autograd.detect_anomaly(False):
-            pass
+        with autograd.detect_anomaly():
+            for frame in range(data.shape[1]-1):
+                output, hidden = model(data[:, frame, :, :, :], hidden)
+
+                nan_hook(output)
+                nan_hook(hidden)
+                target = data[:, frame+1, :, :, :]
+                loss += loss_fn(output, target)
+                
             loss.backward()
             grad_norm = get_grad_norm(model)
             grad_norm_log.append(grad_norm)
@@ -72,21 +78,20 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args)
         epoch_loss += loss.detach()
         
     epoch_loss = epoch_loss / (batch_idx+1)
-    epoch_loss_log.append(epoch_loss)
-    epoch_loss_log.save()
-    return train_batch_idx
+    return train_batch_idx, epoch_loss
 
 def main():
     args = argument_parser()
 
     print(args)
-    logbook = LogBook(configs = args)
+    logbook = LogBook(config = args)
 
     if not args.should_resume:
         make_dir(f"{args.folder_log}/checkpoints")
+        make_dir(f"{args.folder_log}/model")
         logbook.write_message_logs(message=f"Saving args to {args.folder_log}/model/args")
         torch.save({
-            "args": var(args)
+            "args": vars(args)
         }, f"{args.folder_log}/model/args")
 
     cudable = torch.cuda.is_available()
@@ -94,8 +99,8 @@ def main():
 
     model, optimizer, start_epoch, train_batch_idx = setup_model(args=args, logbook=logbook)
 
-    train_set = MovingMNIST(root='.data', train=True, download=True)
-    test_set = MovingMNIST(root='.data', train=False, download=True)
+    train_set = MovingMNIST(root='./data', train=True, download=True)
+    test_set = MovingMNIST(root='./data', train=False, download=True)
 
     train_loader = torch.utils.data.DataLoader(
         dataset=train_set,
@@ -108,9 +113,9 @@ def main():
         shuffle=False
     )
     transfer_loader = test_loader
-
+    epoch_loss_log = VectorLog(args.folder_log, "epoch_loss")
     for epoch in range(start_epoch, args.epochs+1):
-        train_batch_idx = train(
+        train_batch_idx, epoch_loss = train(
             model = model,
             train_loader = train_loader,
             optimizer = optimizer,
@@ -119,6 +124,8 @@ def main():
             train_batch_idx = train_batch_idx,
             args = args
         )
+        epoch_loss_log.append(epoch_loss)
+        epoch_loss_log.save()
 
         # no test done here
 

@@ -35,10 +35,9 @@ class MovingMNIST(data.Dataset):
     training_file = 'moving_mnist_train.pt'
     test_file = 'moving_mnist_test.pt'
 
-    def __init__(self, root, train=True, split=1000, transform=None, target_transform=None, download=False):
+    def __init__(self, root, train=True, split=1000, transform=None, download=False):
         self.root = os.path.expanduser(root)
         self.transform = transform
-        self.target_transform = target_transform
         self.split = split
         self.train = train  # training set or test set
 
@@ -75,16 +74,14 @@ class MovingMNIST(data.Dataset):
             return new_data
 
         if self.train:
-            seq, target = self.train_data[index, :10], self.train_data[index, 10:]
+            data = self.train_data[index, :]
         else:
-            seq, target = self.test_data[index, :10], self.test_data[index, 10:]
+            data = self.test_data[index, :]
 
         if self.transform is not None:
-            seq = _transform_time(seq)
-        if self.target_transform is not None:
-            target = _transform_time(target)
+            data = _transform_time(seq)
 
-        return seq, target
+        return data
 
     def __len__(self):
         if self.train:
@@ -151,6 +148,4 @@ class MovingMNIST(data.Dataset):
         fmt_str += '    Root Location: {}\n'.format(self.root)
         tmp = '    Transforms (if any): '
         fmt_str += '{0}{1}\n'.format(tmp, self.transform.__repr__().replace('\n', '\n' + ' ' * len(tmp)))
-        tmp = '    Target Transforms (if any): '
-        fmt_str += '{0}{1}'.format(tmp, self.target_transform.__repr__().replace('\n', '\n' + ' ' * len(tmp)))
         return fmt_str
