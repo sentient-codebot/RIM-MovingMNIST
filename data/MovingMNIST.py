@@ -35,11 +35,12 @@ class MovingMNIST(data.Dataset):
     training_file = 'moving_mnist_train.pt'
     test_file = 'moving_mnist_test.pt'
 
-    def __init__(self, root, train=True, split=1000, transform=None, download=False):
+    def __init__(self, root, train=True, split=1000, transform=None, download=False, mini=False):
         self.root = os.path.expanduser(root)
         self.transform = transform
         self.split = split
         self.train = train  # training set or test set
+        self.mini = mini
 
         if download:
             self.download()
@@ -85,9 +86,15 @@ class MovingMNIST(data.Dataset):
 
     def __len__(self):
         if self.train:
-            return len(self.train_data)
+            if not self.mini:
+                return len(self.train_data)
+            else:
+                return len(self.train_data) // 10
         else:
-            return len(self.test_data)
+            if not self.mini:
+                return len(self.test_data)
+            else:
+                return len(self.test_data) // 10
 
     def _check_exists(self):
         return os.path.exists(os.path.join(self.root, self.processed_folder, self.training_file)) and \

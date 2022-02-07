@@ -10,8 +10,10 @@ from argument_parser import argument_parser
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
 from utils.visualize import VectorLog
+from utils.visualize import HeatmapLog
 from data.MovingMNIST import MovingMNIST
 from box import Box
+from tqdm import tqdm
 
 import os 
 from os import listdir
@@ -36,11 +38,17 @@ def get_grad_norm(model):
 
 def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args):
     grad_norm_log = VectorLog(args.folder_log, "grad_norm")
+    inp_key_log = HeatmapLog(args.folder_log, "inp key mat")
+    inp_value_log = HeatmapLog(args.folder_log, "inp value mat")
+    inp_query_log = HeatmapLog(args.folder_log, "inp query mat")
+    comm_key_log = HeatmapLog(args.folder_log, "comm key mat")
+    comm_value_log = HeatmapLog(args.folder_log, "comm value mat")
+    comm_query_log = HeatmapLog(args.folder_log, "comm query mat")
 
     model.train()
 
     epoch_loss = torch.tensor(0.).to(args.device)
-    for batch_idx, data in enumerate(train_loader):
+    for batch_idx, data in enumerate(tqdm(train_loader)):
         hidden = model.init_hidden(data.shape[0]).to(args.device)
 
         start_time = time()
@@ -52,7 +60,7 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args)
         # with autograd.detect_anomaly():
         if True:
             for frame in range(data.shape[1]-1):
-                output, hidden = model(data[:, frame, :, :, :], hidden)
+                output, hidden, inp_ctx, comm_ctx = model(data[:, frame, :, :, :], hidden)
 
                 nan_hook(output)
                 nan_hook(hidden)
@@ -75,6 +83,20 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args)
             "time_taken": time() - start_time,
         }
         logbook.write_metric_logs(metrics=metrics)
+
+        # if True:
+        if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0:
+            """log intermediate variables here"""
+            pass
+            # TODO plot inp_ctx 
+            inp_key_log.plot(inp_ctx[0], epoch) # happens in the first batch
+            inp_value_log.plot(inp_ctx[1], epoch)
+            inp_query_log.plot(inp_ctx[2], epoch)
+            pass
+            # TODO plot comm_ctx
+            comm_key_log.plot(comm_ctx[0], epoch)
+            comm_value_log.plot(comm_ctx[1], epoch)
+            comm_query_log.plot(comm_ctx[2], epoch)
 
         epoch_loss += loss.detach()
         
@@ -100,7 +122,7 @@ def main():
 
     model, optimizer, start_epoch, train_batch_idx = setup_model(args=args, logbook=logbook)
 
-    train_set = MovingMNIST(root='./data', train=True, download=True)
+    train_set = MovingMNIST(root='./data', train=True, download=True, mini=True)
     test_set = MovingMNIST(root='./data', train=False, download=True)
 
     train_loader = torch.utils.data.DataLoader(

@@ -248,14 +248,14 @@ class BallModel(nn.Module):
         encoded_input = self.Encoder(x)
         # encoded_input = clamp(encoded_input)
         self.nan_hook(encoded_input)
-        h_new, foo, bar = self.rim_model(encoded_input, h_prev)
+        h_new, foo, bar, inp_ctx, comm_ctx = self.rim_model(encoded_input, h_prev)
         # h_new = clamp(h_new)
         self.nan_hook(h_new)
         dec_out_ = self.Decoder(h_new.view(h_new.shape[0],-1))
         # dec_out_ = clamp(dec_out_)
         self.nan_hook(dec_out_)
 
-        return dec_out_, h_new
+        return dec_out_, h_new, inp_ctx, comm_ctx
 
     def init_hidden(self, batch_size): 
         # assert False, "don't call this"

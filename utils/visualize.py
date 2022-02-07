@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import torch
+from .util import make_dir
 
 def plot_frames(batch_of_pred, batch_of_target, start_frame, end_frame, batch_idx):
     '''
@@ -26,6 +27,43 @@ def plot_curve(loss):
     fig, axs = plt.subplots(1,1)
     axs.plot(loss)
     plt.savefig(f"loss_curve.png",dpi=120)
+
+def plot_mat(mat, mat_name, epoch):
+    if mat.dim() == 3:
+        mat_list = [mat[idx_unit,:,:].squeeze().cpu() for idx_unit in range(mat.shape[0])] 
+    else:
+        mat_list = [mat.cpu()]
+    fig, axs = plt.subplots(1, len(mat_list), figsize=(2*len(mat_list), 2))
+    for idx_mat, mat in enumerate(mat_list):
+        if len(mat_list) == 1:
+            axs.imshow(mat, cmap='hot', interpolation='nearest')
+        else:
+            axs[idx_mat].imshow(mat, cmap='hot', interpolation='nearest')
+    fig.suptitle(mat_name.replace("_", " ")+ f' in epoch [{epoch}]')
+    plt.savefig(mat_name + f'_epoch_{epoch}.png', dpi=120)
+    plt.close()
+
+class HeatmapLog:
+    def __init__(self, folder_log, mat_name):
+        make_dir(f"{folder_log}/intermediate_vars/"+mat_name)
+        self.save_folder = f"{folder_log}/intermediate_vars/"+mat_name
+        self.mat_name = mat_name
+
+    def plot(self, mat, epoch):
+        if mat.dim() == 3:
+            mat_list = [mat[idx_unit,:,:].squeeze().cpu() for idx_unit in range(mat.shape[0])] 
+        else:
+            mat_list = [mat.cpu()]
+        fig, axs = plt.subplots(1, len(mat_list), figsize=(2*len(mat_list), 2))
+        for idx_mat, mat in enumerate(mat_list):
+            if len(mat_list) == 1:
+                axs.imshow(mat, cmap='hot', interpolation='nearest')
+            else:
+                axs[idx_mat].imshow(mat, cmap='hot', interpolation='nearest')
+        fig.suptitle(self.mat_name.replace("_", " ")+ f' in epoch [{epoch}]')
+        plt.savefig(self.save_folder + '/' + self.mat_name.replace(' ','_') + f'_epoch_{epoch}.png', dpi=120)
+        plt.close()
+
 
 class VectorLog:
     def __init__(self, save_path, var_name):

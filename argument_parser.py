@@ -71,6 +71,9 @@ def argument_parser():
                         help='Number of training epochs after which model is to '
                              'be persisted. -1 means that the model is not'
                              'persisted')
+    parser.add_argument('--log_intm_frequency', type=int, default=10,
+                        metavar="Frequency at which we log the intermediate variables of the model",
+                        help='Just type in a positive integer')
     parser.add_argument('--batch_frequency_to_log_heatmaps', type=int, default=-1,
                         metavar='Frequency at which the heatmaps are persisted',
                         help='Number of training batches after which we will persit the '

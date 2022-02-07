@@ -222,7 +222,17 @@ class RIMCell(nn.Module):
         attention_probs = self.input_dropout(nn.Softmax(dim = -1)(attention_scores))
         inputs = torch.matmul(attention_probs, value_layer) * mask_.unsqueeze(2)
 
-        return inputs, mask_
+        """
+        parameters: 
+        key_mat: input_size x key_size -> input 2 key
+        value_mat: input_size x val_size -> input 2 value
+        query_mat: num_units x hidden_size x key_size -> hidden 2 query
+        """
+        key_mat = get_mat(self.key).transpose(0,1).detach() # TODO detach?
+        value_mat = get_mat(self.value).transpose(0,1).detach()
+        query_mat = self.query.w.detach()
+
+        return inputs, mask_, key_mat, value_mat, query_mat
 
     def communication_attention(self, h, mask):
         """
@@ -263,8 +273,18 @@ class RIMCell(nn.Module):
         context_layer = context_layer.view(*new_context_layer_shape)
         context_layer = self.comm_attention_output(context_layer)
         context_layer = context_layer + h
-        
-        return context_layer
+
+        """
+        parameters: 
+        key_mat: num_units x hidden_size x (key_size*num_heads) -> hidden 2 key
+        value_mat: num_units x hidden_size x (val_size*num_heads==hidden_size*num_heads) -> hidden 2 (value==new hidden_state)
+        query_mat: num_units x hidden_size x (key_size*num_heads) -> hidden 2 query
+        """
+        key_mat = self.key_.w.detach()
+        value_mat = self.value_.w.detach()
+        query_mat = self.query_.w.detach()
+
+        return context_layer, key_mat, value_mat, query_mat
 
     def nan_hook(self, out):
         nan_mask = torch.isnan(out)
@@ -290,7 +310,7 @@ class RIMCell(nn.Module):
         x = torch.cat((x.unsqueeze(1), null_input), dim = 1)
 
         # Compute input attention
-        inputs, mask = self.input_attention_mask(x, hs)
+        inputs, mask, *inp_ctx = self.input_attention_mask(x, hs)
         h_old = hs * 1.0
         if cs is not None:
             c_old = cs * 1.0
@@ -309,15 +329,15 @@ class RIMCell(nn.Module):
         h_new = blocked_grad.apply(hs, mask)
 
         # Compute communication attention
-        h_new = self.communication_attention(h_new, mask.squeeze(2))
+        h_new, *comm_ctx = self.communication_attention(h_new, mask.squeeze(2))
         self.nan_hook(h_new)
 
         hs = mask * h_new + (1 - mask) * h_old
         if cs is not None:
             cs = mask * cs + (1 - mask) * c_old
-            return hs, cs, None
+            return hs, cs, None, inp_ctx, comm_ctx
         self.nan_hook(hs)
-        return hs, None, None
+        return hs, None, None, inp_ctx, comm_ctx
 
 
 class RIM(nn.Module):
@@ -626,3 +646,8 @@ class Interpolate(nn.Module):
     def forward(self, x):
         x = self.interp(x, scale_factor=self.scale_factor, mode=self.mode, align_corners=False)
         return x
+
+def get_mat(linear_layer):
+    '''get linear transformation matrix in a linear layer'''
+    p_list = [p for p in linear_layer.parameters()]
+    return p_list[0]
