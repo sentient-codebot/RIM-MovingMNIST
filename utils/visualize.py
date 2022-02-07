@@ -27,7 +27,7 @@ def plot_curve(loss):
     axs.plot(loss)
     plt.savefig(f"loss_curve.png",dpi=120)
 
-class VectorLog:
+class ScalarLog:
     def __init__(self, save_path, var_name):
         self.save_path = save_path
         self.var_name = var_name+".pt"
