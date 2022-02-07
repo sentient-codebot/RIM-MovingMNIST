@@ -65,7 +65,7 @@ class HeatmapLog:
         plt.close()
 
 
-class VectorLog:
+class ScalarLog:
     def __init__(self, save_path, var_name):
         self.save_path = save_path
         self.var_name = var_name+".pt"

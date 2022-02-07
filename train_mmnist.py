@@ -9,7 +9,7 @@ from networks import BallModel
 from argument_parser import argument_parser
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
-from utils.visualize import VectorLog
+from utils.visualize import ScalarLog
 from utils.visualize import HeatmapLog
 from data.MovingMNIST import MovingMNIST
 from box import Box
@@ -37,7 +37,7 @@ def get_grad_norm(model):
     return total_norm
 
 def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args):
-    grad_norm_log = VectorLog(args.folder_log, "grad_norm")
+    grad_norm_log = ScalarLog(args.folder_log, "grad_norm")
     inp_key_log = HeatmapLog(args.folder_log, "inp key mat")
     inp_value_log = HeatmapLog(args.folder_log, "inp value mat")
     inp_query_log = HeatmapLog(args.folder_log, "inp query mat")
@@ -136,7 +136,7 @@ def main():
         shuffle=False
     )
     transfer_loader = test_loader
-    epoch_loss_log = VectorLog(args.folder_log, "epoch_loss")
+    epoch_loss_log = ScalarLog(args.folder_log, "epoch_loss")
     for epoch in range(start_epoch, args.epochs+1):
         train_batch_idx, epoch_loss = train(
             model = model,

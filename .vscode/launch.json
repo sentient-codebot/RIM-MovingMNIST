@@ -118,7 +118,7 @@
                 "--model_persist_frequency",
                 "1",
                 "--log_intm_frequency",
-                "1"
+                "10"
             ]
         },
         {
@@ -180,7 +180,7 @@
                 "--model_persist_frequency",
                 "1",
                 "--log_intm_frequency",
-                "1"
+                "10"
             ]
         }
     ]
