@@ -73,7 +73,7 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args)
                 # ----- logging -----
                 encoded_log.append(encoded_input[-1]) # only take the last sample in a batch
                 attn_score_cat = torch.cat(
-                    (inp_ctx[2][-1].flatten(),comm_ctx[2][-1].flatten())
+                    (inp_ctx[3][-1].flatten(),comm_ctx[3][-1].flatten())
                 )
                 attn_score_log.append(attn_score_cat)
                 hidden_log.append(hidden[-1].flatten())

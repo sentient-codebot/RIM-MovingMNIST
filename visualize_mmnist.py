@@ -51,7 +51,7 @@ def test(model, test_loader, args):
         prediction = torch.zeros_like(data)
 
         for frame in range(data.shape[1]-1):
-            output, hidden = model(data[:, frame, :, :, :], hidden)
+            output, hidden, *_ = model(data[:, frame, :, :, :], hidden)
 
             nan_hook(output)
             nan_hook(hidden)

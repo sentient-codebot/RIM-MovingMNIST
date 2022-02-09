@@ -8,7 +8,7 @@
             "console": "integratedTerminal",
             "args": [
                 "--folder_log",
-                "logs/SchemaBlocks_5_2_MMnist_0.0007_num_inp_heads_1_ver_0/intermediate_vars"
+                "logs/SchemaBlocks_5_5_MMnist_0.0007_num_inp_heads_1_ver_0/intermediate_vars"
             ]
         },
         {
@@ -30,7 +30,7 @@
                 "--lr",
                 "0.0007",
                 "--num_units",
-                "2",
+                "5",
                 "--k",
                 "1",
                 "--num_input_heads",
@@ -101,7 +101,7 @@
                 "--input_key_size",
                 "64",
                 "--input_value_size",
-                "2040",
+                "400",
                 "--input_query_size",
                 "64",
                 "--input_dropout",
@@ -117,17 +117,17 @@
                 "--comm_dropout",
                 "0.1",
                 "--experiment_name",
-                "MMnist",
+                "MMNIST_complete",
                 "--batch_size",
                 "64",
                 "--epochs",
-                "50",
+                "200",
                 "--should_resume",
                 "False",
                 "--batch_frequency_to_log_heatmaps",
                 "10",
                 "--model_persist_frequency",
-                "1",
+                "5",
                 "--log_intm_frequency",
                 "10"
             ]
@@ -179,11 +179,11 @@
                 "--comm_dropout",
                 "0.1",
                 "--experiment_name",
-                "MMnist",
+                "MMNIST_mini",
                 "--batch_size",
                 "16",
                 "--epochs",
-                "10",
+                "100",
                 "--should_resume",
                 "True",
                 "--batch_frequency_to_log_heatmaps",

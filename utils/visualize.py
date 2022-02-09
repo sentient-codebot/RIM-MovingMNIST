@@ -62,14 +62,18 @@ class HeatmapLog:
             mat_list = [mat.cpu()]
         w_h_ratio = (mat_list[0].shape[1]/mat_list[0].shape[0])
         if w_h_ratio >= 1:
-            fig, axs = plt.subplots(1, len(mat_list), figsize=(2*len(mat_list)*w_h_ratio, 2))
+            fig, axs = plt.subplots(1, len(mat_list), figsize=(0.5+2*len(mat_list)*w_h_ratio, 2))
+            cbar_ax = fig.add_axes([0.90, 0.15, 0.03, 0.7]) # left bottom width height
         else:
-            fig, axs = plt.subplots(1, len(mat_list), figsize=(2*len(mat_list), 2/(w_h_ratio)))
+            fig, axs = plt.subplots(1, len(mat_list), figsize=(2*len(mat_list), 0.5+2/(w_h_ratio)))
+            cbar_ax = fig.add_axes([0.10, 0.8, 0.7, 0.05]) # left bottom width height
         for idx_mat, mat in enumerate(mat_list):
             if len(mat_list) == 1:
-                axs.imshow(mat, cmap='hot', interpolation='nearest')
+                im=axs.imshow(mat, cmap='Greys', interpolation='nearest')
             else:
-                axs[idx_mat].imshow(mat, cmap='hot', interpolation='nearest')
+                im=axs[idx_mat].imshow(mat, cmap='Greys', interpolation='nearest')
+        
+        fig.colorbar(im, cax=cbar_ax)
         fig.suptitle(self.mat_name.replace("_", " ")+ f' in epoch [{epoch}]')
         plt.savefig(self.save_folder + '/' + self.mat_name + f'_epoch_{epoch}.png', dpi=120)
         plt.close()

@@ -211,6 +211,12 @@ class RIMCell(nn.Module):
         attention_scores = torch.mean(attention_scores, dim = 1)
         mask_ = torch.zeros(x.size(0), self.num_units).to(self.device)
 
+        '''
+        attention_scores:   (batch_size, num_heads, num_units, 2) 
+                            --> mean in dim-1 
+                            --> (batch_size, num_units, 2)
+        '''
+
         not_null_scores = attention_scores[:,:, 0]
         topk1 = torch.topk(not_null_scores,self.k,  dim = 1)
         row_index = np.arange(x.size(0))
@@ -259,6 +265,10 @@ class RIMCell(nn.Module):
         attention_scores = attention_scores / math.sqrt(self.comm_key_size)
         self.inf_hook(attention_scores)
         attention_probs = nn.Softmax(dim=-1)(attention_scores)
+
+        """
+        attention_scores: (batch_size, num_heads, num_units, num_units)
+        """
         
         mask = [mask for _ in range(attention_probs.size(1))]
         mask = torch.stack(mask, dim = 1)
