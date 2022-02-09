@@ -141,7 +141,7 @@ def main():
 
     model, optimizer, start_epoch, train_batch_idx = setup_model(args=args, logbook=logbook)
 
-    train_set = MovingMNIST(root='./data', train=True, download=True, mini=True)
+    train_set = MovingMNIST(root='./data', train=True, download=True, mini=False)
     test_set = MovingMNIST(root='./data', train=False, download=True)
 
     train_loader = torch.utils.data.DataLoader(

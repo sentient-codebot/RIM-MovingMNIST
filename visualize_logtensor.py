@@ -70,7 +70,7 @@ def main():
     gradnorm_plot()
 
     # TODO plot per-epoch tensors
-    for epoch_idx in range(1,11):
+    for epoch_idx in range(10,110,10):
         encoded_plot(epoch_idx)
         attn_plot(epoch_idx)
 
