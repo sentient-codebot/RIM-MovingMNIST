@@ -9,7 +9,7 @@ from networks import BallModel
 from argument_parser import argument_parser
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
-from utils.visualize import ScalarLog
+from utils.visualize import ScalarLog, VectorLog
 from utils.visualize import HeatmapLog
 from data.MovingMNIST import MovingMNIST
 from box import Box
@@ -37,18 +37,27 @@ def get_grad_norm(model):
     return total_norm
 
 def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args):
-    grad_norm_log = ScalarLog(args.folder_log, "grad_norm")
-    inp_key_log = HeatmapLog(args.folder_log, "inp key mat")
-    inp_value_log = HeatmapLog(args.folder_log, "inp value mat")
-    inp_query_log = HeatmapLog(args.folder_log, "inp query mat")
-    comm_key_log = HeatmapLog(args.folder_log, "comm key mat")
-    comm_value_log = HeatmapLog(args.folder_log, "comm value mat")
-    comm_query_log = HeatmapLog(args.folder_log, "comm query mat")
+    intm_log_folder = args.folder_log + '/intermediate_vars'
+    inp_key_log = HeatmapLog(intm_log_folder, "inp key mat")
+    inp_value_log = HeatmapLog(intm_log_folder, "inp value mat")
+    inp_query_log = HeatmapLog(intm_log_folder, "inp query mat")
+    comm_key_log = HeatmapLog(intm_log_folder, "comm key mat")
+    comm_value_log = HeatmapLog(intm_log_folder, "comm value mat")
+    comm_query_log = HeatmapLog(intm_log_folder, "comm query mat")
+
+    grad_norm_log = ScalarLog(intm_log_folder, "grad_norm")
+    encoded_log = VectorLog(intm_log_folder, "encoded", epoch=epoch) # TODO put them in a folder
+    attn_score_log = VectorLog(intm_log_folder, "attn_score", epoch=epoch)
+    hidden_log = VectorLog(intm_log_folder, "hidden_state", epoch=epoch)
 
     model.train()
 
     epoch_loss = torch.tensor(0.).to(args.device)
     for batch_idx, data in enumerate(tqdm(train_loader)):
+        attn_score_log.reset()
+        encoded_log.reset()
+        hidden_log.reset()
+
         hidden = model.init_hidden(data.shape[0]).to(args.device)
 
         start_time = time()
@@ -60,8 +69,15 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args)
         # with autograd.detect_anomaly():
         if True:
             for frame in range(data.shape[1]-1):
-                output, hidden, inp_ctx, comm_ctx = model(data[:, frame, :, :, :], hidden)
-
+                output, hidden, inp_ctx, comm_ctx, encoded_input = model(data[:, frame, :, :, :], hidden)
+                # ----- logging -----
+                encoded_log.append(encoded_input[-1]) # only take the last sample in a batch
+                attn_score_cat = torch.cat(
+                    (inp_ctx[2][-1].flatten(),comm_ctx[2][-1].flatten())
+                )
+                attn_score_log.append(attn_score_cat)
+                hidden_log.append(hidden[-1].flatten())
+                # ----- ------- -----
                 nan_hook(output)
                 nan_hook(hidden)
                 target = data[:, frame+1, :, :, :]
@@ -84,19 +100,22 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args)
         }
         logbook.write_metric_logs(metrics=metrics)
 
-        # if True:
-        if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0:
-            """log intermediate variables here"""
-            pass
-            # TODO plot inp_ctx 
-            inp_key_log.plot(inp_ctx[0], epoch) # happens in the first batch
-            inp_value_log.plot(inp_ctx[1], epoch)
-            inp_query_log.plot(inp_ctx[2], epoch)
-            pass
-            # TODO plot comm_ctx
-            comm_key_log.plot(comm_ctx[0], epoch)
-            comm_value_log.plot(comm_ctx[1], epoch)
-            comm_query_log.plot(comm_ctx[2], epoch)
+    if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0:
+        """log intermediate variables here"""
+        pass
+        # TODO plot inp_ctx 
+        inp_key_log.plot(inp_ctx[0], epoch) # happens in the first batch
+        inp_value_log.plot(inp_ctx[1], epoch)
+        inp_query_log.plot(inp_ctx[2], epoch)
+        pass
+        # TODO plot comm_ctx
+        comm_key_log.plot(comm_ctx[0], epoch)
+        comm_value_log.plot(comm_ctx[1], epoch)
+        comm_query_log.plot(comm_ctx[2], epoch)
+        # TODO SAVE logged vectors
+        encoded_log.save()
+        attn_score_log.save()
+        hidden_log.save()
 
         epoch_loss += loss.detach()
         
@@ -136,7 +155,7 @@ def main():
         shuffle=False
     )
     transfer_loader = test_loader
-    epoch_loss_log = ScalarLog(args.folder_log, "epoch_loss")
+    epoch_loss_log = ScalarLog(args.folder_log+'/intermediate_vars', "epoch_loss")
     for epoch in range(start_epoch, args.epochs+1):
         train_batch_idx, epoch_loss = train(
             model = model,

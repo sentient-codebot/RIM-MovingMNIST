@@ -89,12 +89,12 @@ class MovingMNIST(data.Dataset):
             if not self.mini:
                 return len(self.train_data)
             else:
-                return len(self.train_data) // 10
+                return min(len(self.train_data) // 50 , 100)
         else:
             if not self.mini:
                 return len(self.test_data)
             else:
-                return len(self.test_data) // 10
+                return min(len(self.test_data) // 50 , 100)
 
     def _check_exists(self):
         return os.path.exists(os.path.join(self.root, self.processed_folder, self.training_file)) and \

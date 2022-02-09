@@ -1,6 +1,17 @@
 {
     "configurations": [
         {
+            "name": "visualize logged tensor",
+            "type": "python",
+            "request": "launch",
+            "program": "./visualize_logtensor.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--folder_log",
+                "logs/SchemaBlocks_5_2_MMnist_0.0007_num_inp_heads_1_ver_0/intermediate_vars"
+            ]
+        },
+        {
             "name": "minimal: only for debugging code",
             "type": "python",
             "request": "launch",

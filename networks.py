@@ -255,7 +255,7 @@ class BallModel(nn.Module):
         # dec_out_ = clamp(dec_out_)
         self.nan_hook(dec_out_)
 
-        return dec_out_, h_new, inp_ctx, comm_ctx
+        return dec_out_, h_new, inp_ctx, comm_ctx, encoded_input
 
     def init_hidden(self, batch_size): 
         # assert False, "don't call this"

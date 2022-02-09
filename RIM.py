@@ -232,7 +232,7 @@ class RIMCell(nn.Module):
         value_mat = get_mat(self.value).transpose(0,1).detach()
         query_mat = self.query.w.detach()
 
-        return inputs, mask_, key_mat, value_mat, query_mat
+        return inputs, mask_, key_mat, value_mat, query_mat, attention_scores
 
     def communication_attention(self, h, mask):
         """
@@ -284,7 +284,7 @@ class RIMCell(nn.Module):
         value_mat = self.value_.w.detach()
         query_mat = self.query_.w.detach()
 
-        return context_layer, key_mat, value_mat, query_mat
+        return context_layer, key_mat, value_mat, query_mat, attention_scores
 
     def nan_hook(self, out):
         nan_mask = torch.isnan(out)
