@@ -64,15 +64,17 @@ def main():
     gradnorm_plot = TensorVisualizer(args.folder_log, 'grad_norm')
     encoded_plot = TensorVisualizer(args.folder_log, "encoded")
     attn_plot = TensorVisualizer(args.folder_log, "attn_score")
+    hidden_plot = TensorVisualizer(args.folder_log, "hidden_state")
     # testmat_plot = TensorVisualizer(args.folder_log, "test_mat")
     # TODO plot all-epoch tensors
     loss_plot()
-    gradnorm_plot()
 
     # TODO plot per-epoch tensors
     for epoch_idx in range(10,110,10):
+        gradnorm_plot(epoch_idx)
         encoded_plot(epoch_idx)
         attn_plot(epoch_idx)
+        hidden_plot(epoch_idx)
 
 if __name__ == "__main__":
     main()
