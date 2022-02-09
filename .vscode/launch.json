@@ -1,7 +1,7 @@
 {
     "configurations": [
         {
-            "name": "train bball complete (cuda)",
+            "name": "train mmnist complete (cuda)",
             "type": "python",
             "request": "launch",
             "program": "${file}",
@@ -44,17 +44,17 @@
                 "--comm_dropout",
                 "0.1",
                 "--experiment_name",
-                "Curtain",
+                "MMNIST_complete",
                 "--batch_size",
                 "64",
                 "--epochs",
-                "50",
+                "200",
                 "--should_resume",
                 "False",
                 "--batch_frequency_to_log_heatmaps",
                 "10",
                 "--model_persist_frequency",
-                "1"
+                "10"
             ]
         },
         {
@@ -70,7 +70,7 @@
                 "--transfer_dataset",
                 "balls3curtain64.h5",
                 "--hidden_size",
-                "10",
+                "50",
                 "--should_save_csv",
                 "False",
                 "--lr",
@@ -104,17 +104,17 @@
                 "--comm_dropout",
                 "0.1",
                 "--experiment_name",
-                "Curtain",
+                "MMNIST_mini",
                 "--batch_size",
                 "16",
                 "--epochs",
-                "10",
+                "100",
                 "--should_resume",
-                "True",
+                "False",
                 "--batch_frequency_to_log_heatmaps",
                 "1",
                 "--model_persist_frequency",
-                "1"
+                "5"
             ]
         },
         {
