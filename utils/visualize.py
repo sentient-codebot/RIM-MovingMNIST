@@ -66,7 +66,8 @@ class HeatmapLog:
             cbar_ax = fig.add_axes([0.90, 0.15, 0.03, 0.7]) # left bottom width height
         else:
             fig, axs = plt.subplots(1, len(mat_list), figsize=(2*len(mat_list), 0.75+2/(w_h_ratio)))
-            cbar_ax = fig.add_axes([0.10, 0.8, 0.7, 0.05]) # left bottom width height
+            cbar_ax = fig.add_axes([0.10, 0.85, 0.8, 0.03]) # left bottom width height
+            char_ax.orientation = 'horizontal'
         for idx_mat, mat in enumerate(mat_list):
             if len(mat_list) == 1:
                 im=axs.imshow(mat, cmap='Greys', interpolation='nearest')
