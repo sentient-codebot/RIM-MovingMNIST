@@ -74,7 +74,7 @@
             ]
         },
         {
-            "name": "train bball complete (cuda)",
+            "name": "train mmnist complete (cuda)",
             "type": "python",
             "request": "launch",
             "program": "${file}",
