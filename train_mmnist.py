@@ -9,7 +9,7 @@ from networks import BallModel
 from argument_parser import argument_parser
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
-from utils.visualize import ScalarLog
+from utils.visualize import ScalarLog, VectorLog, HeatmapLog
 from data.MovingMNIST import MovingMNIST
 from box import Box
 
@@ -35,7 +35,7 @@ def get_grad_norm(model):
     return total_norm
 
 def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args):
-    grad_norm_log = ScalarLog(args.folder_log, "grad_norm")
+    grad_norm_log = ScalarLog(args.folder_log, "grad_norm", epoch=epoch)
 
     model.train()
 
@@ -77,7 +77,12 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args)
         logbook.write_metric_logs(metrics=metrics)
 
         epoch_loss += loss.detach()
-        
+
+    if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0:
+        """log intermediate variables here"""
+        pass
+        # SAVE logged vectors
+
     epoch_loss = epoch_loss / (batch_idx+1)
     return train_batch_idx, epoch_loss
 
@@ -98,7 +103,7 @@ def main():
     cudable = torch.cuda.is_available()
     args.device = torch.device("cuda" if cudable else "cpu")
 
-    model, optimizer, start_epoch, train_batch_idx = setup_model(args=args, logbook=logbook)
+    model, optimizer, start_epoch, train_batch_idx, epoch_loss_log = setup_model(args=args, logbook=logbook)
 
     train_set = MovingMNIST(root='./data', train=True, download=True)
     test_set = MovingMNIST(root='./data', train=False, download=True)
@@ -114,7 +119,7 @@ def main():
         shuffle=False
     )
     transfer_loader = test_loader
-    epoch_loss_log = ScalarLog(args.folder_log, "epoch_loss")
+
     for epoch in range(start_epoch, args.epochs+1):
         train_batch_idx, epoch_loss = train(
             model = model,
@@ -137,6 +142,7 @@ def main():
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': epoch_loss,
+                'epoch_loss_log': epoch_loss_log
             }, f"{args.folder_log}/checkpoints/{epoch}")
         
 def setup_model(args, logbook):
@@ -144,6 +150,7 @@ def setup_model(args, logbook):
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     start_epoch = 1
     train_batch_idx = 0
+    epoch_loss_log = ScalarLog(args.folder_log+'/intermediate_vars', "epoch_loss")
     if args.should_resume:
         # Find the last checkpointed model and resume from that
         model_dir = f"{args.folder_log}/checkpoints"
@@ -160,10 +167,11 @@ def setup_model(args, logbook):
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         start_epoch = checkpoint['epoch'] + 1
         loss = checkpoint['epoch']
+        epoch_loss_log = checkpoint['epoch_loss_log']
     
         logbook.write_message_logs(message=f"Resuming experiment id: {args.id}, from epoch: {start_epoch}")
 
-    return model, optimizer, start_epoch, train_batch_idx
+    return model, optimizer, start_epoch, train_batch_idx, epoch_loss_log
 
 if __name__ == '__main__':
     main()
