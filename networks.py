@@ -208,7 +208,7 @@ class BallModel(nn.Module):
                                     hidden_size=self.args.hidden_size * self.args.num_units,
                                     num_layers=1,
                                     batch_first=True,
-            )
+            ).to(self.args.device)
         elif self.core == 'LSTM':
             raise ValueError('LSTM Baseline Not Implemented Yet. ')
         else:
