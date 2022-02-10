@@ -99,6 +99,7 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args)
             "time_taken": time() - start_time,
         }
         logbook.write_metric_logs(metrics=metrics)
+        epoch_loss += loss.detach()
 
     if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0:
         """log intermediate variables here"""
@@ -116,8 +117,6 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args)
         encoded_log.save()
         attn_score_log.save()
         hidden_log.save()
-
-        epoch_loss += loss.detach()
         
     epoch_loss = epoch_loss / (batch_idx+1)
     return train_batch_idx, epoch_loss
