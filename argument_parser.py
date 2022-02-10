@@ -138,6 +138,7 @@ def argument_parser():
     parser.add_argument('--comm_value_size', type=int)
     parser.add_argument('--comm_query_size', type=int)
     parser.add_argument('--num_comm_heads', type=int, default=4)
+    parser.add_argument('--core', type=str, default='RIM')
     # parser.add_argument('--mini', action=store_true, default=False)
 
 
@@ -145,7 +146,7 @@ def argument_parser():
 
     args.frame_frequency_to_log_heatmaps = 5
 
-    args.id = f"SchemaBlocks_{args.hidden_size}_{args.num_units}"+\
+    args.id = args.core.upper() + f"_{args.hidden_size}_{args.num_units}"+\
         f"_{args.experiment_name}_{args.lr}_num_inp_heads_{args.num_input_heads}"+\
         f"_ver_{args.version}"
 

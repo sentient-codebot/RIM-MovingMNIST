@@ -176,30 +176,43 @@ class BallModel(nn.Module):
         self.args = args
         self.input_size = args.hidden_size * args.num_units # NOTE dimension of encoded input. not clearly mentioned in paper
         self.output_size = args.hidden_size * args.num_units
+        self.core = args.core.upper()
 
         self.Encoder = self.make_encoder().to(self.args.device)
         
         self.Decoder = None
         self.make_decoder()
 
-        self.rim_model = RIMCell(
-                                device=self.args.device,
-                                input_size=self.input_size, 
-                                num_units=self.args.num_units,
-                                hidden_size=self.args.hidden_size,
-                                k=self.args.k,
-                                rnn_cell='GRU', # defalt GRU
-                                input_key_size=self.args.input_key_size,
-                                input_value_size=self.args.input_value_size,
-                                input_query_size = self.args.input_query_size,
-                                num_input_heads = self.args.num_input_heads,
-                                input_dropout = self.args.input_dropout,
-                                comm_key_size = self.args.comm_key_size,
-                                comm_value_size = self.args.comm_value_size, 
-                                comm_query_size = self.args.comm_query_size, 
-                                num_comm_heads = self.args.num_comm_heads, 
-                                comm_dropout = self.args.comm_dropout
-        ).to(self.args.device)
+        if self.core == 'RIM':
+            self.rim_model = RIMCell(
+                                    device=self.args.device,
+                                    input_size=self.input_size, 
+                                    num_units=self.args.num_units,
+                                    hidden_size=self.args.hidden_size,
+                                    k=self.args.k,
+                                    rnn_cell='GRU', # defalt GRU
+                                    input_key_size=self.args.input_key_size,
+                                    input_value_size=self.args.input_value_size,
+                                    input_query_size = self.args.input_query_size,
+                                    num_input_heads = self.args.num_input_heads,
+                                    input_dropout = self.args.input_dropout,
+                                    comm_key_size = self.args.comm_key_size,
+                                    comm_value_size = self.args.comm_value_size, 
+                                    comm_query_size = self.args.comm_query_size, 
+                                    num_comm_heads = self.args.num_comm_heads, 
+                                    comm_dropout = self.args.comm_dropout
+            ).to(self.args.device)
+        elif self.core == 'GRU':
+            self.rim_model = nn.GRU(
+                                    input_size=self.input_size,
+                                    hidden_size=self.args.hidden_size * self.args.num_units,
+                                    num_layers=1,
+                                    batch_first=True,
+            )
+        elif self.core == 'LSTM':
+            raise ValueError('LSTM Baseline Not Implemented Yet. ')
+        else:
+            raise ValueError('Illegal RNN Core')
 
     def make_encoder(self):
         """Method to initialize the encoder"""
@@ -248,11 +261,18 @@ class BallModel(nn.Module):
         encoded_input = self.Encoder(x)
         # encoded_input = clamp(encoded_input)
         self.nan_hook(encoded_input)
-        h_new, foo, bar = self.rim_model(encoded_input, h_prev)
-        # h_new = clamp(h_new)
+        if self.core=='RIM':
+            h_new, foo, bar = self.rim_model(encoded_input, h_prev)
+        elif self.core=='GRU':
+            h_shape = h_prev.shape # record the shape
+            h_prev = h_prev.reshape((h_shape[0],-1)) # flatten
+            _, h_new = self.rim_model(encoded_input.unsqueeze(1), 
+                                        h_prev.unsqueeze(0))
+            h_new = h_new.reshape(h_shape)
+        elif self.core=='LSTM':
+            raise ValueError('LSTM core not implemented yet!')
         self.nan_hook(h_new)
         dec_out_ = self.Decoder(h_new.view(h_new.shape[0],-1))
-        # dec_out_ = clamp(dec_out_)
         self.nan_hook(dec_out_)
 
         return dec_out_, h_new
@@ -260,8 +280,8 @@ class BallModel(nn.Module):
     def init_hidden(self, batch_size): 
         # assert False, "don't call this"
         return torch.zeros((batch_size, 
-            self.rim_model.num_units, 
-            self.rim_model.hidden_size), 
+            self.args.num_units, 
+            self.args.hidden_size), 
             requires_grad=False)
 
     def nan_hook(self, out):

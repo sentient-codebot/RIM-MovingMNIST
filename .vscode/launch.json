@@ -70,7 +70,9 @@
                 "--model_persist_frequency",
                 "1",
                 "--log_intm_frequency",
-                "1"
+                "1",
+                "--core",
+                "GRU"
             ]
         },
         {
