@@ -35,7 +35,7 @@ def get_grad_norm(model):
     return total_norm
 
 def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args):
-    grad_norm_log = ScalarLog(args.folder_log, "grad_norm", epoch=epoch)
+    grad_norm_log = ScalarLog(args.folder_log+'/intermediate_vars', "grad_norm", epoch=epoch)
 
     model.train()
 
