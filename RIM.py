@@ -49,11 +49,25 @@ class AlphaFix(torch.autograd.Function):
 
 
 class GroupLinearLayer(nn.Module):
+    '''
+    for num_blocks blocks, do linear transformations independently
 
+    self.w: (num_blocks, din, dout)
+
+    x: (batch_size, num_blocks, din)
+        -> permute: (num_blocks, batch_size, din)
+        -> bmm with self.w: (num_blocks, batch_size, din) (bmm) (num_blocks, din, dout)
+                            for each block in range(num_blocks):
+                                do (batch_size, din) mat_mul (din, dout)
+                                concatenate
+                            result (num_blocks, batch_size, dout)
+        -> permute: (batch_size, num_blocks, dout)
+
+    '''
     def __init__(self, din, dout, num_blocks):
         super(GroupLinearLayer, self).__init__()
 
-        self.w	 = nn.Parameter(0.01 * torch.randn(num_blocks,din,dout))
+        self.w = nn.Parameter(0.01 * torch.randn(num_blocks,din,dout))
 
     def forward(self,x):
         x = x.permute(1,0,2)
@@ -164,24 +178,27 @@ class RIMCell(nn.Module):
         self.num_comm_heads = num_comm_heads
         self.input_key_size = input_key_size
         self.input_query_size = input_query_size
+        assert input_key_size == input_query_size, "Key and query should be of same size, no? " # they must be equal! 
         self.input_value_size = input_value_size
 
         self.comm_key_size = comm_key_size
         self.comm_query_size = comm_query_size
         self.comm_value_size = comm_value_size
 
-        self.key = nn.Linear(input_size, num_input_heads * input_query_size).to(self.device)
-        self.value = nn.Linear(input_size, num_input_heads * input_value_size).to(self.device)
+        # inp_attn transformations
+        self.key = nn.Lineaer(input_size, num_input_heads * input_query_size, bias=False)
+        self.value = nn.Linear(input_size, num_input_heads * input_value_size, bias=False)
+        self.query = GroupLinearLayer(hidden_size,  input_key_size * num_input_heads, self.num_units)
 
         if self.rnn_cell == 'GRU':
             self.rnn = GroupGRUCell(input_value_size, hidden_size, num_units)
-            self.query = GroupLinearLayer(hidden_size,  input_key_size * num_input_heads, self.num_units)
         else:
             self.rnn = GroupLSTMCell(input_value_size, hidden_size, num_units)
-            self.query = GroupLinearLayer(hidden_size,  input_key_size * num_input_heads, self.num_units)
+        # comm_attn transformations
         self.query_ =GroupLinearLayer(hidden_size, comm_query_size * num_comm_heads, self.num_units) 
         self.key_ = GroupLinearLayer(hidden_size, comm_key_size * num_comm_heads, self.num_units)
         self.value_ = GroupLinearLayer(hidden_size, comm_value_size * num_comm_heads, self.num_units)
+        
         self.comm_attention_output = GroupLinearLayer(num_comm_heads * comm_value_size, comm_value_size, self.num_units)
         self.comm_dropout = nn.Dropout(p =input_dropout)
         self.input_dropout = nn.Dropout(p =comm_dropout)
