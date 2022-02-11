@@ -262,7 +262,7 @@ class RIMCell(nn.Module):
         not_null_scores = attention_scores[:,:, 0]
         topk1 = torch.topk(not_null_scores,self.k,  dim = 1)
         batch_indices = torch.arange(x.shape[0]).unsqueeze(1)
-        row_to_activate = torch.cat((batch_indices,batch_indices), dim=1) # same shape as topk1.indices
+        row_to_activate = batch_indices.repeat((1,self.k)) # repeat to the same shape as topk1.indices
 
         mask_[row_to_activate.view(-1), topk1.indices.view(-1)] = 1
         self.nan_hook(attention_scores)
