@@ -8,7 +8,7 @@
             "console": "integratedTerminal",
             "args": [
                 "--folder_log",
-                "logs/SchemaBlocks_10_3_MMNIST_mini_0.0007_num_inp_heads_1_ver_0/intermediate_vars"
+                "logs/RIM_100_6_MMNIST_complete_0.0007_num_inp_heads_1_ver_0/intermediate_vars"
             ]
         },
         {

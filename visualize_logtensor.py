@@ -67,7 +67,7 @@ def main():
     loss_plot()
 
     # TODO plot per-epoch tensors
-    for epoch_idx in range(10,110,10):
+    for epoch_idx in [10,30,60,90,120]:
         gradnorm_plot(epoch_idx)
 
 if __name__ == "__main__":
