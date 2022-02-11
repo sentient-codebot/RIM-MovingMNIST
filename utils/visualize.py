@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import torch
 from .util import make_dir
 
-def plot_frames(batch_of_pred, batch_of_target, start_frame, end_frame, batch_idx):
+def plot_frames(batch_of_pred, batch_of_target, start_frame, end_frame, batch):
     '''
     batch_of_pred: (BATCH_SIZE, 50, W, H)
     batch_of_target: (BATCH_SIZE, 51, W, H) NOTICE: 51
@@ -10,18 +10,21 @@ def plot_frames(batch_of_pred, batch_of_target, start_frame, end_frame, batch_id
     0 = data[:,1,:,:] 
     0 = pred[:,0,:,:]
     '''
-    pred = batch_of_pred[batch_idx].detach().to(torch.device('cpu')).squeeze()
-    target = batch_of_target[batch_idx].detach().to(torch.device('cpu')).squeeze()
-    target = target[1:]
-    num_frames = end_frame-start_frame+1
-    fig, axs = plt.subplots(2, num_frames, figsize=(2*num_frames, 4))
-    for frame in range(start_frame, end_frame+1):
-        axs[0, frame-start_frame].imshow(target[frame,:,:], cmap="Greys")
-        axs[0, frame-start_frame].axis('off')
-        axs[1, frame-start_frame].imshow(pred[frame,:,:], cmap="Greys")
-        axs[1, frame-start_frame].axis('off')
-    plt.savefig(f'frames_in_batch_{batch_idx}.png', dpi=120)
-    plt.close()
+    if not isinstance(batch, list):
+        batch = [batch]
+    for batch_idx in batch:
+        pred = batch_of_pred[batch_idx].detach().to(torch.device('cpu')).squeeze()
+        target = batch_of_target[batch_idx].detach().to(torch.device('cpu')).squeeze()
+        target = target[1:]
+        num_frames = end_frame-start_frame+1
+        fig, axs = plt.subplots(2, num_frames, figsize=(2*num_frames, 4))
+        for frame in range(start_frame, end_frame+1):
+            axs[0, frame-start_frame].imshow(target[frame,:,:], cmap="Greys")
+            axs[0, frame-start_frame].axis('off')
+            axs[1, frame-start_frame].imshow(pred[frame,:,:], cmap="Greys")
+            axs[1, frame-start_frame].axis('off')
+        plt.savefig(f'frames_in_batch_{batch_idx}.png', dpi=120)
+        plt.close()
 
 def plot_curve(vector, save_path, filename):
     vector = vector.detach().to(torch.device('cpu')).squeeze()
