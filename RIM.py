@@ -182,7 +182,7 @@ class GroupTorchGRU(nn.Module):
         output: hidden (batch_size, num_units, hidden_size)
         """
 
-        hidden_list = [gru(inputs[:,i,:].unsqueeze(1), hidden[:,i,:].unsqueeze(0))[1].squeeze(0).contiguous() for i, gru in enumerate(self.grus)]
+        hidden_list = [gru(inputs[:,i,:].unsqueeze(1), hidden[:,i,:].unsqueeze(0).contiguous())[1].squeeze(0) for i, gru in enumerate(self.grus)]
         # hidden_list: list of (batch_size, hidden_size)
         hidden_new = torch.stack(hidden_list, dim=1)
 
