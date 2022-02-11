@@ -4,6 +4,7 @@ import math
 
 import numpy as np
 import torch.multiprocessing as mp
+from torch.nn.utils.rnn import PackedSequence
 
 
 class blocked_grad(torch.autograd.Function):
@@ -158,6 +159,35 @@ class GroupGRUCell(nn.Module):
         return hy
 
 
+class GroupTorchGRU(nn.Module):
+    '''
+    Calculate num_units GRU cells in parallel
+    '''
+    def __init__(self, input_size, hidden_size, num_units):
+        super().__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.num_units = num_units
+        gru_list = [nn.GRU(input_size=self.input_size, 
+                            hidden_size=self.hidden_size,
+                            num_layers=1,
+                            batch_first=True,
+                            bidirectional=False) for _ in range(num_units)]
+        self.grus = nn.ModuleList(gru_list)
+
+    def forward(self, inputs, hidden):
+        """
+        input: x (batch_size, num_units, input_size)
+               hidden (batch_size, num_units, hidden_size)
+        output: hidden (batch_size, num_units, hidden_size)
+        """
+
+        hidden_list = [gru(inputs[:,i,:].unsqueeze(1), hidden[:,i,:].unsqueeze(0))[1].squeeze(0) for i, gru in enumerate(self.grus)]
+        # hidden_list: list of (batch_size, hidden_size)
+        hidden_new = torch.stack(hidden_list, dim=1)
+
+        return hidden_new
+
 
 class RIMCell(nn.Module):
     def __init__(self, 
@@ -186,12 +216,13 @@ class RIMCell(nn.Module):
         self.comm_value_size = comm_value_size
 
         # inp_attn transformations
-        self.key = nn.Lineaer(input_size, num_input_heads * input_query_size, bias=False)
+        self.key = nn.Linear(input_size, num_input_heads * input_query_size, bias=False)
         self.value = nn.Linear(input_size, num_input_heads * input_value_size, bias=False)
         self.query = GroupLinearLayer(hidden_size,  input_key_size * num_input_heads, self.num_units)
 
         if self.rnn_cell == 'GRU':
-            self.rnn = GroupGRUCell(input_value_size, hidden_size, num_units)
+            # self.rnn = GroupGRUCell(input_value_size, hidden_size, num_units)
+            self.rnn = GroupTorchGRU(input_value_size, hidden_size, num_units) 
         else:
             self.rnn = GroupLSTMCell(input_value_size, hidden_size, num_units)
         # comm_attn transformations
@@ -200,8 +231,8 @@ class RIMCell(nn.Module):
         self.value_ = GroupLinearLayer(hidden_size, comm_value_size * num_comm_heads, self.num_units)
         
         self.comm_attention_output = GroupLinearLayer(num_comm_heads * comm_value_size, comm_value_size, self.num_units)
-        self.comm_dropout = nn.Dropout(p =input_dropout)
-        self.input_dropout = nn.Dropout(p =comm_dropout)
+        self.input_dropout = nn.Dropout(p =input_dropout)
+        self.comm_dropout = nn.Dropout(p =comm_dropout)
 
 
     def transpose_for_scores(self, x, num_attention_heads, attention_head_size):
@@ -230,10 +261,10 @@ class RIMCell(nn.Module):
 
         not_null_scores = attention_scores[:,:, 0]
         topk1 = torch.topk(not_null_scores,self.k,  dim = 1)
-        row_index = np.arange(x.size(0))
-        row_index = np.repeat(row_index, self.k)
+        batch_indices = torch.arange(x.shape[0]).unsqueeze(1)
+        row_to_activate = torch.cat((batch_indices,batch_indices), dim=1) # same shape as topk1.indices
 
-        mask_[row_index, topk1.indices.view(-1)] = 1
+        mask_[row_to_activate.view(-1), topk1.indices.view(-1)] = 1
         self.nan_hook(attention_scores)
         self.inf_hook(attention_scores)
         attention_probs = self.input_dropout(nn.Softmax(dim = -1)(attention_scores))
@@ -258,27 +289,27 @@ class RIMCell(nn.Module):
         query_layer = self.transpose_for_scores(query_layer, self.num_comm_heads, self.comm_query_size)
         key_layer = self.transpose_for_scores(key_layer, self.num_comm_heads, self.comm_key_size)
         value_layer = self.transpose_for_scores(value_layer, self.num_comm_heads, self.comm_value_size)
-        query_layer = torch.clamp(query_layer, min=-1e6, max=1e6)
-        key_layer = torch.clamp(key_layer, min=-1e6, max=1e6)
-        value_layer = torch.clamp(value_layer, min=-1e6, max=1e6)
+        # query_layer = torch.clamp(query_layer, min=-1e6, max=1e6)
+        # key_layer = torch.clamp(key_layer, min=-1e6, max=1e6)
+        # value_layer = torch.clamp(value_layer, min=-1e6, max=1e6)
         attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
-        attention_scores = torch.clamp(attention_scores, min=-1e7, max=1e7)
+        # attention_scores = torch.clamp(attention_scores, min=-1e7, max=1e7)
         attention_scores = attention_scores / math.sqrt(self.comm_key_size)
         self.inf_hook(attention_scores)
         attention_probs = nn.Softmax(dim=-1)(attention_scores)
         
         mask = [mask for _ in range(attention_probs.size(1))]
-        mask = torch.stack(mask, dim = 1)
+        mask = torch.stack(mask, dim = 1) # repeat activation mask for each head
         
-        attention_probs = attention_probs * mask.unsqueeze(3)
+        attention_probs = attention_probs * mask.unsqueeze(3) # inactive modules have zero-value query -> no context for them
         self.nan_hook(attention_probs)
         self.inf_hook(attention_probs)
         attention_probs = self.comm_dropout(attention_probs)
         context_layer = torch.matmul(attention_probs, value_layer)
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
         new_context_layer_shape = context_layer.size()[:-2] + (self.num_comm_heads * self.comm_value_size,)
-        context_layer = context_layer.view(*new_context_layer_shape)
-        context_layer = self.comm_attention_output(context_layer)
+        context_layer = context_layer.view(*new_context_layer_shape) # concatenate all heads
+        context_layer = self.comm_attention_output(context_layer) # linear
         context_layer = context_layer + h
         
         return context_layer
@@ -322,7 +353,7 @@ class RIMCell(nn.Module):
         self.nan_hook(hs)
 
         # Block gradient through inactive units
-        mask = mask.unsqueeze(2)
+        mask = mask.unsqueeze(2).detach()
         h_new = blocked_grad.apply(hs, mask)
 
         # Compute communication attention
