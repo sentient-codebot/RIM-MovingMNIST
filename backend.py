@@ -6,7 +6,7 @@ class GroupDropout(nn.Module):
         super().__init__()
         if p<0 or p>1:
             raise ValueError("dropout probability illegal")
-        self.p = p
+        self.p = torch.tensor(p).reshape(1)
 
     def forward(self, hidden: torch.Tensor, p = None) -> torch.Tensor:
         '''hidden:  (batch_size, num_units, dim_hidden)
@@ -27,7 +27,7 @@ class GroupDropout(nn.Module):
                 binomial = torch.distributions.binomial.Binomial(probs=1-p)
                 compensate = 1./(1.-p)
             else: # a scalar: single class bernoulli
-                if p<0 or p>1:
+                if (p<0 or p>1).item():
                     raise ValueError("dropout probability illegal")
                 binomial = torch.distributions.binomial.Binomial(probs=1-p)
                 compensate = torch.ones(p.shape[0])/(1.-p)
@@ -39,8 +39,9 @@ class GroupDropout(nn.Module):
 
 def main():
     inputs = torch.ones(4,6,3)
-    dropout = GroupDropout()
-    probs = torch.tensor([0.1, 0.1, 0.4, 0.5, 0.6, 0.99])
+    dropout = GroupDropout(p=0.3)
+    # probs = torch.tensor([0.1, 0.1, 0.4, 0.5, 0.6, 0.99])
+    probs = None
     outputs = dropout(inputs, probs)
     print(outputs)
 
