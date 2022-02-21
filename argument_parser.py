@@ -166,7 +166,7 @@ def argument_parser():
 
     parser.parse_args(left_argv, args) # override JSON values with command-line values
 
-    if args.rim_dropout < 0 or args.dropout > 1:
+    if args.rim_dropout < 0 or args.rim_dropout > 1:
         args.do_rim_dropout = False
     else:
         args.do_rim_dropout = True
