@@ -3,7 +3,7 @@ echo Running on $HOSTNAME
 #source ../../cas_env/bin/activate
 
 experiment_name="MMNIST_complete"
-cfg_json="configs/rim_complete/rim_complete.json"
+cfg_json="configs/rim_complete/rim_complete_dropout.json"
 core="RIM"
 should_resume="false"
 save_freq=25
