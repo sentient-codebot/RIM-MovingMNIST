@@ -141,15 +141,24 @@ def main():
         batch_size=args.batch_size,
         shuffle=False
     )
+
+    if args.loss_fn == "BCE":
+        loss_fn = torch.nn.BCELoss() 
+    elif args.loss_fn == "MSE":
+        loss_fn = torch.nn.MSELoss()
+    else:
+        loss_fn = torch.nn.MSELoss()    
     
-    epoch_loss, prediction, target, f1_avg = test(
+    test_loss, test_mse, prediction, target, f1_avg = test(
         model = model,
         test_loader = test_loader,
-        args = args
+        args = args,
+        loss_fn = loss_fn,
+        rollout = False
     )
-    print(f"test loss: {epoch_loss}")
+    print(f"test loss: {test_loss}")
     print(f"test average F1 score: {f1_avg}")
-    plot_frames(prediction, target, start_frame=10, end_frame=40, sample=[0,-1])
+    plot_frames(prediction, target, start_frame=0, end_frame=target.shape[1]-1, sample=[0,-1])
 
     # wait = input("Press any key to terminate program. ")
     return None
