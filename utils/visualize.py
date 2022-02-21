@@ -109,7 +109,7 @@ class ScalarLog:
             if idx is None:
                 self.idx = [0]
             else:
-                self.idx [idx]
+                self.idx = [idx]
         else:
             if idx is None:
                 self.idx.append(self.idx[-1]+1)
@@ -150,7 +150,7 @@ class VectorLog:
             if idx is None:
                 self.idx = [0]
             else:
-                self.idx [idx]
+                self.idx = [idx]
         else:
             if idx is None:
                 self.idx.append(self.idx[-1]+1)
