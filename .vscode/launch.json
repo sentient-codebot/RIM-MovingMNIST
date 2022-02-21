@@ -46,6 +46,25 @@
             ]
         },
         {
+            "name": "train/test mmnist complete: dropout",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "--cfg_json",
+                "configs/rim_complete/rim_complete_droupout.json",
+                "--core",
+                "RIM",
+                "--should_resume",
+                "false",
+                "--experiment_name",
+                "MMNIST_dropout",
+                "--model_persist_frequency",
+                "25"
+            ]
+        },
+        {
             "name": "train/test mmnist complete - GRU",
             "type": "python",
             "request": "launch",

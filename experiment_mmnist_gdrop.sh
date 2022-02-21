@@ -2,7 +2,7 @@
 echo Running on $HOSTNAME
 #source ../../cas_env/bin/activate
 
-experiment_name="MMNIST_complete"
+experiment_name="MMNIST_dropout"
 cfg_json="configs/rim_complete/rim_complete_dropout.json"
 core="RIM"
 should_resume="false"
