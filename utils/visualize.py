@@ -26,10 +26,11 @@ def plot_frames(batch_of_pred, batch_of_target, start_frame, end_frame, sample):
         plt.savefig(f'frames_in_sample_{sample_idx}.png', dpi=120)
         plt.close()
 
-def plot_curve(vector, save_path, filename):
+def plot_curve(idx, vector, save_path, filename):
+    idx = idx.detach().to(torch.device('cpu')).squeeze()
     vector = vector.detach().to(torch.device('cpu')).squeeze()
     fig, axs = plt.subplots(1,1)
-    axs.plot(vector)
+    axs.plot(idx, vector)
     plt.savefig(save_path +'/'+ filename, dpi=120)
     plt.close()
 
@@ -53,12 +54,14 @@ def plot_mat(mat, mat_name, epoch):
 
 class HeatmapLog:
     def __init__(self, folder_log, mat_name):
+        '''specify where to save the figure and with what variable name'''
         mat_name = mat_name.replace(' ','_')
         make_dir(f"{folder_log}/"+mat_name)
         self.save_folder = f"{folder_log}/"+mat_name
         self.mat_name = mat_name
 
     def plot(self, mat, epoch=None):
+        '''pass the matrix tensor and plot (doesn't take index yet)'''
         if mat.dim() == 3:
             mat_list = [mat[idx_unit,:,:].squeeze().cpu() for idx_unit in range(mat.shape[0])] 
         else:
@@ -93,20 +96,33 @@ class ScalarLog:
         self.var_name = var_name
         make_dir(self.save_folder)
         self.var = []
+        self.idx = []
         self.epoch = epoch
 
     def reset(self):
         self.var = []
+        self.idx = []
 
-    def append(self, value):
+    def append(self, value, idx=None):
         self.var.append(value)
+        if self.idx == []:
+            if idx is None:
+                self.idx = [0]
+            else:
+                self.idx [idx]
+        else:
+            if idx is None:
+                self.idx.append(self.idx[-1]+1)
+            else:
+                self.idx.append(idx)
 
     def save(self):
         var_tensor = torch.tensor(self.var)
+        idx_tensor = torch.tensor(self.idx)
         if self.epoch is None:
-            torch.save(var_tensor, self.save_folder +'/'+ self.var_name + '.pt')
+            torch.save([idx_tensor, var_tensor], self.save_folder +'/'+ self.var_name + '.pt')
         else:
-            torch.save(var_tensor, self.save_folder +'/'+ self.var_name + f'_epoch_{self.epoch}.pt')
+            torch.save([idx_tensor, var_tensor], self.save_folder +'/'+ self.var_name + f'_epoch_{self.epoch}.pt')
 
 class VectorLog:
     def __init__(self, folder_log, var_name, epoch=None):
@@ -117,22 +133,36 @@ class VectorLog:
         self.var_name = var_name
         make_dir(self.save_folder)
         self.var_stack = None
+        self.idx = []
         self.epoch = epoch
 
     def reset(self):
         self.var_stack = None
+        self.idx = []
 
-    def append(self, vector):
+    def append(self, vector, idx=None):
         if self.var_stack is None:
             self.var_stack = vector.detach().unsqueeze(1)
         else:
             self.var_stack = torch.cat((self.var_stack, vector.detach().unsqueeze(1)), 1)
 
-    def save(self):
-        if self.epoch is None:
-            torch.save(self.var_stack, self.save_folder +'/'+ self.var_name + '.pt')
+        if self.idx == []:
+            if idx is None:
+                self.idx = [0]
+            else:
+                self.idx [idx]
         else:
-            torch.save(self.var_stack, self.save_folder +'/'+ self.var_name + f'_epoch_{self.epoch}.pt')
+            if idx is None:
+                self.idx.append(self.idx[-1]+1)
+            else:
+                self.idx.append(idx)        
+
+    def save(self):
+        idx_tensor = torch.tensor(self.idx)
+        if self.epoch is None:
+            torch.save([idx_tensor, self.var_stack], self.save_folder +'/'+ self.var_name + '.pt')
+        else:
+            torch.save([idx_tensor, self.var_stack], self.save_folder +'/'+ self.var_name + f'_epoch_{self.epoch}.pt')
 
 
 def main():

@@ -1,3 +1,4 @@
+from tabnanny import check
 from time import time
 
 import matplotlib.pyplot as plt
@@ -104,7 +105,7 @@ def main():
     cudable = torch.cuda.is_available()
     args.device = torch.device("cuda" if cudable else "cpu")
 
-    model, optimizer, start_epoch, train_batch_idx, epoch_loss_log = setup_model(args=args, logbook=logbook)
+    model, optimizer, start_epoch, train_batch_idx, train_loss_log, test_loss_log = setup_model(args=args, logbook=logbook)
 
     train_set = MovingMNIST(root='./data', train=True, download=True, mini=False)
     test_set = MovingMNIST(root='./data', train=False, download=True)
@@ -132,8 +133,8 @@ def main():
             train_batch_idx = train_batch_idx,
             args = args
         )
-        epoch_loss_log.append(epoch_loss)
-        epoch_loss_log.save()
+        train_loss_log.append(epoch_loss, idx=epoch)
+        train_loss_log.save()
 
         # test done here
         if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0:
@@ -142,6 +143,8 @@ def main():
             print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}; test loss: {test_epoch_loss:.3f}; test mse: {test_mse:.3f}; test F1 score: {f1_avg}")
         else:
             print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}")
+        test_loss_log.append(test_epoch_loss, idx=epoch)
+        test_loss_log.save() # TODO maybe a should save a metric dict file
 
         # save checkpoints here
         if args.model_persist_frequency > 0 and epoch % args.model_persist_frequency == 0 or epoch==10: # early save at 10 and regular save checkpoints
@@ -151,7 +154,8 @@ def main():
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': epoch_loss,
-                'epoch_loss_log': epoch_loss_log
+                'train_loss_log': train_loss_log,
+                'test_loss_log': test_loss_log,
             }, f"{args.folder_log}/checkpoints/{epoch}")
         
 def setup_model(args, logbook):
@@ -159,7 +163,8 @@ def setup_model(args, logbook):
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     start_epoch = 1
     train_batch_idx = 0
-    epoch_loss_log = ScalarLog(args.folder_log+'/intermediate_vars', "epoch_loss")
+    train_loss_log = ScalarLog(args.folder_log+'/intermediate_vars', "train_loss")
+    test_loss_log = ScalarLog(args.folder_log+'/intermediate_vars', "test_loss")
     if args.should_resume:
         # Find the last checkpointed model and resume from that
         model_dir = f"{args.folder_log}/checkpoints"
@@ -176,11 +181,12 @@ def setup_model(args, logbook):
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         start_epoch = checkpoint['epoch'] + 1
         loss = checkpoint['epoch']
-        epoch_loss_log = checkpoint['epoch_loss_log']
+        train_loss_log = checkpoint['train_loss_log']
+        test_loss_log = checkpoint['test_loss_log']
     
         logbook.write_message_logs(message=f"Resuming experiment id: {args.id}, from epoch: {start_epoch}")
 
-    return model, optimizer, start_epoch, train_batch_idx, epoch_loss_log
+    return model, optimizer, start_epoch, train_batch_idx, train_loss_log, test_loss_log
 
 if __name__ == '__main__':
     main()

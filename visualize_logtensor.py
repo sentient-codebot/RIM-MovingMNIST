@@ -24,12 +24,13 @@ class TensorVisualizer:
         self.save_folder = folder_log+'/'+self.tensor_name
         self.filename = folder_log+'/'+self.tensor_name+'/'+self.tensor_name
         self.tensor = None
+        self.idx = None
 
     def log_tensor(self, epoch=None):
         if epoch is not None:
-            self.tensor = torch.load(self.filename+f'_epoch_{epoch}.pt')
+            self.idx, self.tensor = torch.load(self.filename+f'_epoch_{epoch}.pt')
         else:
-            self.tensor = torch.load(self.filename+f'.pt')
+            self.idx, self.tensor = torch.load(self.filename+f'.pt')
         return 0
 
     def plot_logged_tensor(self, epoch=None): # NOTE epoch for curve ????/
@@ -40,7 +41,7 @@ class TensorVisualizer:
         else:
             figname = self.tensor_name+f'.png'
         if self.tensor.dim() == 1:
-            plot_curve(self.tensor, save_path, figname)
+            plot_curve(self.idx, self.tensor, save_path, figname)
         elif self.tensor.dim() == 2:
             # TODO plot a matrix as a Heatmap or?
             mat_log = HeatmapLog(save_path, 'figures')
