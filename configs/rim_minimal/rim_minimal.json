@@ -1,6 +1,4 @@
 {
-    "experiment_name"           : "BBall_minimal",
-
     "train_dataset"             : "balls3curtain64.h5",
     "batch_size"                : 64,
     "epochs"                    : 10,
