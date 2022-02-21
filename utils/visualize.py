@@ -4,10 +4,11 @@ from .util import make_dir
 
 def plot_frames(batch_of_pred, batch_of_target, start_frame, end_frame, sample):
     '''
-    batch_of_pred: (BATCH_SIZE, 50, W, H)
+    batch_of_pred: (BATCH_SIZE, 51, W, H)
     batch_of_target: (BATCH_SIZE, 51, W, H) NOTICE: 51
-    0 <= start_frame <= end_frame <= 50
-    0 = data[:,1,:,:] 
+    0 <= start_frame <= end_frame <= 51
+    plot: [start_frame, end_frame)
+    0 = data[:,0,:,:] 
     0 = pred[:,0,:,:]
     '''
     if not isinstance(sample, list):
@@ -15,10 +16,9 @@ def plot_frames(batch_of_pred, batch_of_target, start_frame, end_frame, sample):
     for sample_idx in sample:
         pred = batch_of_pred[sample_idx].detach().to(torch.device('cpu')).squeeze()
         target = batch_of_target[sample_idx].detach().to(torch.device('cpu')).squeeze()
-        target = target[1:]
-        num_frames = end_frame-start_frame+1
+        num_frames = end_frame-start_frame
         fig, axs = plt.subplots(2, num_frames, figsize=(2*num_frames, 4))
-        for frame in range(start_frame, end_frame+1):
+        for frame in range(start_frame, end_frame):
             axs[0, frame-start_frame].imshow(target[frame,:,:], cmap="Greys")
             axs[0, frame-start_frame].axis('off')
             axs[1, frame-start_frame].imshow(pred[frame,:,:], cmap="Greys")
