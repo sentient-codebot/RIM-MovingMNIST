@@ -22,6 +22,7 @@ def argument_parser():
         description='Experiment Script',
         add_help=False) # a must because otherwise the child will have two help options
     config_parser.add_argument('--cfg_json', type=str)
+    config_parser.add_argument('--experiment_name', type=str)
 
     parser = argparse.ArgumentParser(parents=[config_parser])
     parser.add_argument('--batch_size', type=int, default=50, metavar='N',
@@ -134,7 +135,7 @@ def argument_parser():
                                 'resumd. If this flag is set, the last saved model '
                                 '(corresponding to the given id is fetched)',)
 
-    parser.add_argument('--experiment_name', type=str, default='4Balls')
+    # parser.add_argument('--experiment_name', type=str, default='4Balls')
     parser.add_argument('--version', type=int, default=1)
     parser.add_argument('--do_comm', type=str2bool, default=True)
     # added by Nan

@@ -19,7 +19,9 @@
             "console": "integratedTerminal",
             "args": [
                 "--cfg_json",
-                "configs/rim_minimal/rim_minimal.json"
+                "configs/rim_minimal/rim_minimal.json",
+                "--experiment_name",
+                "MMNIST_minimal"
             ]
         },
         {
@@ -34,7 +36,9 @@
                 "--core",
                 "RIM",
                 "--should_resume",
-                "false"
+                "false",
+                "--experiment_name",
+                "MMNIST_complete"
             ]
         },
         {
@@ -47,7 +51,9 @@
                 "--cfg_json",
                 "configs/rim_complete/rim_complete.json",
                 "--core",
-                "GRU"
+                "GRU",
+                "--experiment_name",
+                "MMNIST_baseline"
             ]
         }
     ]
