@@ -142,7 +142,7 @@ class BallModel(nn.Module):
 
         self.rim_dropout = None
         if self.args.do_rim_dropout:
-            self.rim_dropout = GroupDropout(p=args.rim_dropout) # TODO later test different probs for different modules
+            self.rim_dropout = GroupDropout(p=args.rim_dropout).to(self.args.device) # TODO later test different probs for different modules
 
         if self.core == 'RIM':
             self.rim_model = RIMCell(
@@ -237,7 +237,7 @@ class BallModel(nn.Module):
         # module_mask = torch.tensor([1,1,1,0,0,0]).reshape(1,-1,1).to(self.args.device)
         # h_new = h_new*module_mask
         # --- above for test        ---
-        
+
         if self.rim_dropout is not None:
             h_new = self.rim_dropout(h_new)
         dec_out_ = self.Decoder(h_new.view(h_new.shape[0],-1))
