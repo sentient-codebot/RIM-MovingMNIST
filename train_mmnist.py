@@ -141,10 +141,10 @@ def main():
             """test model accuracy and log intermediate variables here"""
             test_epoch_loss, test_mse, prediction, data, f1_avg = test(model, test_loader, args, rollout=False)
             print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}; test loss: {test_epoch_loss:.3f}; test mse: {test_mse:.3f}; test F1 score: {f1_avg}")
+            test_loss_log.append(test_epoch_loss, idx=epoch)
+            test_loss_log.save() # TODO maybe a should save a metric dict file
         else:
             print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}")
-        test_loss_log.append(test_epoch_loss, idx=epoch)
-        test_loss_log.save() # TODO maybe a should save a metric dict file
 
         # save checkpoints here
         if args.model_persist_frequency > 0 and epoch % args.model_persist_frequency == 0 or epoch==10: # early save at 10 and regular save checkpoints
