@@ -22,7 +22,6 @@ from os.path import isfile, join
 
 set_seed(1997)
 
-loss_fn = torch.nn.BCELoss()
 
 def nan_hook(_tensor):
         nan_mask = torch.isnan(_tensor)
@@ -37,7 +36,7 @@ def get_grad_norm(model):
     total_norm = total_norm ** 0.5
     return total_norm
 
-def train(model, train_loader, test_loader, optimizer, epoch, logbook, train_batch_idx, args):
+def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args, loss_fn):
     grad_norm_log = ScalarLog(args.folder_log+'/intermediate_vars', "grad_norm", epoch=epoch)
 
     model.train()
@@ -122,16 +121,23 @@ def main():
     )
     transfer_loader = test_loader
 
+    if args.loss_fn == "BCE":
+        loss_fn = torch.nn.BCELoss() 
+    elif args.loss_fn == "MSE":
+        loss_fn = torch.nn.MSELoss()
+    else:
+        loss_fn = torch.nn.MSELoss()
+
     for epoch in range(start_epoch, args.epochs+1):
         train_batch_idx, epoch_loss = train(
             model = model,
             train_loader = train_loader,
-            test_loader = test_loader,
             optimizer = optimizer,
             epoch = epoch,
             logbook = logbook,
             train_batch_idx = train_batch_idx,
-            args = args
+            args = args,
+            loss_fn = loss_fn
         )
         train_loss_log.append(epoch_loss, idx=epoch)
         train_loss_log.save()
@@ -139,7 +145,14 @@ def main():
         # test done here
         if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0:
             """test model accuracy and log intermediate variables here"""
-            test_epoch_loss, test_mse, prediction, data, f1_avg = test(model, test_loader, args, rollout=False)
+            test_epoch_loss, test_mse, prediction, data, f1_avg = test(
+                model = model, 
+                test_loader = test_loader, 
+                args = args, 
+                loss_fn = loss_fn, 
+                rollout = False
+            )
+
             print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}; test loss: {test_epoch_loss:.3f}; test mse: {test_mse:.3f}; test F1 score: {f1_avg}")
             test_loss_log.append(test_epoch_loss, idx=epoch)
             test_loss_log.save() # TODO maybe a should save a metric dict file

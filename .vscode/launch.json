@@ -21,7 +21,9 @@
                 "--cfg_json",
                 "configs/rim_minimal/rim_minimal.json",
                 "--experiment_name",
-                "MMNIST_minimal"
+                "MMNIST_minimal",
+                "--loss_fn",
+                "mseloss"
             ]
         },
         {

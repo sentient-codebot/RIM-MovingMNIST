@@ -21,7 +21,7 @@ from os.path import isfile, join
 
 set_seed(1997)
 
-loss_fn = torch.nn.BCELoss()
+# loss_fn = torch.nn.BCELoss()
 
 def nan_hook(_tensor):
         nan_mask = torch.isnan(_tensor)
@@ -37,7 +37,7 @@ def get_grad_norm(model):
     return total_norm
 
 # @torch.no_grad()
-def test(model, test_loader, args, rollout=True):
+def test(model, test_loader, args, loss_fn, rollout=True):
     '''test(model, test_loader, args, rollout)'''
     rim_actv_log = VectorLog(args.folder_log+"/intermediate_vars", "rim_actv")
     dec_actv_log = VectorLog(args.folder_log+"/intermediate_vars", "decoder_actv")
@@ -100,7 +100,7 @@ def test(model, test_loader, args, rollout=True):
 
     prediction = prediction[:, 1:, :, :, :] # last batch of prediction, starting from frame 1
     epoch_loss = epoch_loss / (batch_idx+1)
-    epoch_mseloss = epoch_loss / (batch_idx+1)
+    epoch_mseloss = epoch_mseloss / (batch_idx+1)
     f1_avg = f1 / (batch_idx+1) / (data.shape[1]-1)
 
     """save last batch of intermediate variables"""
@@ -110,8 +110,7 @@ def test(model, test_loader, args, rollout=True):
 
 def dec_rim_util(model, h, args):
     """check the contribution of the (num_module)-th RIM by seeing how much they contribute to the activaiton of first relu"""
-    h = h.detach()
-    h = torch.tensor(h, requires_grad=True)
+    h = h.clone().detach().requires_grad_(True)
     
     h_flat = h.view(h.shape[0],-1)
     decoded = model.Decoder(h_flat)

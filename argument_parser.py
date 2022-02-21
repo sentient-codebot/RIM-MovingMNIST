@@ -13,6 +13,13 @@ def str2bool(v):
         return False
     raise argparse.ArgumentTypeError('Boolean value expected.')
 
+def str2loss_fn(_str):
+    _str = _str.upper()
+    if 'MSE' in _str:
+        return 'MSE'
+    if 'BCE' in _str:
+        return 'BCE'
+    raise argparse.ArgumentTypeError('Unrecognized loss function type.')
 
 def argument_parser():
     """Function to parse all the arguments"""
@@ -147,7 +154,7 @@ def argument_parser():
     parser.add_argument('--comm_query_size', type=int)
     parser.add_argument('--num_comm_heads', type=int, default=4)
     parser.add_argument('--core', type=str, default='RIM')
-    # parser.add_argument('--mini', action=store_true, default=False)
+    parser.add_argument('--loss_fn', type=str2loss_fn, default='BCE')
 
     args, left_argv = config_parser.parse_known_args() # if passed args BESIDES defined in cfg_parser, store in left_argv
 

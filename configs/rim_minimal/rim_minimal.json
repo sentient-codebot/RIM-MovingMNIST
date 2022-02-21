@@ -7,6 +7,7 @@
     "log_intm_frequency"        : 1,
     "should_save_csv"           : false,
     "lr"                        : 0.0007,
+    "loss_fn"                   : "MSE",
 
     "hidden_size"               : 10,
     "num_units"                 : 5,
