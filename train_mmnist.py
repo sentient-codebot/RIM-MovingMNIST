@@ -42,7 +42,7 @@ def train(model, train_loader, test_loader, optimizer, epoch, logbook, train_bat
     model.train()
 
     train_epoch_loss = torch.tensor(0.).to(args.device)
-    for batch_idx, data in enumerate(train_loader):
+    for batch_idx, data in enumerate(tqdm(train_loader)):
         hidden = model.init_hidden(data.shape[0]).to(args.device)
 
         start_time = time()
@@ -66,14 +66,15 @@ def train(model, train_loader, test_loader, optimizer, epoch, logbook, train_bat
             grad_norm_log.save()
 
         train_batch_idx += 1 
-        metrics = {
-            "loss": loss.cpu().item(),
-            "mode": "train",
-            "batch_idx": train_batch_idx,
-            "epoch": epoch,
-            "time_taken": time() - start_time,
-        }
-        logbook.write_metric_logs(metrics=metrics)
+        if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0: # DON'T ALWAYS PRINT THESE BATCH-WISE STATS!
+            metrics = {
+                "loss": loss.cpu().item(),
+                "mode": "train",
+                "batch_idx": train_batch_idx,
+                "epoch": epoch,
+                "time_taken": time() - start_time,
+            }
+            logbook.write_metric_logs(metrics=metrics)
 
         train_epoch_loss += loss.detach()
 

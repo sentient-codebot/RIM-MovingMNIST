@@ -83,7 +83,7 @@ def test(model, test_loader, args, rollout=True):
 
                 frame_loss_log.append(loss_fn(output, target)) # * num_frames OR now?? NO, because I am check the loss in FRAME by FRAME
                 f1_score_log.append(f1_frame)
-            print(f"Frame {frame} F1 score: {f1_frame}")
+            # print(f"Frame {frame} F1 score: {f1_frame}") 
 
             intm["decoder_utilization"] = dec_rim_util(model, hidden, args)
             rim_actv_log.append(intm["input_mask"][-1]) # shape (batchsize, num_units, 1)
