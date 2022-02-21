@@ -158,7 +158,7 @@ def main():
     )
     print(f"test loss: {test_loss}")
     print(f"test average F1 score: {f1_avg}")
-    plot_frames(prediction, target, start_frame=1, end_frame=target.shape[1]-2, sample=[0,-1])
+    plot_frames(prediction, target, start_frame=1, end_frame=target.shape[1]-2, sample=[0,2,7,17,29,-1])
 
     # wait = input("Press any key to terminate program. ")
     return None
