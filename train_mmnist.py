@@ -66,7 +66,7 @@ def train(model, train_loader, test_loader, optimizer, epoch, logbook, train_bat
             grad_norm_log.save()
 
         train_batch_idx += 1 
-        if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0: # DON'T ALWAYS PRINT THESE BATCH-WISE STATS!
+        if False: # PRINT THESE BATCH-WISE STATS, if you really wanna debug looking at the batches
             metrics = {
                 "loss": loss.cpu().item(),
                 "mode": "train",
