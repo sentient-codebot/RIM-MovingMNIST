@@ -94,7 +94,7 @@ def main():
         test_loader = test_loader,
         args = args
     )
-    plot_frames(prediction, target, start_frame=0, end_frame=18, batch=[2,3,4,5,6,7])
+    plot_frames(prediction, target, start_frame=0, end_frame=18, sample=[2,3,4,5,6,7])
 
         
 def setup_model(args, logbook):

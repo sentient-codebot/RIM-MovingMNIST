@@ -83,6 +83,43 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args)
     epoch_loss = epoch_loss / (batch_idx+1)
     return train_batch_idx, epoch_loss
 
+@torch.no_grad()
+def test(model, test_loader, logbook, args):
+
+    model.eval()
+
+    epoch_loss = torch.tensor(0.).to(args.device)
+    test_batch_idx = 0
+    for batch_idx, data in enumerate(test_loader):
+        hidden = model.init_hidden(data.shape[0]).to(args.device)
+
+        start_time = time()
+        data = data.to(args.device)
+        data = data.unsqueeze(2).float()
+        hidden = hidden.detach()
+        
+        loss = 0.
+        # with autograd.detect_anomaly():
+        if True:
+            for frame in range(data.shape[1]-1):
+                output, hidden = model(data[:, frame, :, :, :], hidden)
+                target = data[:, frame+1, :, :, :]
+                loss += loss_fn(output, target)
+
+        test_batch_idx += 1 
+        metrics = {
+            "loss": loss.cpu().item(),
+            "mode": "train",
+            "batch_idx": test_batch_idx,
+            "time_taken": time() - start_time,
+        }
+        logbook.write_metric_logs(metrics=metrics)
+
+        epoch_loss += loss.detach()
+
+    epoch_loss = epoch_loss / (batch_idx+1)
+    return epoch_loss
+
 def main():
     args = argument_parser()
 
