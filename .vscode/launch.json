@@ -53,7 +53,7 @@
             "console": "integratedTerminal",
             "args": [
                 "--cfg_json",
-                "configs/rim_complete/rim_complete_droupout.json",
+                "configs/rim_complete/rim_complete_dropout.json",
                 "--core",
                 "RIM",
                 "--should_resume",

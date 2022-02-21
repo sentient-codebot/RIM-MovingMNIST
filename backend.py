@@ -31,8 +31,8 @@ class GroupDropout(nn.Module):
                     raise ValueError("dropout probability illegal")
                 binomial = torch.distributions.binomial.Binomial(probs=1-p)
                 compensate = torch.ones(p.shape[0])/(1.-p)
-            compensate = compensate.reshape((1,-1,1))
-            rnd_mask = binomial.sample().reshape((1,-1,1))
+            compensate = compensate.reshape((1,-1,1)).to(hidden.device)
+            rnd_mask = binomial.sample().reshape((1,-1,1)).to(hidden.device)
             return hidden*rnd_mask*compensate
 
         return hidden
