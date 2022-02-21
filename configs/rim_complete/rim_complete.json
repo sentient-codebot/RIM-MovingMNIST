@@ -3,7 +3,7 @@
     "batch_size"                : 64,
     "epochs"                    : 200,
     "should_resume"             : false,
-    "model_persist_frequency"   : 10,
+    "model_persist_frequency"   : 20,
     "log_intm_frequency"        : 10,
     "should_save_csv"           : false,
     "lr"                        : 0.0007,

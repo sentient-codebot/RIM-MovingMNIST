@@ -79,10 +79,9 @@ def train(model, train_loader, test_loader, optimizer, epoch, logbook, train_bat
 
     train_epoch_loss = train_epoch_loss / (batch_idx+1)
     if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0:
-        """test model accuracy and log intermediate variables here"""
-        test_epoch_loss, test_mse, prediction, data, f1_avg = test(model, test_loader, args, rollout=False)
-        print(f"epoch [{epoch}] train loss: {train_epoch_loss:.3f}; test loss: {test_epoch_loss:.3f}; test mse: {test_mse:.3f}; test F1 score: {f1_avg}")
+        
         # SAVE logged vectors
+        pass
 
     return train_batch_idx, train_epoch_loss
 
@@ -135,9 +134,14 @@ def main():
         epoch_loss_log.append(epoch_loss)
         epoch_loss_log.save()
 
-        # no test done here
+        # test done here
+        if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0:
+            """test model accuracy and log intermediate variables here"""
+            test_epoch_loss, test_mse, prediction, data, f1_avg = test(model, test_loader, args, rollout=False)
+            print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}; test loss: {test_epoch_loss:.3f}; test mse: {test_mse:.3f}; test F1 score: {f1_avg}")
 
-        if args.model_persist_frequency > 0 and epoch % args.model_persist_frequency == 0:
+        # save checkpoints here
+        if args.model_persist_frequency > 0 and epoch % args.model_persist_frequency == 0 or epoch==10: # early save at 10 and regular save checkpoints
             logbook.write_message_logs(message=f"Saving model to {args.folder_log}/checkpoints/{epoch}")
             torch.save({
                 'epoch': epoch,
