@@ -1,5 +1,6 @@
 """Script to parse all the command-line arguments"""
 import argparse
+import json
 
 
 def str2bool(v):
@@ -16,7 +17,13 @@ def str2bool(v):
 def argument_parser():
     """Function to parse all the arguments"""
 
-    parser = argparse.ArgumentParser(description='Block Model')
+    """Define config parser and parser"""
+    config_parser = argparse.ArgumentParser(
+        description='Experiment Script',
+        add_help=False) # a must because otherwise the child will have two help options
+    config_parser.add_argument('--cfg_json', type=str)
+
+    parser = argparse.ArgumentParser(parents=[config_parser])
     parser.add_argument('--batch_size', type=int, default=50, metavar='N',
                         help='ADD')
     parser.add_argument('--epochs', type=int, default=100, metavar='E',
@@ -97,7 +104,7 @@ def argument_parser():
                                 'trained',
                         help='path to dataset on which the model should be '
                              'trained')
-    parser.add_argument('--test_dataset', type=str,
+    parser.add_argument('--test_dataset', type=str, default="balls4mass64.h5",
                         metavar='path to dataset on which the model should be '
                                 'tested for stove',
                         help='path to dataset on which the model should be '
@@ -141,9 +148,15 @@ def argument_parser():
     parser.add_argument('--core', type=str, default='RIM')
     # parser.add_argument('--mini', action=store_true, default=False)
 
+    args, left_argv = config_parser.parse_known_args() # if passed args BESIDES defined in cfg_parser, store in left_argv
 
-    args = parser.parse_args()
+    if args.cfg_json is not None:
+        with open(args.cfg_json) as f:
+            json_dict = json.load(f)
+        args.__dict__.update(json_dict)
 
+    parser.parse_args(left_argv, args) # override JSON values with command-line values
+    
     args.frame_frequency_to_log_heatmaps = 5
 
     args.id = args.core.upper() + f"_{args.hidden_size}_{args.num_units}"+\

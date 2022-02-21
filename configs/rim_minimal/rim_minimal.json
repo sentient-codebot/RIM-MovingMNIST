@@ -1,0 +1,28 @@
+{
+    "experiment_name"           : "BBall_minimal",
+
+    "train_dataset"             : "balls3curtain64.h5",
+    "batch_size"                : 64,
+    "epochs"                    : 10,
+    "should_resume"             : false,
+    "model_persist_frequency"   : 1,
+    "log_intm_frequency"        : 1,
+    "should_save_csv"           : false,
+    "lr"                        : 0.0007,
+
+    "hidden_size"               : 10,
+    "num_units"                 : 5,
+    "k"                         : 2,
+    "num_input_heads"           : 1,
+    "version"                   : 0,
+    "rnn_cell"                  : "GRU",
+    "input_key_size"            : 3,
+    "input_value_size"          : 4,
+    "input_query_size"          : 3,
+    "input_dropout"             : 0.1,
+    "comm_key_size"             : 3,
+    "comm_value_size"           : 4,
+    "comm_query_size"           : 3,
+    "num_comm_heads"            : 2,
+    "comm_dropout"              : 0.1
+}

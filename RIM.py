@@ -358,14 +358,20 @@ class RIMCell(nn.Module):
 
         # Compute communication attention
         h_new = self.communication_attention(h_new, mask.squeeze(2))
-        self.nan_hook(h_new)
+
+        # Prepare the context/intermediate value
+        ctx = {
+            "input_mask": mask.squeeze(),
+        }
+
+        # Update hs and cs and return them
 
         hs = mask * h_new + (1 - mask) * h_old
         if cs is not None:
             cs = mask * cs + (1 - mask) * c_old
-            return hs, cs, None
+            return hs, cs, None, mask
         self.nan_hook(hs)
-        return hs, None, None
+        return hs, None, None, ctx
 
 
 class RIM(nn.Module):

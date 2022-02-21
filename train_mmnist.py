@@ -52,17 +52,14 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args)
         # with autograd.detect_anomaly():
         if True:
             for frame in range(data.shape[1]-1):
-                output, hidden = model(data[:, frame, :, :, :], hidden)
-
-                nan_hook(output)
-                nan_hook(hidden)
+                output, hidden, intm = model(data[:, frame, :, :, :], hidden)
                 target = data[:, frame+1, :, :, :]
                 loss += loss_fn(output, target)
                 
             loss.backward()
             grad_norm = get_grad_norm(model)
             grad_norm_log.append(grad_norm)
-            # torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=True) 
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=True) 
             optimizer.step()
             grad_norm_log.save()
 
@@ -111,12 +108,12 @@ def main():
     train_loader = torch.utils.data.DataLoader(
         dataset=train_set,
         batch_size=args.batch_size,
-        shuffle=False
+        shuffle=True
     )
     test_loader = torch.utils.data.DataLoader(
         dataset=test_set,
         batch_size=args.batch_size,
-        shuffle=False
+        shuffle=True
     )
     transfer_loader = test_loader
 

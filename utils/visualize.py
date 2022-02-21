@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import torch
 from .util import make_dir
 
-def plot_frames(batch_of_pred, batch_of_target, start_frame, end_frame, batch):
+def plot_frames(batch_of_pred, batch_of_target, start_frame, end_frame, sample):
     '''
     batch_of_pred: (BATCH_SIZE, 50, W, H)
     batch_of_target: (BATCH_SIZE, 51, W, H) NOTICE: 51
@@ -10,11 +10,11 @@ def plot_frames(batch_of_pred, batch_of_target, start_frame, end_frame, batch):
     0 = data[:,1,:,:] 
     0 = pred[:,0,:,:]
     '''
-    if not isinstance(batch, list):
-        batch = [batch]
-    for batch_idx in batch:
-        pred = batch_of_pred[batch_idx].detach().to(torch.device('cpu')).squeeze()
-        target = batch_of_target[batch_idx].detach().to(torch.device('cpu')).squeeze()
+    if not isinstance(sample, list):
+        sample = [sample]
+    for sample_idx in sample:
+        pred = batch_of_pred[sample_idx].detach().to(torch.device('cpu')).squeeze()
+        target = batch_of_target[sample_idx].detach().to(torch.device('cpu')).squeeze()
         target = target[1:]
         num_frames = end_frame-start_frame+1
         fig, axs = plt.subplots(2, num_frames, figsize=(2*num_frames, 4))
@@ -23,7 +23,7 @@ def plot_frames(batch_of_pred, batch_of_target, start_frame, end_frame, batch):
             axs[0, frame-start_frame].axis('off')
             axs[1, frame-start_frame].imshow(pred[frame,:,:], cmap="Greys")
             axs[1, frame-start_frame].axis('off')
-        plt.savefig(f'frames_in_batch_{batch_idx}.png', dpi=120)
+        plt.savefig(f'frames_in_sample_{sample_idx}.png', dpi=120)
         plt.close()
 
 def plot_curve(vector, save_path, filename):
@@ -58,7 +58,7 @@ class HeatmapLog:
         self.save_folder = f"{folder_log}/"+mat_name
         self.mat_name = mat_name
 
-    def plot(self, mat, epoch=0):
+    def plot(self, mat, epoch=None):
         if mat.dim() == 3:
             mat_list = [mat[idx_unit,:,:].squeeze().cpu() for idx_unit in range(mat.shape[0])] 
         else:
@@ -78,8 +78,12 @@ class HeatmapLog:
                 im=axs[idx_mat].imshow(mat, cmap='Greys', interpolation='nearest')
         
         fig.colorbar(im, cax=cbar_ax)
-        fig.suptitle(self.mat_name.replace("_", " ")+ f' in epoch [{epoch}]')
-        plt.savefig(self.save_folder + '/' + self.mat_name + f'_epoch_{epoch}.png', dpi=120)
+        if epoch is not None:
+            fig.suptitle(self.mat_name.replace("_", " ")+ f' in epoch [{epoch}]')
+            plt.savefig(self.save_folder + '/' + self.mat_name + f'_epoch_{epoch}.png', dpi=120)
+        else:
+            fig.suptitle(self.mat_name.replace("_", " "))
+            plt.savefig(self.save_folder + '/' + self.mat_name + f'.png', dpi=120)
         plt.close()
 
 
@@ -120,9 +124,9 @@ class VectorLog:
 
     def append(self, vector):
         if self.var_stack is None:
-            self.var_stack = vector.detach().unsqueeze(0)
+            self.var_stack = vector.detach().unsqueeze(1)
         else:
-            self.var_stack = torch.cat((self.var_stack, vector.detach().unsqueeze(0)), 0)
+            self.var_stack = torch.cat((self.var_stack, vector.detach().unsqueeze(1)), 1)
 
     def save(self):
         if self.epoch is None:

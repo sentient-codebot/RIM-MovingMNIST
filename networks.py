@@ -116,49 +116,6 @@ class LSTM(nn.Module):
         total_norm = total_norm ** (1. / 2)
         return total_norm
 
-class CopyingModel(nn.Module):
-    def __init__(self, args):
-        super().__init__()
-        self.args = args
-        if args['cuda']:
-            self.device = torch.device('cuda')
-        else:
-            self.device = torch.device('cpu')
-        self.rim_model = RIM(self.device, args['input_size'], args['hidden_size'], args['num_units'],args['k'], args['rnn_cell'], args['key_size_input'], args['value_size_input'] , args['query_size_input'],
-            args['num_input_heads'], args['input_dropout'], args['key_size_comm'], args['value_size_comm'], args['query_size_comm'], args['num_input_heads'], args['comm_dropout']).to(self.device)
-
-        self.Linear = nn.Linear(args['hidden_size'] * args['num_units'], 9)
-        self.Loss = nn.CrossEntropyLoss()
-        
-    def to_device(self, x):
-        return torch.from_numpy(x).to(self.device)
-
-    def forward(self, x, y = None):
-        x = x.float()
-        hs = torch.randn(x.size(0), self.args['num_units'], self.args['hidden_size']).to(self.device)
-        cs = None
-        if self.args['rnn_cell'] == 'LSTM':
-            cs = torch.randn(x.size(0), self.args['num_units'], self.args['hidden_size']).to(self.device)
-
-        xs = torch.split(x, 1, 1)
-        preds_ = []
-        loss = 0
-        loss_last_10 = 0
-        for i,k in enumerate(xs):
-            hs, cs = self.rim_model(k, hs, cs)
-            
-            preds = self.Linear(hs.contiguous().view(x.size(0), -1))
-            preds_.append(preds)
-            if y is not None:
-                loss+=self.Loss(preds, y[:,i].squeeze().long())
-                if i >= len(xs) - 10:
-                    loss_last_10+=self.Loss(preds, y[:,i].squeeze().long())
-        preds_ = torch.stack(preds_, dim = 1)
-        if y is not None:
-            loss/=len(xs)
-            loss_last_10/=10
-            return preds_, loss, loss_last_10
-        return preds_
 
 def sparse_loss(beta, gamma):
     # NOTE: loss is defined for BATCH. so it should be the average across the whole batch
@@ -258,11 +215,11 @@ class BallModel(nn.Module):
         ).to(self.args.device)
 
     def forward(self, x, h_prev):
+        ctx = None
         encoded_input = self.Encoder(x)
-        # encoded_input = clamp(encoded_input)
-        self.nan_hook(encoded_input)
+
         if self.core=='RIM':
-            h_new, foo, bar = self.rim_model(encoded_input, h_prev)
+            h_new, foo, bar, ctx = self.rim_model(encoded_input, h_prev)
         elif self.core=='GRU':
             h_shape = h_prev.shape # record the shape
             h_prev = h_prev.reshape((h_shape[0],-1)) # flatten
@@ -271,11 +228,22 @@ class BallModel(nn.Module):
             h_new = h_new.reshape(h_shape)
         elif self.core=='LSTM':
             raise ValueError('LSTM core not implemented yet!')
-        self.nan_hook(h_new)
+        
+        # --- here just for test    ---
+        # module_mask = torch.tensor([1,1,1,0,0,0]).reshape(1,-1,1).to(self.args.device)
+        # h_new = h_new*module_mask
+        # --- above for test        ---
         dec_out_ = self.Decoder(h_new.view(h_new.shape[0],-1))
-        self.nan_hook(dec_out_)
+        
+        intm = ctx
 
-        return dec_out_, h_new
+        """ 
+        [
+            "input_mask",
+            # "decoder_activation"
+        ]
+        """
+        return dec_out_, h_new, intm
 
     def init_hidden(self, batch_size): 
         # assert False, "don't call this"
