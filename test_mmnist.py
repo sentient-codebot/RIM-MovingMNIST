@@ -38,14 +38,18 @@ def get_grad_norm(model):
 
 # @torch.no_grad()
 def test(model, test_loader, args, rollout=True):
+    '''test(model, test_loader, args, rollout)'''
     rim_actv_log = VectorLog(args.folder_log+"/intermediate_vars", "rim_actv")
     dec_actv_log = VectorLog(args.folder_log+"/intermediate_vars", "decoder_actv")
     frame_loss_log = ScalarLog(args.folder_log+"/intermediate_vars", "frame_loss")
     f1_score_log = ScalarLog(args.folder_log+"/intermediate_vars", "f1_score")
 
+    mse = torch.nn.MSELoss()
+
     model.eval()
 
     epoch_loss = torch.tensor(0.).to(args.device)
+    epoch_mseloss = torch.tensor(0.).to(args.device)
     for batch_idx, data in enumerate(test_loader): # tqdm doesn't work here?
         frame_loss_log.reset()
         f1_score_log.reset()
@@ -57,6 +61,7 @@ def test(model, test_loader, args, rollout=True):
             data = data.unsqueeze(2).float()
         hidden = hidden.detach()
         loss = 0.
+        mseloss = 0.
         f1 = 0.
         prediction = torch.zeros_like(data)
 
@@ -72,6 +77,7 @@ def test(model, test_loader, args, rollout=True):
                 target = data[:, frame+1, :, :, :]
                 prediction[:, frame+1, :, :, :] = output
                 loss += loss_fn(output, target)
+                mseloss += mse(output, target)
                 f1_frame = f1_score(target, output)
                 f1 += f1_frame
 
@@ -84,6 +90,7 @@ def test(model, test_loader, args, rollout=True):
             dec_actv_log.append(intm["decoder_utilization"][-1])
 
         epoch_loss += loss.detach()
+        epoch_mseloss += mseloss.detach()
         if args.device == torch.device("cpu"):
             break
         
@@ -91,14 +98,15 @@ def test(model, test_loader, args, rollout=True):
     dec_actv_log.save()
     frame_loss_log.save()
 
-    prediction = prediction[:, 1:, :, :, :]
+    prediction = prediction[:, 1:, :, :, :] # last batch of prediction, starting from frame 1
     epoch_loss = epoch_loss / (batch_idx+1)
+    epoch_mseloss = epoch_loss / (batch_idx+1)
     f1_avg = f1 / (batch_idx+1) / (data.shape[1]-1)
 
     """save last batch of intermediate variables"""
 
 
-    return epoch_loss, prediction, data, f1_avg
+    return epoch_loss, epoch_mseloss, prediction, data, f1_avg
 
 def dec_rim_util(model, h, args):
     """check the contribution of the (num_module)-th RIM by seeing how much they contribute to the activaiton of first relu"""

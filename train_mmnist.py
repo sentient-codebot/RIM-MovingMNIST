@@ -12,6 +12,8 @@ from utils.util import set_seed, make_dir
 from utils.visualize import ScalarLog, VectorLog, HeatmapLog
 from data.MovingMNIST import MovingMNIST
 from box import Box
+from tqdm import tqdm
+from test_mmnist import test
 
 import os 
 from os import listdir
@@ -34,12 +36,12 @@ def get_grad_norm(model):
     total_norm = total_norm ** 0.5
     return total_norm
 
-def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args):
+def train(model, train_loader, test_loader, optimizer, epoch, logbook, train_batch_idx, args):
     grad_norm_log = ScalarLog(args.folder_log+'/intermediate_vars', "grad_norm", epoch=epoch)
 
     model.train()
 
-    epoch_loss = torch.tensor(0.).to(args.device)
+    train_epoch_loss = torch.tensor(0.).to(args.device)
     for batch_idx, data in enumerate(train_loader):
         hidden = model.init_hidden(data.shape[0]).to(args.device)
 
@@ -73,52 +75,17 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args)
         }
         logbook.write_metric_logs(metrics=metrics)
 
-        epoch_loss += loss.detach()
+        train_epoch_loss += loss.detach()
 
+    train_epoch_loss = train_epoch_loss / (batch_idx+1)
     if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0:
-        """log intermediate variables here"""
-        pass
+        """test model accuracy and log intermediate variables here"""
+        test_epoch_loss, test_mse, prediction, data, f1_avg = test(model, test_loader, args, rollout=False)
+        print(f"epoch [{epoch}] train loss: {train_epoch_loss:.3f}; test loss: {test_epoch_loss:.3f}; test mse: {test_mse:.3f}; test F1 score: {f1_avg}")
         # SAVE logged vectors
 
-    epoch_loss = epoch_loss / (batch_idx+1)
-    return train_batch_idx, epoch_loss
+    return train_batch_idx, train_epoch_loss
 
-@torch.no_grad()
-def test(model, test_loader, logbook, args):
-
-    model.eval()
-
-    epoch_loss = torch.tensor(0.).to(args.device)
-    test_batch_idx = 0
-    for batch_idx, data in enumerate(test_loader):
-        hidden = model.init_hidden(data.shape[0]).to(args.device)
-
-        start_time = time()
-        data = data.to(args.device)
-        data = data.unsqueeze(2).float()
-        hidden = hidden.detach()
-        
-        loss = 0.
-        # with autograd.detect_anomaly():
-        if True:
-            for frame in range(data.shape[1]-1):
-                output, hidden = model(data[:, frame, :, :, :], hidden)
-                target = data[:, frame+1, :, :, :]
-                loss += loss_fn(output, target)
-
-        test_batch_idx += 1 
-        metrics = {
-            "loss": loss.cpu().item(),
-            "mode": "train",
-            "batch_idx": test_batch_idx,
-            "time_taken": time() - start_time,
-        }
-        logbook.write_metric_logs(metrics=metrics)
-
-        epoch_loss += loss.detach()
-
-    epoch_loss = epoch_loss / (batch_idx+1)
-    return epoch_loss
 
 def main():
     args = argument_parser()
@@ -158,6 +125,7 @@ def main():
         train_batch_idx, epoch_loss = train(
             model = model,
             train_loader = train_loader,
+            test_loader = test_loader,
             optimizer = optimizer,
             epoch = epoch,
             logbook = logbook,

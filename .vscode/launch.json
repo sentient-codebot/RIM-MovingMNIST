@@ -38,7 +38,9 @@
                 "--should_resume",
                 "false",
                 "--experiment_name",
-                "MMNIST_complete"
+                "MMNIST_complete",
+                "--model_persist_frequency",
+                "25"
             ]
         },
         {

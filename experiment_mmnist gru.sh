@@ -4,7 +4,7 @@ echo Running on $HOSTNAME
 
 experiment_name="MMNIST_complete"
 cfg_json="configs/rim_complete/rim_complete.json"
-core="RIM"
+core="GRU"
 should_resume="false"
 save_freq=25
 
