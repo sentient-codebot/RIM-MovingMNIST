@@ -61,15 +61,22 @@ def main():
     # TODO parse a folder_log
     args = arg_parser()
     # TODO load the tensor
-    loss_plot = TensorVisualizer(args.folder_log, "epoch_loss")
-    gradnorm_plot = TensorVisualizer(args.folder_log, 'grad_norm')
+    loss_plot = TensorVisualizer(args.folder_log, "train_loss")
+    testloss_plot =  TensorVisualizer(args.folder_log, "test_loss")
+    rim_actv_plot = TensorVisualizer(args.folder_log, "rim_actv")
+    decoder_actv = TensorVisualizer(args.folder_log, "decoder_actv")
+    # gradnorm_plot = TensorVisualizer(args.folder_log, 'grad_norm')
     # testmat_plot = TensorVisualizer(args.folder_log, "test_mat")
     # TODO plot all-epoch tensors
     loss_plot()
+    testloss_plot()
+    rim_actv_plot()
+    decoder_actv()
 
     # TODO plot per-epoch tensors
     for epoch_idx in [10,30,60,90,120]:
-        gradnorm_plot(epoch_idx)
+        # gradnorm_plot(epoch_idx)
+        pass
 
 if __name__ == "__main__":
     main()
