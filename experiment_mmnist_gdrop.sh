@@ -5,7 +5,7 @@ echo Running on $HOSTNAME
 experiment_name="MMNIST_dropout"
 cfg_json="configs/rim_complete/rim_complete_dropout.json"
 core="RIM"
-should_resume="false"
+should_resume="true"
 save_freq=25
 
 python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --model_persist_frequency $save_freq 

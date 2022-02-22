@@ -104,7 +104,7 @@ def main():
     cudable = torch.cuda.is_available()
     args.device = torch.device("cuda" if cudable else "cpu")
 
-    model, optimizer, start_epoch, train_batch_idx, train_loss_log, test_loss_log = setup_model(args=args, logbook=logbook)
+    model, optimizer, start_epoch, train_batch_idx, train_loss_log, test_loss_log, f1_log = setup_model(args=args, logbook=logbook)
 
     train_set = MovingMNIST(root='./data', train=True, download=True, mini=False)
     test_set = MovingMNIST(root='./data', train=False, download=True)
@@ -156,6 +156,8 @@ def main():
             print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}; test loss: {test_epoch_loss:.3f}; test mse: {test_mse:.3f}; test F1 score: {f1_avg}")
             test_loss_log.append(test_epoch_loss, idx=epoch)
             test_loss_log.save() # TODO maybe a should save a metric dict file
+            f1_log.append(f1_avg, idx=epoch)
+            f1_log.save()
         else:
             print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}")
 
@@ -169,6 +171,9 @@ def main():
                 'loss': epoch_loss,
                 'train_loss_log': train_loss_log,
                 'test_loss_log': test_loss_log,
+                'metric_log': {
+                    'f1_log': f1_log,
+                }
             }, f"{args.folder_log}/checkpoints/{epoch}")
         
 def setup_model(args, logbook):
@@ -178,6 +183,7 @@ def setup_model(args, logbook):
     train_batch_idx = 0
     train_loss_log = ScalarLog(args.folder_log+'/intermediate_vars', "train_loss")
     test_loss_log = ScalarLog(args.folder_log+'/intermediate_vars', "test_loss")
+    f1_log = ScalarLog(args.folder_log+'/intermediate_vars', "f1_score")
     if args.should_resume:
         # Find the last checkpointed model and resume from that
         model_dir = f"{args.folder_log}/checkpoints"
@@ -196,10 +202,13 @@ def setup_model(args, logbook):
         loss = checkpoint['epoch']
         train_loss_log = checkpoint['train_loss_log']
         test_loss_log = checkpoint['test_loss_log']
+        metric_log = checkpoint['metric_log']
+        f1_log = metric_log['f1_log']
+
     
         logbook.write_message_logs(message=f"Resuming experiment id: {args.id}, from epoch: {start_epoch}")
 
-    return model, optimizer, start_epoch, train_batch_idx, train_loss_log, test_loss_log
+    return model, optimizer, start_epoch, train_batch_idx, train_loss_log, test_loss_log, f1_log
 
 if __name__ == '__main__':
     main()
