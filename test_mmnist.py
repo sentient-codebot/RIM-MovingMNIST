@@ -69,7 +69,7 @@ def test(model, test_loader, args, loss_fn, rollout=True):
             with torch.no_grad():
                 if not rollout:
                     output, hidden, intm = model(data[:, frame, :, :, :], hidden)
-                elif frame >= 15:
+                elif frame >= 5:
                     output, hidden, intm = model(output, hidden)
                 else:
                     output, hidden, intm = model(data[:, frame, :, :, :], hidden)
