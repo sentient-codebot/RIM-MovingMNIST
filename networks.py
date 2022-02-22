@@ -222,6 +222,9 @@ class BallModel(nn.Module):
         ctx = None
         encoded_input = self.Encoder(x)
 
+        if self.rim_dropout is not None:
+            h_prev = self.rim_dropout(h_prev)
+
         if self.core=='RIM':
             h_new, foo, bar, ctx = self.rim_model(encoded_input, h_prev)
         elif self.core=='GRU':
@@ -238,8 +241,7 @@ class BallModel(nn.Module):
         # h_new = h_new*module_mask
         # --- above for test        ---
 
-        if self.rim_dropout is not None:
-            h_new = self.rim_dropout(h_new)
+        
         dec_out_ = self.Decoder(h_new.view(h_new.shape[0],-1))
         
         intm = ctx
@@ -254,7 +256,7 @@ class BallModel(nn.Module):
 
     def init_hidden(self, batch_size): 
         # assert False, "don't call this"
-        return torch.zeros((batch_size, 
+        return torch.rand((batch_size, 
             self.args.num_units, 
             self.args.hidden_size), 
             requires_grad=False)

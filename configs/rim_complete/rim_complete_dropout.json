@@ -11,7 +11,7 @@
 
     "hidden_size"               : 100,
     "num_units"                 : 6,
-    "k"                         : 4,
+    "k"                         : 2,
     "num_input_heads"           : 1,
     "version"                   : 0,
     "rnn_cell"                  : "GRU",
@@ -25,5 +25,5 @@
     "num_comm_heads"            : 2,
     "comm_dropout"              : 0.1,
 
-    "rim_dropout"               : 0.3
+    "rim_dropout"               : 0.1
 }
