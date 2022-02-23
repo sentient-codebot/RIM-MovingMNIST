@@ -92,8 +92,8 @@ def test(model, test_loader, args, loss_fn, rollout=True):
             rim_actv_log.append(intm["input_mask"][-1]) # shape (batchsize, num_units, 1)
             dec_actv_log.append(intm["decoder_utilization"][-1])
         
-        ssim += pt_ssim.ssim(data[:,1:,:,:].reshape((-1,data.shape[2],data.shape[3])),
-                        prediction[:,1:,:,:].reshape((-1,data.shape[2],data.shape[3])))
+        ssim += pt_ssim.ssim(data[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
+                        prediction[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
         epoch_loss += loss.detach()
         epoch_mseloss += mseloss.detach()
         if args.device == torch.device("cpu"):
