@@ -41,7 +41,8 @@ def get_grad_norm(model):
 # @torch.no_grad()
 def test(model, test_loader, args, loss_fn, rollout=True):
     '''test(model, test_loader, args, rollout)'''
-    rim_actv_log = VectorLog(args.folder_log+"/intermediate_vars", "rim_actv")
+    if args.core == 'RIM':
+        rim_actv_log = VectorLog(args.folder_log+"/intermediate_vars", "rim_actv")
     dec_actv_log = VectorLog(args.folder_log+"/intermediate_vars", "decoder_actv")
     frame_loss_log = ScalarLog(args.folder_log+"/intermediate_vars", "frame_loss")
     f1_score_log = ScalarLog(args.folder_log+"/intermediate_vars", "f1_score")
@@ -89,7 +90,8 @@ def test(model, test_loader, args, loss_fn, rollout=True):
             # print(f"Frame {frame} F1 score: {f1_frame}") 
 
             intm["decoder_utilization"] = dec_rim_util(model, hidden, args)
-            rim_actv_log.append(intm["input_mask"][-1]) # shape (batchsize, num_units, 1)
+            if args.core == 'RIM':
+                rim_actv_log.append(intm["input_mask"][-1]) # shape (batchsize, num_units, 1)
             dec_actv_log.append(intm["decoder_utilization"][-1])
         
         ssim += pt_ssim.ssim(data[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
@@ -99,7 +101,8 @@ def test(model, test_loader, args, loss_fn, rollout=True):
         if args.device == torch.device("cpu"):
             break
         
-    rim_actv_log.save()
+    if args.core == 'RIM':
+        rim_actv_log.save()
     dec_actv_log.save()
     frame_loss_log.save()
 
