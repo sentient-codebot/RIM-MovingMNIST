@@ -15,6 +15,8 @@ from utils.metric import f1_score
 from box import Box
 from tqdm import tqdm
 
+import utils.pssim.pytorch_ssim as pt_ssim
+
 import os 
 from os import listdir
 from os.path import isfile, join
@@ -63,6 +65,7 @@ def test(model, test_loader, args, loss_fn, rollout=True):
         hidden = hidden.detach()
         loss = 0.
         mseloss = 0.
+        ssim = 0.
         prediction = torch.zeros_like(data)
 
         for frame in range(data.shape[1]-1):
@@ -88,7 +91,9 @@ def test(model, test_loader, args, loss_fn, rollout=True):
             intm["decoder_utilization"] = dec_rim_util(model, hidden, args)
             rim_actv_log.append(intm["input_mask"][-1]) # shape (batchsize, num_units, 1)
             dec_actv_log.append(intm["decoder_utilization"][-1])
-
+        
+        ssim += pt_ssim(data[:,1:,:,:].reshape((-1,data.shape[2],data.shape[3])),
+                        prediction[:,1:,:,:].reshape((-1,data.shape[2],data.shape[3])))
         epoch_loss += loss.detach()
         epoch_mseloss += mseloss.detach()
         if args.device == torch.device("cpu"):
@@ -101,12 +106,13 @@ def test(model, test_loader, args, loss_fn, rollout=True):
     prediction = prediction[:, 1:, :, :, :] # last batch of prediction, starting from frame 1
     epoch_loss = epoch_loss / (batch_idx+1)
     epoch_mseloss = epoch_mseloss / (batch_idx+1)
+    ssim = ssim / (batch_idx+1)
     f1_avg = f1 / (batch_idx+1) / (data.shape[1]-1)
 
     """save last batch of intermediate variables"""
 
 
-    return epoch_loss, epoch_mseloss, prediction, data, f1_avg
+    return epoch_loss, epoch_mseloss, prediction, data, f1_avg, ssim
 
 def dec_rim_util(model, h, args):
     """check the contribution of the (num_module)-th RIM by seeing how much they contribute to the activaiton of first relu"""

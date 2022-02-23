@@ -145,7 +145,7 @@ def main():
         # test done here
         if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0:
             """test model accuracy and log intermediate variables here"""
-            test_epoch_loss, test_mse, prediction, data, f1_avg = test(
+            test_epoch_loss, test_mse, prediction, data, f1_avg, ssim = test(
                 model = model, 
                 test_loader = test_loader, 
                 args = args, 
@@ -153,7 +153,7 @@ def main():
                 rollout = False
             )
 
-            print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}; test loss: {test_epoch_loss:.3f}; test mse: {test_mse:.3f}; test F1 score: {f1_avg}")
+            print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}; test loss: {test_epoch_loss:.3f}; test mse: {test_mse:.3f}; test F1 score: {f1_avg}; test SSIM: {ssim}")
             test_loss_log.append(test_epoch_loss, idx=epoch)
             test_loss_log.save() # TODO maybe a should save a metric dict file
             f1_log.append(f1_avg, idx=epoch)
