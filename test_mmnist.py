@@ -54,6 +54,7 @@ def test(model, test_loader, args, loss_fn, rollout=True):
     epoch_loss = torch.tensor(0.).to(args.device)
     epoch_mseloss = torch.tensor(0.).to(args.device)
     f1 = 0.
+    ssim = 0.
     for batch_idx, data in enumerate(test_loader): # tqdm doesn't work here?
         frame_loss_log.reset()
         f1_score_log.reset()
@@ -66,7 +67,6 @@ def test(model, test_loader, args, loss_fn, rollout=True):
         hidden = hidden.detach()
         loss = 0.
         mseloss = 0.
-        ssim = 0.
         prediction = torch.zeros_like(data)
 
         for frame in range(data.shape[1]-1):
