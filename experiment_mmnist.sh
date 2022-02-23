@@ -1,6 +1,6 @@
 #!/bin/zsh
 echo Running on $HOSTNAME
-#source ../../cas_env/bin/activate
+source ../../cas_env/bin/activate
 
 experiment_name="MMNIST_complete"
 cfg_json="configs/rim_complete/rim_complete.json"
