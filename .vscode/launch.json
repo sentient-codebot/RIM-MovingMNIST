@@ -76,7 +76,7 @@
                 "--core",
                 "GRU",
                 "--experiment_name",
-                "MMNIST_baseline"
+                "MMNIST_GRU"
             ]
         }
     ]

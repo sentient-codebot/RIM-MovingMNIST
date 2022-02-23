@@ -244,7 +244,10 @@ class BallModel(nn.Module):
         
         dec_out_ = self.Decoder(h_new.view(h_new.shape[0],-1))
         
-        intm = ctx
+        if ctx is not None:
+            intm = ctx
+        else:
+            intm = {}
 
         """ 
         [
