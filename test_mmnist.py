@@ -92,7 +92,7 @@ def test(model, test_loader, args, loss_fn, rollout=True):
             rim_actv_log.append(intm["input_mask"][-1]) # shape (batchsize, num_units, 1)
             dec_actv_log.append(intm["decoder_utilization"][-1])
         
-        ssim += pt_ssim(data[:,1:,:,:].reshape((-1,data.shape[2],data.shape[3])),
+        ssim += pt_ssim.ssim(data[:,1:,:,:].reshape((-1,data.shape[2],data.shape[3])),
                         prediction[:,1:,:,:].reshape((-1,data.shape[2],data.shape[3])))
         epoch_loss += loss.detach()
         epoch_mseloss += mseloss.detach()
@@ -155,7 +155,7 @@ def main():
     else:
         loss_fn = torch.nn.MSELoss()    
     
-    test_loss, test_mse, prediction, target, f1_avg = test(
+    test_loss, test_mse, prediction, target, f1_avg, ssim = test(
         model = model,
         test_loader = test_loader,
         args = args,
@@ -164,6 +164,7 @@ def main():
     )
     print(f"test loss: {test_loss}")
     print(f"test average F1 score: {f1_avg}")
+    print(f'test SSIM: {ssim}')
     plot_frames(prediction, target, start_frame=1, end_frame=target.shape[1]-2, sample=[0,2,7,17,29,-1])
 
     # wait = input("Press any key to terminate program. ")
