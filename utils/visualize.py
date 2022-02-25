@@ -184,6 +184,7 @@ class SaliencyMap():
     def differentiate(self, x: Tensor, h_prev: Tensor, abs: bool=True) -> Tensor:
         '''
         h_prev  : (batch_size, num_units, hidden_dim)
+        attn_score  : (BS, num_units)
         x       : (batch_size, height, width) / (BS, 1, H, W)
         'h_new' : (batch_size, num_units)
 
@@ -192,8 +193,9 @@ class SaliencyMap():
         x = x.clone().requires_grad_(True)
         h_prev = h_prev.clone()
         output, h_new, intm = self.model(x, h_prev)
+        attn_score = intm['input_attn'] # ()
         h_new_out = h_new # save a copy to return
-        h_new = torch.norm(h_new, p=2, dim=2) # (_, _, _,) -> (_, _,)
+        # h_new = torch.norm(h_new, p=2, dim=2) # (_, _, _,) -> (_, _,)
         saliency_maps: List[Tensor] = []
         mask_init = torch.zeros(1, h_prev.shape[1]).to(x.device)
         for module_idx in range(h_prev.shape[1]):
@@ -201,7 +203,7 @@ class SaliencyMap():
             mask[:, module_idx] = 1.
             if x.grad is not None:
                 x.grad = torch.zeros_like(x.grad)
-            (h_new*mask).backward(gradient=torch.ones_like(h_new), retain_graph=True)
+            (attn_score*mask).backward(gradient=torch.ones_like(attn_score), retain_graph=True)
             saliency_maps.append(x.grad.unsqueeze(1))
         saliency_maps = torch.cat(saliency_maps, dim=1)
         self.inputs = x.squeeze().cpu() # derivative is x-dependent! 

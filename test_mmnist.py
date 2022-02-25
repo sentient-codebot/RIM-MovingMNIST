@@ -96,7 +96,7 @@ def test(model, test_loader, args, loss_fn, rollout=True):
 
             intm["decoder_utilization"] = dec_rim_util(model, hidden, args)
             if args.core == 'RIM':
-                rim_actv_log.append(intm["input_mask"][-1]) # shape (batchsize, num_units, 1)
+                rim_actv_log.append(intm["input_attn"][-1]) # shape (batchsize, num_units, 1)
             dec_actv_log.append(intm["decoder_utilization"][-1])
         
         # last batch, last frame, draw saliency map

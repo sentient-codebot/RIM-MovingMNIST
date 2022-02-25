@@ -251,7 +251,7 @@ class BallModel(nn.Module):
 
         """ 
         [
-            "input_mask",
+            "input_attn",
             # "decoder_activation"
         ]
         """
