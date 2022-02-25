@@ -198,7 +198,8 @@ class SaliencyMap():
         for module_idx in range(h_prev.shape[1]):
             mask = mask_init
             mask[:, module_idx] = 1.
-            x.grad = torch.tensor(0.)
+            if x.grad is not None:
+                x.grad = torch.zeros_like(x.grad)
             (h_new*mask).backward(gradient=torch.ones_like(h_new))
             saliency_maps.append(x.grad.unsqueeze(1))
         saliency_maps = torch.cat(saliency_maps, dim=1)
