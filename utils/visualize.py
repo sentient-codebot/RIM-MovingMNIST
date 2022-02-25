@@ -193,7 +193,7 @@ class SaliencyMap():
         h_prev = h_prev.clone()
         output, h_new, intm = self.model(x, h_prev)
         h_new_out = h_new # save a copy to return
-        h_new = torch.sum(h_new, dim=2) # -> (_, _,)
+        h_new = torch.norm(h_new, p=2, dim=2) # (_, _, _,) -> (_, _,)
         saliency_maps: List[Tensor] = []
         mask_init = torch.zeros(1, h_prev.shape[1]).to(x.device)
         for module_idx in range(h_prev.shape[1]):
