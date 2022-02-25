@@ -31,12 +31,14 @@ def main():
         batch_size=args.batch_size,
         shuffle=True
     )
-
-    sa_map = SaliencyMap(model.eval(), args)
+    args.rim_dropout = -1
+    args.do_rim_dropout = False
+    sa_map = SaliencyMap(model.train(), args)
     data = next(iter(test_loader)).to(args.device)
     if data.dim()==4:
         data = data.unsqueeze(2).float()
     rollout = False
+    hidden = model.init_hidden(data.shape[0]).to(args.device).detach()
     for frame in range(data.shape[1]-1):
         if not rollout:
             inputs = data[:, frame, :, :, :].to(args.device)
