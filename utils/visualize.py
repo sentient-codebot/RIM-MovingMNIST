@@ -7,7 +7,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from numpy import var
 import torch
 from torch import Tensor, save
-from util import make_dir
+from .util import make_dir
 import argparse
 from typing import List, Union, Any, Optional
 
