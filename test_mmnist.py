@@ -100,7 +100,7 @@ def test(model, test_loader, args, loss_fn, rollout=True):
             dec_actv_log.append(intm["decoder_utilization"][-1])
         
         # last batch, last frame, draw saliency map
-        sa_map_list = sa_map.differentiate(data[:, frame, :, :, :], hidden_before_last)
+        # sa_map_list = sa_map.differentiate(data[:, frame, :, :, :], hidden_before_last)
         
         ssim += pt_ssim.ssim(data[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
                         prediction[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))

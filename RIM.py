@@ -270,7 +270,7 @@ class RIMCell(nn.Module):
         attention_probs = self.input_dropout(nn.Softmax(dim = -1)(attention_scores))
         inputs = torch.matmul(attention_probs, value_layer) * mask_.unsqueeze(2)
 
-        return inputs, mask_
+        return inputs, mask_, not_null_scores
 
     def communication_attention(self, h, mask):
         """
@@ -338,7 +338,7 @@ class RIMCell(nn.Module):
         x = torch.cat((x.unsqueeze(1), null_input), dim = 1)
 
         # Compute input attention
-        inputs, mask = self.input_attention_mask(x, hs)
+        inputs, mask, attn_score = self.input_attention_mask(x, hs)
         h_old = hs * 1.0
         if cs is not None:
             c_old = cs * 1.0
@@ -361,7 +361,7 @@ class RIMCell(nn.Module):
 
         # Prepare the context/intermediate value
         ctx = {
-            "input_mask": mask.squeeze(),
+            "input_mask": attn_score, # mask.squeeze(),
         }
 
         # Update hs and cs and return them
