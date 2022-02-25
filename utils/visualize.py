@@ -190,8 +190,9 @@ class SaliencyMap():
         saliency_maps   : (batch_size, num_units, height, width)]
         '''
         x = x.clone().requires_grad_(True)
-        h_prev = h_prev.clone().requires_grad_(False)
+        h_prev = h_prev.clone()
         output, h_new, intm = self.model(x, h_prev)
+        h_new_out = h_new # save a copy to return
         h_new = torch.sum(h_new, dim=2) # -> (_, _,)
         saliency_maps: List[Tensor] = []
         mask_init = torch.zeros(1, h_prev.shape[1]).to(x.device)
@@ -207,7 +208,7 @@ class SaliencyMap():
         self.saliency_maps = saliency_maps.cpu().squeeze()
         if abs:
             self.saliency_maps = torch.abs(self.saliency_maps)
-        return output, h_new, intm
+        return output, h_new_out, intm
 
     def plot(self, 
         sample_indices: Union[List[int], int],
@@ -217,6 +218,7 @@ class SaliencyMap():
         save_folder: Optional[str]='.'
         ) -> None:
         '''
+        self.inputs: (BS, H, W)
         self.saliency_maps: (BS, num_units, H, W)
         background: (height, width)
         '''
@@ -226,18 +228,20 @@ class SaliencyMap():
             sample_indices = [sample_indices]
         for sample_idx in sample_indices:
             sa_map_ = self.saliency_maps[sample_idx] 
-            bg_ = self.inputs[sample_idx]
+            bg_ = self.inputs[sample_idx].unsqueeze(0).repeat((num_units, 1, 1))
             if index_name is not None:
                 ind_name_ = index_name+f'_{index}_'+f'sample_{sample_idx}'
             else:
                 ind_name_ = f'sample_{sample_idx}'
             plot_saliency(
-                background=bg_,
+                background=bg_.detach(),
                 saliency=sa_map_,
                 variable_name=variable_name,
                 index_name=ind_name_,
                 index=sample_idx,
-                save_folder=save_folder
+                save_folder=save_folder,
+                bg_alpha=1,
+                sa_alpha=0.7
             )
             
 

@@ -9,7 +9,7 @@ import torch
 from data.MovingMNIST import MovingMNIST
 from utils.visualize import SaliencyMap
 
-set_seed(1997)
+set_seed(2022)
 
 def main():
     args = argument_parser()
@@ -52,7 +52,7 @@ def main():
             variable_name='saliency_hid2inp',
             index_name='frame',
             index=frame,
-            save_folder=args.folder_log+'intermediate_vars'
+            save_folder=args.folder_log+'/intermediate_vars'
         )
 
 if __name__ == "__main__":
