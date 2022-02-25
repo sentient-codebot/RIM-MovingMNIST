@@ -200,10 +200,10 @@ class SaliencyMap():
             mask[:, module_idx] = 1.
             if x.grad is not None:
                 x.grad = torch.zeros_like(x.grad)
-            (h_new*mask).backward(gradient=torch.ones_like(h_new))
+            (h_new*mask).backward(gradient=torch.ones_like(h_new), retain_graph=True)
             saliency_maps.append(x.grad.unsqueeze(1))
         saliency_maps = torch.cat(saliency_maps, dim=1)
-        self.inputs = x.squeeze() # derivative is x-dependent! 
+        self.inputs = x.squeeze().cpu() # derivative is x-dependent! 
         self.saliency_maps = saliency_maps.cpu().squeeze()
         if abs:
             self.saliency_maps = torch.abs(self.saliency_maps)
@@ -220,7 +220,6 @@ class SaliencyMap():
         self.saliency_maps: (BS, num_units, H, W)
         background: (height, width)
         '''
-        background = background.cpu()
         num_units = self.saliency_maps.shape[1]
         
         if not isinstance(sample_indices, list):
