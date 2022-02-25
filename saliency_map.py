@@ -33,13 +33,15 @@ def main():
     )
 
     sa_map = SaliencyMap(model.eval(), args)
-    data = next(iter(test_loader))
+    data = next(iter(test_loader)).to(args.device)
+    if data.dim()==4:
+        data = data.unsqueeze(2).float()
     rollout = False
     for frame in range(data.shape[1]-1):
         if not rollout:
-            inputs = data[:, frame, :, :, :]
+            inputs = data[:, frame, :, :, :].to(args.device)
         elif frame >= 5:
-            inputs = output
+            inputs = output.to(args.device)
         else:
             inputs = data[:, frame, :, :, :]
         output, hidden, intm = sa_map.differentiate(inputs, hidden)
