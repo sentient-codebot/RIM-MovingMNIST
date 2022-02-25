@@ -181,7 +181,7 @@ class SaliencyMap():
         self.args = args
         self.saliency_maps: Optional[List[Tensor]] = None
 
-    def differentiate(self, x: Tensor, h_prev: Tensor) -> Tensor:
+    def differentiate(self, x: Tensor, h_prev: Tensor, abs: bool=True) -> Tensor:
         '''
         h_prev  : (batch_size, num_units, hidden_dim)
         x       : (batch_size, height, width) / (BS, 1, H, W)
@@ -204,7 +204,9 @@ class SaliencyMap():
         saliency_maps = torch.cat(saliency_maps, dim=1)
         self.inputs = x.squeeze() # derivative is x-dependent! 
         self.saliency_maps = saliency_maps.cpu().squeeze()
-        return saliency_maps.cpu(), output, h_new, intm
+        if abs:
+            self.saliency_maps = torch.abs(self.saliency_maps)
+        return output, h_new, intm
 
     def plot(self, 
         sample_indices: Union[List[int], int],
@@ -298,7 +300,9 @@ def plot_saliency(
     variable_name: Optional[str]='variable', 
     index_name: Optional[str]=None, 
     index: Optional[Union[List[Any], Any]]=None,
-    save_folder: Optional[str]='.'
+    save_folder: Optional[str]='.',
+    bg_alpha: float=1,
+    sa_alpha: float=0.3
 ) -> None:
     ''' Saliency Map Plot Function: plot M WxH images in a row
     background  : (M, W, H) image in the background 
@@ -330,14 +334,14 @@ def plot_saliency(
 
     for subplot_idx, (bg_, sa_) in enumerate(zip(background,saliency)):
         if len(background) == 1:
-            axs.imshow(bg_, cmap='Greys', interpolation='nearest')
+            axs.imshow(bg_, cmap='Greys', interpolation='nearest', alpha=bg_alpha)
             axs.tick_params(labelleft=False, labelbottom=False)
-            sa_im = axs.imshow(sa_, cmap='Reds', alpha=0.3) # default interpolation = 'antialiased'
+            sa_im = axs.imshow(sa_, cmap='Reds', alpha=sa_alpha) # default interpolation = 'antialiased'
             divider = make_axes_locatable(axs)
         else:
-            axs[subplot_idx].imshow(bg_, cmap='Greys', interpolation='nearest')
+            axs[subplot_idx].imshow(bg_, cmap='Greys', interpolation='nearest', alpha=bg_alpha)
             axs[subplot_idx].tick_params(labelleft=False, labelbottom=False)
-            sa_im = axs[subplot_idx].imshow(sa_, cmap='Reds', alpha=0.3) # default interpolation = 'antialiased'
+            sa_im = axs[subplot_idx].imshow(sa_, cmap='Reds', alpha=sa_alpha) # default interpolation = 'antialiased'
             divider = make_axes_locatable(axs[subplot_idx])
         cax = divider.append_axes("bottom", size="5%", pad=0.05)
         fig.colorbar(sa_im, cax=cax, orientation='horizontal')

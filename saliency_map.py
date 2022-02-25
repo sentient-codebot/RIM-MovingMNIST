@@ -44,7 +44,7 @@ def main():
             inputs = output
         else:
             inputs = data[:, frame, :, :, :]
-        _, output, hidden, intm = sa_map.differentiate(inputs, hidden)
+        output, hidden, intm = sa_map.differentiate(inputs, hidden)
         sa_map.plot(
             sample_indices=0,
             variable_name='saliency_hid2inp',
