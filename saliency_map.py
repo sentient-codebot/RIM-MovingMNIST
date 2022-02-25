@@ -1,5 +1,3 @@
-from random import sample
-from click import argument
 from logbook.logbook import LogBook
 from test_mmnist import setup_model
 from utils.util import set_seed
@@ -53,4 +51,5 @@ def main():
             save_folder=args.folder_log+'intermediate_vars'
         )
 
-        
+if __name__ == "__main__":
+    main()
