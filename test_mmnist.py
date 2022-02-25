@@ -10,7 +10,7 @@ from argument_parser import argument_parser
 from data.MovingMNIST import MovingMNIST
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
-from utils.visualize import ScalarLog, plot_frames, VectorLog
+from utils.visualize import ScalarLog, plot_frames, VectorLog, SaliencyMap
 from utils.metric import f1_score
 from box import Box
 from tqdm import tqdm
@@ -47,6 +47,8 @@ def test(model, test_loader, args, loss_fn, rollout=True):
     frame_loss_log = ScalarLog(args.folder_log+"/intermediate_vars", "frame_loss")
     f1_score_log = ScalarLog(args.folder_log+"/intermediate_vars", "f1_score")
 
+    sa_map = SaliencyMap(model, args)
+
     mse = torch.nn.MSELoss()
 
     model.eval()
@@ -70,6 +72,8 @@ def test(model, test_loader, args, loss_fn, rollout=True):
         prediction = torch.zeros_like(data)
 
         for frame in range(data.shape[1]-1):
+            if frame == data.shape[1]-2: # last two frame
+                hidden_before_last = hidden.detach()
             with torch.no_grad():
                 if not rollout:
                     output, hidden, intm = model(data[:, frame, :, :, :], hidden)
@@ -87,12 +91,16 @@ def test(model, test_loader, args, loss_fn, rollout=True):
 
                 frame_loss_log.append(loss_fn(output, target)) # * num_frames OR now?? NO, because I am check the loss in FRAME by FRAME
                 f1_score_log.append(f1_frame)
-            # print(f"Frame {frame} F1 score: {f1_frame}") 
+
+
 
             intm["decoder_utilization"] = dec_rim_util(model, hidden, args)
             if args.core == 'RIM':
                 rim_actv_log.append(intm["input_mask"][-1]) # shape (batchsize, num_units, 1)
             dec_actv_log.append(intm["decoder_utilization"][-1])
+        
+        # last batch, last frame, draw saliency map
+        sa_map_list = sa_map.differentiate(data[:, frame, :, :, :], hidden_before_last)
         
         ssim += pt_ssim.ssim(data[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
                         prediction[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
@@ -148,7 +156,7 @@ def main():
     test_loader = torch.utils.data.DataLoader(
         dataset=test_set,
         batch_size=args.batch_size,
-        shuffle=False
+        shuffle=True
     )
 
     if args.loss_fn == "BCE":
@@ -173,7 +181,7 @@ def main():
     # wait = input("Press any key to terminate program. ")
     return None
         
-def setup_model(args, logbook):
+def setup_model(args, logbook) -> torch.nn.Module:
     model = BallModel(args)
     
     if args.should_resume:

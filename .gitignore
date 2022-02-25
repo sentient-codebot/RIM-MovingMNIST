@@ -130,3 +130,5 @@ dmypy.json
 
 logs/
 data/
+
+utils/test_variable

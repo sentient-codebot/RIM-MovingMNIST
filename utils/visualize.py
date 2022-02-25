@@ -1,6 +1,17 @@
+from configparser import Interpolation
+from random import sample
+from turtle import back
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+from numpy import var
 import torch
-from .util import make_dir
+from torch import Tensor, save
+from util import make_dir
+import argparse
+from typing import List, Union, Any, Optional
+
+torch.manual_seed(2022)
 
 def plot_frames(batch_of_pred, batch_of_target, start_frame, end_frame, sample):
     '''
@@ -164,17 +175,204 @@ class VectorLog:
         else:
             torch.save([idx_tensor, self.var_stack], self.save_folder +'/'+ self.var_name + f'_epoch_{self.epoch}.pt')
 
+class SaliencyMap():
+    def __init__(self, group_rnn: torch.nn.Module, args: argparse.Namespace) -> None:
+        self.model = group_rnn
+        self.args = args
+        self.saliency_maps: Optional[List[Tensor]] = None
+
+    def differentiate(self, x: Tensor, h_prev: Tensor) -> Tensor:
+        '''
+        h_prev  : (batch_size, num_units, hidden_dim)
+        x       : (batch_size, height, width) / (BS, 1, H, W)
+        'h_new' : (batch_size, num_units)
+
+        saliency_maps   : (batch_size, num_units, height, width)]
+        '''
+        x = x.clone().requires_grad_(True)
+        h_prev = h_prev.clone().requires_grad_(False)
+        output, h_new, intm = self.model(x, h_prev)
+        h_new = torch.sum(h_new, dim=2) # -> (_, _,)
+        saliency_maps: List[Tensor] = []
+        mask_init = torch.zeros(1, h_prev.shape[1])
+        for module_idx in range(h_prev.shape[1]):
+            mask = mask_init
+            mask[:, module_idx] = 1.
+            x.grad = torch.tensor(0.)
+            (h_new*mask).backward(gradient=torch.ones_like(h_new))
+            saliency_maps.append(x.grad.unsqueeze(1))
+        saliency_maps = torch.cat(saliency_maps, dim=1)
+        self.inputs = x.squeeze() # derivative is x-dependent! 
+        self.saliency_maps = saliency_maps.cpu().squeeze()
+        return saliency_maps.cpu(), output, h_new, intm
+
+    def plot(self, 
+        sample_indices: Union[List[int], int],
+        variable_name: Optional[str]='saliency_hid2inp',
+        index_name: Optional[str]=None,
+        index: Optional[Union[List[Any], Any]]=None,
+        save_folder: Optional[str]='.'
+        ) -> None:
+        '''
+        self.saliency_maps: (BS, num_units, H, W)
+        background: (height, width)
+        '''
+        background = background.cpu()
+        num_units = self.saliency_maps.shape[1]
+        
+        if not isinstance(sample_indices, list):
+            sample_indices = [sample_indices]
+        for sample_idx in sample_indices:
+            sa_map_ = self.saliency_maps[sample_idx] 
+            bg_ = self.inputs[sample_idx]
+            if index_name is not None:
+                ind_name_ = index_name+f'_{index}_'+f'sample_{sample_idx}'
+            else:
+                ind_name_ = f'sample_{sample_idx}'
+            plot_saliency(
+                background=bg_,
+                saliency=sa_map_,
+                variable_name=variable_name,
+                index_name=ind_name_,
+                index=sample_idx,
+                save_folder=save_folder
+            )
+            
+
+def plot_matrix(matrix: Tensor, 
+        matrix_name: Optional[str]='matrix', 
+        index_name: Optional[str]=None, 
+        index: Optional[Any]=None,
+        save_folder: Optional[str]='.') -> None:
+    '''
+    matrix: (N, num_row, num_col) / (num_row, num_col)
+    label: len(label) == N / 1 NONO! should be one! for the whole figure!!
+    '''
+    assert isinstance(matrix, Tensor)
+    if matrix.dim() == 3:
+        N = matrix.shape[0]
+    elif matrix.dim() == 2:
+        N = 1
+        matrix = matrix.unsqueeze(0)
+    else: 
+        raise ValueError('matrix should be 2-dim or 3-dim. ')
+
+    matrix = matrix.cpu()
+    w_h_ratio = (matrix[0].shape[1]/matrix[0].shape[0])
+    if w_h_ratio >= 1:
+        fig, axs = plt.subplots(1, len(matrix), figsize=(0.75+2*len(matrix)*w_h_ratio, 2))
+    else:
+        fig, axs = plt.subplots(1, len(matrix), figsize=(2*len(matrix), 0.75+2/(w_h_ratio)))
+
+    for subplot_idx, mat_ in enumerate(matrix):
+        if len(matrix) == 1:
+            im=axs.imshow(mat_, cmap='Greys', interpolation='nearest')
+            axs.tick_params(labelleft=False, labelbottom=False)
+            divider = make_axes_locatable(axs)
+        else:
+            im=axs[subplot_idx].imshow(mat_, cmap='Greys', interpolation='nearest')
+            axs[subplot_idx].tick_params(labelleft=False, labelbottom=False)
+            divider = make_axes_locatable(axs[subplot_idx])
+        cax = divider.append_axes("bottom", size="5%", pad=0.05)
+        fig.colorbar(im, cax=cax, orientation='horizontal')
+    
+    if index is not None:
+        fig_title = matrix_name.replace("_", " ")+ f' in '+index_name+f' [{index}]'
+        filename = save_folder + \
+            '/' + matrix_name.replace(' ','_') + '/' + \
+            matrix_name.replace(' ','_') + '_' + index_name + \
+            f'_{index}.png'
+    else:
+        fig_title = matrix_name.replace("_", " ").capitalize()
+        filename = save_folder + \
+            '/' + matrix_name.replace(' ','_') + '/' + \
+            matrix_name.replace(' ','_') + '.png'
+    fig.suptitle(fig_title)
+    make_dir(save_folder+'/'+matrix_name.replace(' ','_'))
+    plt.savefig(filename, dpi=120)
+    plt.close()
+
+def plot_saliency(
+    background: Tensor, 
+    saliency: Tensor, 
+    variable_name: Optional[str]='variable', 
+    index_name: Optional[str]=None, 
+    index: Optional[Union[List[Any], Any]]=None,
+    save_folder: Optional[str]='.'
+) -> None:
+    ''' Saliency Map Plot Function: plot M WxH images in a row
+    background  : (M, W, H) image in the background 
+    saliency    : (M, W, H) saliency on top of the background
+    (optional) variable_name: name of variable
+    (optinoal) index_name   : put an label on the figure title
+    (optinoal) index    : corresponding number in label
+    (optional) save_folder  : directory to save plots
+    '''
+    assert isinstance(background, Tensor)
+    assert isinstance(saliency, Tensor)
+    assert background.shape == saliency.shape
+    if background.dim() == 3:
+        N = background.shape[0]
+    elif background.dim() == 2:
+        N = 1
+        background = background.unsqueeze(0)
+        saliency = saliency.unsqueeze(0)
+    else: 
+        raise ValueError('tensor should be 2-dim or 3-dim. ')
+
+    background = background.cpu()
+    saliency = saliency.cpu()
+    w_h_ratio = (background[0].shape[1]/background[0].shape[0])
+    if w_h_ratio >= 1:
+        fig, axs = plt.subplots(1, len(background), figsize=(0.75+2*len(background)*w_h_ratio, 2)) # always plot in a row! just adjust the individual img size!
+    else:
+        fig, axs = plt.subplots(1, len(background), figsize=(2*len(background), 0.75+2/(w_h_ratio))) 
+
+    for subplot_idx, (bg_, sa_) in enumerate(zip(background,saliency)):
+        if len(background) == 1:
+            axs.imshow(bg_, cmap='Greys', interpolation='nearest')
+            axs.tick_params(labelleft=False, labelbottom=False)
+            sa_im = axs.imshow(sa_, cmap='Reds', alpha=0.3) # default interpolation = 'antialiased'
+            divider = make_axes_locatable(axs)
+        else:
+            axs[subplot_idx].imshow(bg_, cmap='Greys', interpolation='nearest')
+            axs[subplot_idx].tick_params(labelleft=False, labelbottom=False)
+            sa_im = axs[subplot_idx].imshow(sa_, cmap='Reds', alpha=0.3) # default interpolation = 'antialiased'
+            divider = make_axes_locatable(axs[subplot_idx])
+        cax = divider.append_axes("bottom", size="5%", pad=0.05)
+        fig.colorbar(sa_im, cax=cax, orientation='horizontal')
+
+    if index is not None:
+        fig_title = variable_name.replace("_", " ")+ f' in '+index_name+f' [{index}]'
+        filename = save_folder + \
+            '/' + variable_name.replace(' ','_') + '/' + \
+            variable_name.replace(' ','_') + '_' + index_name + \
+            f'_{index}.png'
+    else:
+        fig_title = variable_name.replace("_", " ").capitalize()
+        filename = save_folder + \
+            '/' + variable_name.replace(' ','_') + '/' + \
+            variable_name.replace(' ','_') + '.png'
+    fig.suptitle(fig_title)
+    make_dir(save_folder+'/'+variable_name.replace(' ','_'))
+    plt.savefig(filename, dpi=120)
+    plt.close()
 
 def main():
-    data = torch.rand((64,51,1,64,64))
-    pred = torch.rand((64,50,1,64,64))
-    error = torch.randn((100,1)) + torch.arange(100).unsqueeze(1)
-    _t = torch.load('./../data.pt')
-    _t = _t.unsqueeze(2)
-    plot_frames(_t, _t, 0, 18, 6)
-    # plot_curve(error)
-    # epoch_losses = torch.load('../epoch_losses.pt')
-    # plot_curve(epoch_losses)
+    # data = torch.rand((64,51,1,64,64))
+    # pred = torch.rand((64,50,1,64,64))
+    # error = torch.randn((100,1)) + torch.arange(100).unsqueeze(1)
+    # _t = torch.load('./../data.pt')
+    # _t = _t.unsqueeze(2)
+    # plot_frames(_t, _t, 0, 18, 6)
+
+    '''test saliency'''
+    background = torch.round(torch.rand((3, 64, 64)))
+    saliency = torch.zeros_like(background) + torch.rand_like(background)*0.05
+    saliency[1, 32:, 32:] = 0.3
+    saliency[1, 48:, 48:] = 0.8
+    saliency[1, 60:, 60:] = 5
+    plot_saliency(background, saliency, 'test variable', 'epoch', 10, '.')
 
 
 if __name__ == "__main__":
