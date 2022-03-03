@@ -145,7 +145,7 @@ def main():
 
         # test done here
         writer.add_scalar('Loss/Train Loss '+f'({args.loss_fn.upper()})', epoch_loss.detach(), epoch)
-        if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0:
+        if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0 or epoch <= 15:
             """test model accuracy and log intermediate variables here"""
             test_loss, prediction, data, metrics = test(
                 model = model, 

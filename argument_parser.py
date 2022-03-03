@@ -155,7 +155,7 @@ def argument_parser():
     parser.add_argument('--num_comm_heads', type=int, default=4)
     parser.add_argument('--core', type=str, default='RIM')
     parser.add_argument('--loss_fn', type=str2loss_fn, default='BCE')
-    parser.add_argument('--rim_dropout', type=float, default=-1)
+    parser.add_argument('--rim_dropout', type=float, default=0.)
 
     args, left_argv = config_parser.parse_known_args() # if passed args BESIDES defined in cfg_parser, store in left_argv
 
