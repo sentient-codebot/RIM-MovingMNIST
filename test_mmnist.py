@@ -39,7 +39,7 @@ def get_grad_norm(model):
     return total_norm
 
 # @torch.no_grad()
-def test(model, test_loader, args, loss_fn, writer, rollout=True):
+def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
     '''test(model, test_loader, args, loss_fn, writer, rollout)'''
 
     if args.core == 'RIM':
@@ -83,7 +83,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True):
                 loss += loss_fn(output, target)
                 mseloss += mse(output, target)
                 f1_frame = f1_score(target, output)
-                writer.add_scalar(f'Metrics/F1 Frame {frame}', )
+                # writer.add_scalar(f'Metrics/F1 at Frame {frame}', f1_frame, epoch)
                 if f1 is None:
                     f1 = f1_frame.reshape(-1, 1)
 
@@ -157,13 +157,16 @@ def main():
     else:
         loss_fn = torch.nn.MSELoss()    
     
-    test_loss, test_mse, prediction, target, f1_avg, ssim = test(
+    test_loss, prediction, target, metrics= test(
         model = model,
         test_loader = test_loader,
         args = args,
         loss_fn = loss_fn,
-        rollout = False
+        rollout = False,
+        epoch = 0
     )
+    f1_avg = metrics['f1']
+    ssim = metrics['ssim']
     print(f"test loss: {test_loss}")
     print(f"test average F1 score: {f1_avg}")
     print(f'test SSIM: {ssim}')

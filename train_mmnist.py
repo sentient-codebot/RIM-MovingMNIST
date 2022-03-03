@@ -153,7 +153,8 @@ def main():
                 args = args, 
                 loss_fn = loss_fn, 
                 writer = writer,
-                rollout = False
+                rollout = False,
+                epoch = epoch
             )
             test_mse = metrics['mse']
             test_f1 = metrics['f1']
