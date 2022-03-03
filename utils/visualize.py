@@ -9,7 +9,7 @@ import torch
 from torch import Tensor, save
 from .util import make_dir
 import argparse
-from typing import List, Union, Any, Optional
+from typing import List, Sequence, Union, Any, Optional
 
 torch.manual_seed(2022)
 
@@ -367,6 +367,33 @@ def plot_saliency(
     make_dir(save_folder+'/'+variable_name.replace(' ','_'))
     plt.savefig(filename, dpi=120)
     plt.close()
+
+class VecStack():
+    '''stack T D-dim vectors to T-by-N image
+    shapes:
+        vec: (batchsize=N, dim=D) 
+        img: (batchsize=N, dim=D, cols=T)
+
+    methods:
+        append: 
+        reset:
+        show:
+    '''
+    def __init__(self) -> None:
+        self.img = None
+
+    def append(self, vec: Tensor) -> Tensor:
+        if self.img == None:
+            self.img = vec.reshape(vec.shape[0],-1,1)
+        else:
+            self.img = torch.cat((self.img, vec.reshape(vec.shape[0],-1,1)), dim=2)
+        return self.img
+
+    def reset(self) -> None:
+        self.img = None
+    
+    def show(self) -> Union[Tensor, None]:
+        return self.img
 
 def main():
     # data = torch.rand((64,51,1,64,64))

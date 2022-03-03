@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch 
 from torch import autograd
+from torch.utils.tensorboard import SummaryWriter
 
 from networks import BallModel
 from argument_parser import argument_parser
@@ -14,14 +15,13 @@ from utils.visualize import ScalarLog, VectorLog, HeatmapLog
 from data.MovingMNIST import MovingMNIST
 from box import Box
 from tqdm import tqdm
-from test_mmnist import test
+from test_mmnist import dec_rim_util, test
 
 import os 
 from os import listdir
 from os.path import isfile, join
 
 set_seed(1997)
-
 
 def nan_hook(_tensor):
         nan_mask = torch.isnan(_tensor)
@@ -36,8 +36,8 @@ def get_grad_norm(model):
     total_norm = total_norm ** 0.5
     return total_norm
 
-def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args, loss_fn):
-    grad_norm_log = ScalarLog(args.folder_log+'/intermediate_vars', "grad_norm", epoch=epoch)
+def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args, loss_fn, writer):
+    # grad_norm_log = ScalarLog(args.folder_log+'/intermediate_vars', "grad_norm", epoch=epoch)
 
     model.train()
 
@@ -60,10 +60,9 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args,
                 
             loss.backward()
             grad_norm = get_grad_norm(model)
-            grad_norm_log.append(grad_norm)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=True) 
             optimizer.step()
-            grad_norm_log.save()
+            writer.add_scalar('Grad Norm', grad_norm, train_batch_idx)
 
         train_batch_idx += 1 
         if False: # PRINT THESE BATCH-WISE STATS, if you really wanna debug looking at the batches
@@ -79,6 +78,7 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args,
         train_epoch_loss += loss.detach()
 
     train_epoch_loss = train_epoch_loss / (batch_idx+1)
+    writer.add_scalar('Loss/Train Loss '+f'({args.loss_fn.upper()})', train_epoch_loss.detach(), epoch)
     if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0:
         
         # SAVE logged vectors
@@ -104,7 +104,7 @@ def main():
     cudable = torch.cuda.is_available()
     args.device = torch.device("cuda" if cudable else "cpu")
 
-    model, optimizer, start_epoch, train_batch_idx, train_loss_log, test_loss_log, f1_log = setup_model(args=args, logbook=logbook)
+    model, optimizer, start_epoch, train_batch_idx = setup_model(args=args, logbook=logbook)
 
     train_set = MovingMNIST(root='./data', train=True, download=True, mini=False)
     test_set = MovingMNIST(root='./data', train=False, download=True)
@@ -128,6 +128,8 @@ def main():
     else:
         loss_fn = torch.nn.MSELoss()
 
+    writer = SummaryWriter(log_dir='./runs/'+args.id)
+
     for epoch in range(start_epoch, args.epochs+1):
         train_batch_idx, epoch_loss = train(
             model = model,
@@ -137,27 +139,34 @@ def main():
             logbook = logbook,
             train_batch_idx = train_batch_idx,
             args = args,
-            loss_fn = loss_fn
+            loss_fn = loss_fn,
+            writer = writer
         )
-        train_loss_log.append(epoch_loss, idx=epoch)
-        train_loss_log.save()
 
         # test done here
+        writer.add_scalar('Loss/Train Loss', epoch_loss, epoch)
         if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0:
             """test model accuracy and log intermediate variables here"""
-            test_epoch_loss, test_mse, prediction, data, f1_avg, ssim = test(
+            test_loss, prediction, data, metrics = test(
                 model = model, 
                 test_loader = test_loader, 
                 args = args, 
                 loss_fn = loss_fn, 
+                writer = writer,
                 rollout = False
             )
-
-            print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}; test loss: {test_epoch_loss:.3f}; test mse: {test_mse:.3f}; test F1 score: {f1_avg}; test SSIM: {ssim}")
-            test_loss_log.append(test_epoch_loss, idx=epoch)
-            test_loss_log.save() # TODO maybe a should save a metric dict file
-            f1_log.append(f1_avg, idx=epoch)
-            f1_log.save()
+            test_mse = metrics['mse']
+            test_f1 = metrics['f1']
+            test_ssim = metrics['ssim']
+            rim_actv = metrics['rim_actv']
+            dec_actv = metrics['dec_actv']
+            print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}; test loss: {test_loss:.3f}; test mse: {test_mse:.3f}; test F1 score: {test_f1}; test SSIM: {test_ssim}")
+            writer.add_scalar(f'Loss/Test Loss ({args.loss_fn.upper()})', test_loss, epoch)
+            writer.add_scalar(f'Metrics/MSE', test_mse, epoch)
+            writer.add_scalar(f'Metrics/F1 Score', test_f1, epoch)
+            writer.add_scalar(f'Metrics/SSIM', test_ssim, epoch)
+            writer.add_image('Stats/RIM Activation', rim_actv[0], epoch)
+            writer.add_image('Stats/RIM Decoder Utilization', dec_actv[0], epoch)
         else:
             print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}")
 
@@ -169,12 +178,9 @@ def main():
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': epoch_loss,
-                'train_loss_log': train_loss_log,
-                'test_loss_log': test_loss_log,
-                'metric_log': {
-                    'f1_log': f1_log,
-                }
             }, f"{args.folder_log}/checkpoints/{epoch}")
+
+    writer.close()
         
 def setup_model(args, logbook):
     model = BallModel(args)
@@ -200,15 +206,10 @@ def setup_model(args, logbook):
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         start_epoch = checkpoint['epoch'] + 1
         loss = checkpoint['epoch']
-        train_loss_log = checkpoint['train_loss_log']
-        test_loss_log = checkpoint['test_loss_log']
-        metric_log = checkpoint['metric_log']
-        f1_log = metric_log['f1_log']
-
     
         logbook.write_message_logs(message=f"Resuming experiment id: {args.id}, from epoch: {start_epoch}")
 
-    return model, optimizer, start_epoch, train_batch_idx, train_loss_log, test_loss_log, f1_log
+    return model, optimizer, start_epoch, train_batch_idx
 
 if __name__ == '__main__':
     main()

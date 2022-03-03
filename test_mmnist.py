@@ -10,7 +10,7 @@ from argument_parser import argument_parser
 from data.MovingMNIST import MovingMNIST
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
-from utils.visualize import ScalarLog, plot_frames, VectorLog, SaliencyMap
+from utils.visualize import ScalarLog, plot_frames, VectorLog, SaliencyMap, VecStack
 from utils.metric import f1_score
 from box import Box
 from tqdm import tqdm
@@ -39,15 +39,12 @@ def get_grad_norm(model):
     return total_norm
 
 # @torch.no_grad()
-def test(model, test_loader, args, loss_fn, rollout=True):
-    '''test(model, test_loader, args, rollout)'''
-    if args.core == 'RIM':
-        rim_actv_log = VectorLog(args.folder_log+"/intermediate_vars", "rim_actv")
-    dec_actv_log = VectorLog(args.folder_log+"/intermediate_vars", "decoder_actv")
-    frame_loss_log = ScalarLog(args.folder_log+"/intermediate_vars", "frame_loss")
-    f1_score_log = ScalarLog(args.folder_log+"/intermediate_vars", "f1_score")
+def test(model, test_loader, args, loss_fn, writer, rollout=True):
+    '''test(model, test_loader, args, loss_fn, writer, rollout)'''
 
-    sa_map = SaliencyMap(model, args)
+    if args.core == 'RIM':
+        rim_actv = VecStack()
+    dec_actv = VecStack()
 
     mse = torch.nn.MSELoss()
 
@@ -58,10 +55,9 @@ def test(model, test_loader, args, loss_fn, rollout=True):
     f1 = 0.
     ssim = 0.
     for batch_idx, data in enumerate(test_loader): # tqdm doesn't work here?
-        frame_loss_log.reset()
-        f1_score_log.reset()
         hidden = model.init_hidden(data.shape[0]).to(args.device)
-
+        rim_actv.reset()
+        dec_actv.reset()
         start_time = time()
         data = data.to(args.device)
         if data.dim()==4:
@@ -87,20 +83,14 @@ def test(model, test_loader, args, loss_fn, rollout=True):
                 loss += loss_fn(output, target)
                 mseloss += mse(output, target)
                 f1_frame = f1_score(target, output)
-                f1 += f1_frame
-
-                frame_loss_log.append(loss_fn(output, target)) # * num_frames OR now?? NO, because I am check the loss in FRAME by FRAME
-                f1_score_log.append(f1_frame)
-
-
+                writer.add_scalar(f'Metrics/F1 Frame {frame}', )
+                if f1 is None:
+                    f1 = f1_frame.reshape(-1, 1)
 
             intm["decoder_utilization"] = dec_rim_util(model, hidden, args)
             if args.core == 'RIM':
-                rim_actv_log.append(intm["input_attn"][-1]) # shape (batchsize, num_units, 1)
-            dec_actv_log.append(intm["decoder_utilization"][-1])
-        
-        # last batch, last frame, draw saliency map
-        # sa_map_list = sa_map.differentiate(data[:, frame, :, :, :], hidden_before_last)
+                rim_actv.append(intm["input_attn"][-1]) # shape (batchsize, num_units, 1)
+            dec_actv.append(intm["decoder_utilization"][-1])
         
         ssim += pt_ssim.ssim(data[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
                         prediction[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
@@ -108,22 +98,23 @@ def test(model, test_loader, args, loss_fn, rollout=True):
         epoch_mseloss += mseloss.detach()
         if args.device == torch.device("cpu"):
             break
-        
-    if args.core == 'RIM':
-        rim_actv_log.save()
-    dec_actv_log.save()
-    frame_loss_log.save()
-
+    
     prediction = prediction[:, 1:, :, :, :] # last batch of prediction, starting from frame 1
     epoch_loss = epoch_loss / (batch_idx+1)
     epoch_mseloss = epoch_mseloss / (batch_idx+1)
     ssim = ssim / (batch_idx+1)
     f1_avg = f1 / (batch_idx+1) / (data.shape[1]-1)
 
-    """save last batch of intermediate variables"""
+    metrics = {
+        'mse': epoch_mseloss,
+        'ssim': ssim,
+        'f1': f1_avg,
+        'rim_actv': rim_actv.show(),
+        'dec_actv': dec_actv.show()
+    }
 
 
-    return epoch_loss, epoch_mseloss, prediction, data, f1_avg, ssim
+    return epoch_loss, prediction, data, metrics
 
 def dec_rim_util(model, h, args):
     """check the contribution of the (num_module)-th RIM by seeing how much they contribute to the activaiton of first relu"""
