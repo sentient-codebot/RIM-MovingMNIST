@@ -166,8 +166,8 @@ def main():
             writer.add_scalar(f'Metrics/MSE', test_mse, epoch)
             writer.add_scalar(f'Metrics/F1 Score', test_f1, epoch)
             writer.add_scalar(f'Metrics/SSIM', test_ssim, epoch)
-            writer.add_image('Stats/RIM Activation', rim_actv[0], epoch)
-            writer.add_image('Stats/RIM Decoder Utilization', dec_actv[0], epoch)
+            writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
+            writer.add_image('Stats/RIM Decoder Utilization', dec_actv[0], epoch, dataformats='HW')
         else:
             print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}")
 
