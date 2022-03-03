@@ -163,11 +163,19 @@ def main():
             dec_actv = metrics['dec_actv']
             print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}; test loss: {test_loss:.3f}; test mse: {test_mse:.3f}; test F1 score: {test_f1}; test SSIM: {test_ssim}")
             writer.add_scalar(f'Loss/Test Loss ({args.loss_fn.upper()})', test_loss, epoch)
+
             writer.add_scalar(f'Metrics/MSE', test_mse, epoch)
             writer.add_scalar(f'Metrics/F1 Score', test_f1, epoch)
             writer.add_scalar(f'Metrics/SSIM', test_ssim, epoch)
+
             writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
             writer.add_image('Stats/RIM Decoder Utilization', dec_actv[0], epoch, dataformats='HW')
+
+            cat_video = torch.cat(
+                (data[0:5],prediction[0:5]),
+                dim = 3 # join in height
+            )
+            writer.add_video('Predicted Videos', cat_video, epoch)
         else:
             print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}")
 
