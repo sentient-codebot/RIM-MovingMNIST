@@ -84,8 +84,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
                 mseloss += mse(output, target)
                 f1_frame = f1_score(target, output)
                 # writer.add_scalar(f'Metrics/F1 at Frame {frame}', f1_frame, epoch)
-                if f1 is None:
-                    f1 = f1_frame.reshape(-1, 1)
+                f1 += f1_frame
 
             intm["decoder_utilization"] = dec_rim_util(model, hidden, args)
             if args.core == 'RIM':

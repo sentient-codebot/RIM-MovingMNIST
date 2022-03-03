@@ -78,7 +78,7 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args,
         train_epoch_loss += loss.detach()
 
     train_epoch_loss = train_epoch_loss / (batch_idx+1)
-    writer.add_scalar('Loss/Train Loss '+f'({args.loss_fn.upper()})', train_epoch_loss.detach(), epoch)
+    
     if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0:
         
         # SAVE logged vectors
@@ -144,7 +144,7 @@ def main():
         )
 
         # test done here
-        writer.add_scalar('Loss/Train Loss', epoch_loss, epoch)
+        writer.add_scalar('Loss/Train Loss '+f'({args.loss_fn.upper()})', epoch_loss.detach(), epoch)
         if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0:
             """test model accuracy and log intermediate variables here"""
             test_loss, prediction, data, metrics = test(
