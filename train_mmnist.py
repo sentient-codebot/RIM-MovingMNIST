@@ -172,7 +172,7 @@ def main():
             writer.add_image('Stats/RIM Decoder Utilization', dec_actv[0], epoch, dataformats='HW')
 
             cat_video = torch.cat(
-                (data[0:8, 1:, :, :, :],prediction[0:8]),
+                (data[0:4, 1:, :, :, :],prediction[0:4]),
                 dim = 3 # join in height
             )
             writer.add_video('Predicted Videos', cat_video, epoch)
