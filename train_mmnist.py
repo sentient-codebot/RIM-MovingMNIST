@@ -170,12 +170,15 @@ def main():
 
             writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
             writer.add_image('Stats/RIM Decoder Utilization', dec_actv[0], epoch, dataformats='HW')
-
             cat_video = torch.cat(
                 (data[0:4, 1:, :, :, :],prediction[0:4]),
                 dim = 3 # join in height
             )
             writer.add_video('Predicted Videos', cat_video, epoch)
+
+            hidden = model.init_hidden(data.shape[0]).to(args.device)
+            writer.add_graph(model, (data[:, 0, :, :, :], hidden))
+
         else:
             print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}")
 
