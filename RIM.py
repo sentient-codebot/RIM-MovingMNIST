@@ -6,6 +6,12 @@ import numpy as np
 import torch.multiprocessing as mp
 from torch.nn.utils.rnn import PackedSequence
 
+from collections import namedtuple
+
+Ctx = namedtuple('RunningContext',
+    [
+        'input_attn'
+    ])
 
 class blocked_grad(torch.autograd.Function):
 
@@ -360,9 +366,7 @@ class RIMCell(nn.Module):
         h_new = self.communication_attention(h_new, mask.squeeze(2))
 
         # Prepare the context/intermediate value
-        ctx = {
-            "input_attn": attn_score, # mask.squeeze(),
-        }
+        ctx = Ctx(input_attn=attn_score)
 
         # Update hs and cs and return them
 

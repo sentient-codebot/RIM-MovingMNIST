@@ -78,6 +78,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
                 else:
                     output, hidden, intm = model(data[:, frame, :, :, :], hidden)
 
+                intm = intm._asdict()
                 target = data[:, frame+1, :, :, :]
                 prediction[:, frame+1, :, :, :] = output
                 loss += loss_fn(output, target)

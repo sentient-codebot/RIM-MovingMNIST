@@ -3,8 +3,14 @@ import torch.nn as nn
 import math
 from RIM import RIMCell, SparseRIMCell, OmegaLoss, LayerNorm, Flatten, UnFlatten, Interpolate
 from backbone import GroupDropout
+from collections import namedtuple
 import numpy as np
 
+
+Intm = namedtuple('IntermediateVariables',
+    [
+        'input_attn'
+    ])
 
 class MnistModel(nn.Module):
     def __init__(self, args):
@@ -245,16 +251,10 @@ class BallModel(nn.Module):
         dec_out_ = self.Decoder(h_new.view(h_new.shape[0],-1))
         
         if ctx is not None:
-            intm = ctx
+            intm = Intm(input_attn=ctx.input_attn)
         else:
-            intm = {}
+            intm = Intm(input_attn=None)
 
-        """ 
-        [
-            "input_attn",
-            # "decoder_activation"
-        ]
-        """
         return dec_out_, h_new, intm
 
     def init_hidden(self, batch_size): 
