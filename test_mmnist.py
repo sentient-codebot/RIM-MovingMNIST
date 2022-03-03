@@ -89,8 +89,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
 
             intm["decoder_utilization"] = dec_rim_util(model, hidden, args)
             if args.core == 'RIM':
-                rim_actv.append(intm["input_attn"][-1]) # shape (batchsize, num_units, 1)
-            dec_actv.append(intm["decoder_utilization"][-1])
+                rim_actv.append(intm["input_attn"]) # shape (batchsize, num_units, 1) -> (BS, NU, T)
+            dec_actv.append(intm["decoder_utilization"])
         
         ssim += pt_ssim.ssim(data[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
                         prediction[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
