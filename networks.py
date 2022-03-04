@@ -279,7 +279,7 @@ class BallModel(nn.Module):
 
     @torch.no_grad()
     def partial_blocked_decoder(self, h):
-        out_list_ = []
+        out_list_ = self.Decoder(h.view(h.shape[0],-1)).unsqueeze(1) # all-pass
         for block_idx in range(h.shape[1]):
             mask = torch.zeros((h.shape[0],h.shape[1],1), device=self.args.device)
             mask[:, block_idx, :] = 1
