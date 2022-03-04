@@ -70,7 +70,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
         prediction = torch.zeros_like(data)
         blocked_prediction = torch.zeros(
             (data.shape[0],
-            args.num_units,
+            args.num_units+1,
             data.shape[1],
             data.shape[2],
             data.shape[3],
