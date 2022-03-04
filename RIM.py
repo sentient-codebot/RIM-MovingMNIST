@@ -238,7 +238,7 @@ class InputAttention(Attention):
         num_blocks,
         dropout,
         ):
-        super().__init__()
+        super().__init__(dropout)
         self.num_heads = num_heads
         self.kdim = kdim
         self.vdim = vdim
@@ -283,7 +283,7 @@ class CommAttention(Attention):
         num_blocks,
         dropout
         ):
-        super().__init__()
+        super().__init__(dropout)
         self.hidden_size = hidden_size
         self.kdim = kdim
         self.num_heads = num_heads
