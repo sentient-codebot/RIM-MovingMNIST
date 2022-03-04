@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch 
 from torch import autograd
+from torch.utils.tensorboard import SummaryWriter
 
 from networks import BallModel
 from argument_parser import argument_parser
@@ -67,7 +68,11 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
         loss = 0.
         mseloss = 0.
         prediction = torch.zeros_like(data)
-        blocked_prediction = torch.zeros_like(data).unsqueeze(1) # (BS, num_blocks, T, C, H, W)
+        blocked_prediction = torch.zeros_like(
+            data.shape[0],
+            args.num_units,
+            data.shape[1:]
+        ) # (BS, num_blocks, T, C, H, W)
 
         for frame in range(data.shape[1]-1):
             if frame == data.shape[1]-2: # last two frame
@@ -104,6 +109,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
             break
     
     prediction = prediction[:, 1:, :, :, :] # last batch of prediction, starting from frame 1
+    blocked_prediction = blocked_prediction[:, :, 1:, :, :, :]
     epoch_loss = epoch_loss / (batch_idx+1)
     epoch_mseloss = epoch_mseloss / (batch_idx+1)
     ssim = ssim / (batch_idx+1)
@@ -141,12 +147,12 @@ def main():
     logbook = LogBook(config = args)
 
     if not args.should_resume:
-        raise RuntimeError("args.should_resume should be set True. ")
+        args.should_resume = True
 
     cudable = torch.cuda.is_available()
     args.device = torch.device("cuda" if cudable else "cpu")
 
-    model = setup_model(args=args, logbook=logbook)
+    model, epoch = setup_model(args=args, logbook=logbook)
 
     args.directory = './data' # dataset directory
     test_set = MovingMNIST(root='./data', train=False, download=True)
@@ -163,22 +169,48 @@ def main():
     else:
         loss_fn = torch.nn.MSELoss()    
     
-    test_loss, prediction, target, metrics= test(
+    writer = SummaryWriter(log_dir='./runs/'+args.id+'_test')
+    test_loss, prediction, data, metrics= test(
         model = model,
         test_loader = test_loader,
         args = args,
         loss_fn = loss_fn,
+        writer = writer,
         rollout = False,
-        epoch = 0
+        epoch = epoch
     )
-    f1_avg = metrics['f1']
-    ssim = metrics['ssim']
-    print(f"test loss: {test_loss}")
-    print(f"test average F1 score: {f1_avg}")
-    print(f'test SSIM: {ssim}')
-    plot_frames(prediction, target, start_frame=1, end_frame=target.shape[1]-2, sample=[0,2,7,17,29,-1])
+    test_mse = metrics['mse']
+    test_f1 = metrics['f1']
+    test_ssim = metrics['ssim']
+    rim_actv = metrics['rim_actv']
+    rim_actv_mask = metrics['rim_actv_mask']
+    dec_actv = metrics['dec_actv']
+    blocked_dec = metrics['blocked_dec']
+    print(f"epoch [{epoch}] test loss: {test_loss:.4f}; test mse: {test_mse:.4f}; "+\
+        f"test F1 score: {test_f1:.4f}; test SSIM: {test_ssim:.4f}")
+    writer.add_scalar(f'Loss/Test Loss ({args.loss_fn.upper()})', test_loss, epoch)
+
+    writer.add_scalar(f'Metrics/MSE', test_mse, epoch)
+    writer.add_scalar(f'Metrics/F1 Score', test_f1, epoch)
+    writer.add_scalar(f'Metrics/SSIM', test_ssim, epoch)
+
+    writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
+    writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
+    writer.add_image('Stats/RIM Decoder Utilization', dec_actv[0], epoch, dataformats='HW')
+    cat_video = torch.cat(
+        (data[0:4, 1:, :, :, :],prediction[0:4]),
+        dim = 3 # join in height
+    ) # N T C H W
+    writer.add_video('Predicted Videos', cat_video, epoch)
+    writer.add_video('Blocked Predictions', blocked_dec[0]) # N=num_blocks T 1 H W
+
+    hidden = model.init_hidden(data.shape[0]).to(args.device)
+    writer.add_graph(model, (data[:, 0, :, :, :], hidden))
+    # plot_frames(prediction, data, start_frame=1, end_frame=data.shape[1]-2, sample=[0,2,7,17,29,-1])
 
     # wait = input("Press any key to terminate program. ")
+    writer.close()
+    
     return None
         
 def setup_model(args, logbook) -> torch.nn.Module:
@@ -197,10 +229,11 @@ def setup_model(args, logbook) -> torch.nn.Module:
     if args.path_to_load_model != "":
         checkpoint = torch.load(args.path_to_load_model.strip(), map_location=args.device)
         model.load_state_dict(checkpoint['model_state_dict'])
+        epoch = checkpoint['epoch']
     
         logbook.write_message_logs(message=f"Resuming experiment id: {args.id} from epoch: {args.checkpoint}")
 
-    return model
+    return model, epoch
 
 if __name__ == '__main__':
     main()

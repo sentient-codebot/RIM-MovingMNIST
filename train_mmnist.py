@@ -222,7 +222,6 @@ def setup_model(args, logbook):
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         start_epoch = checkpoint['epoch'] + 1
-        loss = checkpoint['epoch']
     
         logbook.write_message_logs(message=f"Resuming experiment id: {args.id}, from epoch: {start_epoch}")
 
