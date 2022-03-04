@@ -251,7 +251,7 @@ class BallModel(nn.Module):
 
         
         dec_out_ = self.Decoder(h_new.view(h_new.shape[0],-1))
-        blocked_out_ = None
+        blocked_out_ = torch.zeros(1)
         if self.get_intm:
             blocked_out_ = self.partial_blocked_decoder(h_new)
 
@@ -261,8 +261,8 @@ class BallModel(nn.Module):
                 blocked_dec=blocked_out_
                 )
         else:
-            intm = Intm(input_attn=None, 
-                input_attn_mask=None,
+            intm = intm = Intm(input_attn=torch.zeros(1), 
+                input_attn_mask=torch.zeros(1),
                 blocked_dec=blocked_out_
                 )
 
