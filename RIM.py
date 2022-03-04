@@ -5,6 +5,8 @@ import math
 import numpy as np
 import torch.multiprocessing as mp
 from torch.nn.utils.rnn import PackedSequence
+from torch.distributions.beta import Beta
+from torch.distributions.binomial import Binomial
 
 from collections import namedtuple
 from abc import ABC, abstractmethod
@@ -53,9 +55,6 @@ class AlphaFix(torch.autograd.Function):
         grad_probs = alpha.reshape(1,-1)
 
         return grad_output * grad_probs, grad_output * grad_alpha
-
-    
-
 
 class GroupLinearLayer(nn.Module):
     """
@@ -273,7 +272,97 @@ class InputAttention(Attention):
         attention_probs = self.dropout(nn.Softmax(dim = -1)(attention_scores))
         inputs = torch.matmul(attention_probs, value) * mask_.unsqueeze(2)
 
-        return inputs, mask_, not_null_scores
+        with torch.no_grad():
+            out_probs = nn.Softmax(dim = -1)(attention_scores)[:,:, 0]
+
+        return inputs, mask_, out_probs
+
+class PriorSampler(nn.Module):
+    """
+    eta = (num_blocks)
+    nu = (num_blocks)
+
+    nu_0, eta_0 -> alpha_0 -> v 
+    eta_0+N - nu +1 > 0
+
+    """
+    def __init__(self, num_blocks, eta_0, nu_0, N):
+        self.eta_0 = eta_0
+        self.nu_0 = nu_0
+        self.num_blocks = num_blocks
+        self.log_beta = nn.Parameter(torch.log(nu_0+1) + 0.01 * torch.randn(num_blocks))
+        self.log_alpha = nn.Parameter(torch.log(eta_0-nu_0+1) + 0.01 * torch.randn(num_blocks))
+
+    def forward(self, bs):
+        alpha = torch.exp(self.log_beta)
+        beta = torch.exp(self.log_alpha)
+        self.switch_prior_sampler = Beta(alpha, beta)
+        switch_prior = self.switch_prior_sampler.sample(bs).reshape(bs, self.num_blocks)
+        # TODO compensate for expectation
+        E_alpha = alpha/(alpha+beta).unsqueeze(0).repeat(bs, 1) # (1, num_blocks) * (bs, 1) -> (bs, num_blocks)
+        self.v_sampler = Binomial(probs=1-switch_prior.flatten())
+        # TODO compensate for expectation
+        E_v = E_alpha
+        v = self.v_sampler.sample().reshape(bs, self.num_blocks, 1)
+
+        return v, 1./(E_v + 1e-6)
+    
+
+
+class SparseInputAttention(Attention):
+    def __init__(self, 
+        input_size,
+        hidden_size, 
+        kdim,
+        vdim,
+        num_heads,
+        num_blocks,
+        k,
+        dropout,
+        eta_0,
+        nu_0,
+        N
+        ):
+        super().__init__(dropout)
+        self.num_heads = num_heads
+        self.kdim = kdim
+        self.vdim = vdim
+        self.num_blocks = num_blocks
+        self.k = k
+
+        self.key = nn.Linear(input_size, num_heads * kdim, bias=False)
+        self.value = nn.Linear(input_size, num_heads * vdim, bias=False)
+        self.query = GroupLinearLayer(hidden_size, kdim * num_heads, num_blocks)
+        self.dropout = nn.Dropout(p = dropout)
+
+        self.prior_sampler = PriorSampler(num_blocks, eta_0, nu_0, 64)
+
+    def forward(self, x, h):
+        key = self.key(x)
+        value = self.value(x)
+        query = self.query(h)
+
+        key = self.transpose_for_scores(key, self.num_heads, self.kdim)
+        value = torch.mean(self.transpose_for_scores(value,  self.num_heads, self.vdim), dim = 1)
+        query = self.transpose_for_scores(query, self.num_heads, self.kdim)
+
+        attention_scores = torch.matmul(query, key.transpose(-1, -2)) / math.sqrt(self.kdim) 
+        attention_scores = torch.mean(attention_scores, dim = 1)
+        attention_probs = nn.Softmax(dim = -1)(attention_scores)
+
+        not_null_probs = attention_probs[:,:, 0]
+        
+        mask = torch.ones((h.shape[0], h.shape[1], 1), device=h.device) 
+        if self.training:
+            on_fly_sampler = torch.distributions.binomial.Binomial(p = not_null_probs)
+            z = on_fly_sampler.sample(x.shape[0]).reshape(h.shape[0], h.shape[1], 1)
+            v, compensate = self.prior_sampler(bs=x.shape[0])
+            mask = mask * v * z
+        
+        attention_probs = self.dropout(attention_probs)
+        inputs = torch.matmul(attention_probs * compensate, value) * mask.unsqueeze(2) 
+
+        return inputs, mask, not_null_probs
 
 class CommAttention(Attention):
     """ h, h -> h 
@@ -529,151 +618,21 @@ class OmegaLoss(nn.Module):
         Omega_c = self.c * (omega_part_1+omega_part_2+omega_part_3)
         return Omega_c
 
-
-
-class SparseRIMCell(nn.Module):
+class SparseRIMCell(RIMCell):
     def __init__(self, 
         device, input_size, hidden_size, num_units, k, rnn_cell, input_key_size = 64, input_value_size = 400, input_query_size = 64,
         num_input_heads = 1, input_dropout = 0.1, comm_key_size = 32, comm_value_size = 100, comm_query_size = 32, num_comm_heads = 4, comm_dropout = 0.1,
-        a=1, b=3, threshold=0.5
+        eta_0 = 1, nu_0 = 1
     ):
-        super().__init__()
-        if comm_value_size != hidden_size:
-            #print('INFO: Changing communication value size to match hidden_size')
-            comm_value_size = hidden_size
-        self.device = device
-        self.hidden_size = hidden_size
-        self.num_units =num_units
-        self.rnn_cell = rnn_cell
-        self.key_size = input_key_size
-        self.k = num_units # full activation
-        self.num_input_heads = num_input_heads
-        self.num_comm_heads = num_comm_heads
-        self.input_key_size = input_key_size
-        self.input_query_size = input_query_size
-        self.input_value_size = input_value_size
-
-        self.comm_key_size = comm_key_size
-        self.comm_query_size = comm_query_size
-        self.comm_value_size = comm_value_size
-
-        self.eta_0 = a+b-1
-        self.nu_0 = b-1
-        self.threshold = threshold
-
-        self.eta = self.eta_0
-        self.nu = nn.Parameter(self.nu_0*torch.ones(num_units))
-
-        self.key = nn.Linear(input_size, num_input_heads * input_query_size).to(self.device)
-        self.value = nn.Linear(input_size, num_input_heads * input_value_size).to(self.device)
-
-        if self.rnn_cell == 'GRU':
-            self.rnn = GroupGRUCell(input_value_size, hidden_size, num_units)
-            self.query = GroupLinearLayer(hidden_size,  input_key_size * num_input_heads, self.num_units)
-        else:
-            self.rnn = GroupLSTMCell(input_value_size, hidden_size, num_units)
-            self.query = GroupLinearLayer(hidden_size,  input_key_size * num_input_heads, self.num_units)
-        self.query_ =GroupLinearLayer(hidden_size, comm_query_size * num_comm_heads, self.num_units) 
-        self.key_ = GroupLinearLayer(hidden_size, comm_key_size * num_comm_heads, self.num_units)
-        self.value_ = GroupLinearLayer(hidden_size, comm_value_size * num_comm_heads, self.num_units)
-        self.comm_attention_output = GroupLinearLayer(num_comm_heads * comm_value_size, comm_value_size, self.num_units)
-        self.comm_dropout = nn.Dropout(p =input_dropout)
-        self.input_dropout = nn.Dropout(p =comm_dropout)
-
-
-    def transpose_for_scores(self, x, num_attention_heads, attention_head_size):
-        new_x_shape = x.size()[:-1] + (num_attention_heads, attention_head_size)
-        x = x.view(*new_x_shape)
-        return x.permute(0, 2, 1, 3)
-
-    def input_attention_mask(self, x, h):
-        """
-        Input : x (batch_size, 2, input_size) [The null input is appended along the first dimension]
-                h (batch_size, num_units, hidden_size)
-        Output: inputs (list of size num_units with each element of shape (batch_size, input_value_size))
-                mask_ binary array of shape (batch_size, num_units) where 1 indicates active and 0 indicates inactive
-        """
-        key_layer = self.key(x) # input size 1 or fullsize??
-        value_layer = self.value(x)
-        query_layer = self.query(h)
-
-        key_layer = self.transpose_for_scores(key_layer,  self.num_input_heads, self.input_key_size)
-        value_layer = torch.mean(self.transpose_for_scores(value_layer,  self.num_input_heads, self.input_value_size), dim = 1)
-        query_layer = self.transpose_for_scores(query_layer, self.num_input_heads, self.input_query_size)
-
-        self.eta = x.shape[0] + self.eta_0
-        alpha = (self.eta-self.nu+1)/(self.eta+2)
-        alpha = alpha.reshape(1,-1)
-
-        attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2)) / math.sqrt(self.input_key_size) 
-        attention_scores = torch.mean(attention_scores, dim = 1)
-        mask_att = torch.zeros(x.size(0), self.num_units).to(self.device)
-        mask_alpha = torch.zeros_like(mask_att)
-
-        not_null_scores = attention_scores[:,:, 0]
-        topk1 = torch.topk(not_null_scores,self.k,  dim = 1)
-        row_index = np.arange(x.size(0))
-        row_index = np.repeat(row_index, self.k)
-
-        mask_att[row_index, topk1.indices.view(-1)] = 1
+        super().__init__(device, input_size, hidden_size, num_units, k, rnn_cell, input_key_size, input_value_size, input_query_size,
+            num_input_heads, input_dropout, comm_key_size, comm_value_size, comm_query_size, num_comm_heads, comm_dropout)
+        self.eta_0 = eta_0,
+        self.nu_0 = nu_0
         
-        attention_probs = nn.Softmax(dim = -1)(attention_scores)
-        not_null_probs = 1 - attention_probs[:,:,-1] 
-        # PERFORM CUSTOM ALPHA FIX FUNCTION 
-        # attention_probs = AlphaFix.apply(attention_probs, alpha)
-        fixed_probs = torch.zeros_like(attention_probs)
-        fixed_probs[:,:,0:-1] = attention_probs[:,:,0:-1] * alpha.reshape(1,-1,1)
-        fixed_probs[:,:,-1] = 1 - not_null_probs * alpha.reshape(1,-1)
-        not_null_probs = 1 - fixed_probs[:,:,-1] 
-
-        mask_alpha = torch.ceil(not_null_probs-self.threshold)
-
-        mask = mask_att * mask_alpha
-
-        fixed_probs = self.input_dropout(fixed_probs)
-        inputs = torch.matmul(fixed_probs, value_layer) * mask.unsqueeze(2)
-
-        return inputs, mask
-
-    def communication_attention(self, h, mask):
-        """
-        Input : h (batch_size, num_units, hidden_size)
-                mask obtained from the input_attention_mask() function
-        Output: context_layer (batch_size, num_units, hidden_size). New hidden states after communication
-        """
-        query_layer = []
-        key_layer = []
-        value_layer = []
         
-        query_layer = self.query_(h)
-        key_layer = self.key_(h)
-        value_layer = self.value_(h)
-
-        query_layer = self.transpose_for_scores(query_layer, self.num_comm_heads, self.comm_query_size)
-        key_layer = self.transpose_for_scores(key_layer, self.num_comm_heads, self.comm_key_size)
-        value_layer = self.transpose_for_scores(value_layer, self.num_comm_heads, self.comm_value_size)
-        attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
-        attention_scores = attention_scores / math.sqrt(self.comm_key_size)
-        
-        attention_probs = nn.Softmax(dim=-1)(attention_scores)
-        
-        mask = [mask for _ in range(attention_probs.size(1))]
-        mask = torch.stack(mask, dim = 1)
-        
-        attention_probs = attention_probs * mask.unsqueeze(3)
-        attention_probs = self.comm_dropout(attention_probs)
-        context_layer = torch.matmul(attention_probs, value_layer)
-        context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
-        new_context_layer_shape = context_layer.size()[:-2] + (self.num_comm_heads * self.comm_value_size,)
-        context_layer = context_layer.view(*new_context_layer_shape)
-        context_layer = self.comm_attention_output(context_layer)
-        context_layer = context_layer + h
-        
-        return context_layer
-
     def forward(self, x, hs, cs = None):
         """
-        Input : x (batch_size, 1 , input_size)
+        Input : x (batch_size, input_size)
                 hs (batch_size, num_units, hidden_size)
                 cs (batch_size, num_units, hidden_size)
         Output: new hs, cs for LSTM
@@ -684,12 +643,11 @@ class SparseRIMCell(nn.Module):
         x = torch.cat((x.unsqueeze(1), null_input), dim = 1)
 
         # Compute input attention
-        inputs, mask = self.input_attention_mask(x, hs)
+        inputs, mask, attn_score = self.input_attention_mask(x, hs)
         h_old = hs * 1.0
         if cs is not None:
             c_old = cs * 1.0
         
-
         # Compute RNN(LSTM or GRU) output
         
         if cs is not None:
@@ -698,18 +656,24 @@ class SparseRIMCell(nn.Module):
             hs = self.rnn(inputs, hs)
 
         # Block gradient through inactive units
-        mask = mask.unsqueeze(2)
+        mask = mask.unsqueeze(2).detach()
         h_new = blocked_grad.apply(hs, mask)
 
         # Compute communication attention
-        h_new = self.communication_attention(h_new, mask.squeeze(2))
+        context = self.communication_attention(h_new, mask.squeeze(2))
+        h_new = h_new + context
 
+        # Prepare the context/intermediate value
+        ctx = Ctx(input_attn=attn_score,
+            input_attn_mask=mask.squeeze()
+            )
+
+        # Update hs and cs and return them
         hs = mask * h_new + (1 - mask) * h_old
         if cs is not None:
             cs = mask * cs + (1 - mask) * c_old
-            return hs, cs, self.nu
-
-        return hs, None, self.nu
+            return hs, cs, None, mask
+        return hs, None, None, ctx
 
 
 class LayerNorm(nn.Module):

@@ -152,7 +152,7 @@ class BallModel(nn.Module):
             self.rim_dropout = GroupDropout(p=args.rim_dropout).to(self.args.device) # TODO later test different probs for different modules
 
         if self.core == 'RIM':
-            self.rim_model = RIMCell(
+            self.rnn_model = RIMCell(
                                     device=self.args.device,
                                     input_size=self.input_size, 
                                     num_units=self.args.num_units,
@@ -171,7 +171,7 @@ class BallModel(nn.Module):
                                     comm_dropout = self.args.comm_dropout
             ).to(self.args.device)
         elif self.core == 'GRU':
-            self.rim_model = nn.GRU(
+            self.rnn_model = nn.GRU(
                                     input_size=self.input_size,
                                     hidden_size=self.args.hidden_size * self.args.num_units,
                                     num_layers=1,
@@ -233,11 +233,11 @@ class BallModel(nn.Module):
             h_prev = self.rim_dropout(h_prev)
 
         if self.core=='RIM':
-            h_new, foo, bar, ctx = self.rim_model(encoded_input, h_prev)
+            h_new, foo, bar, ctx = self.rnn_model(encoded_input, h_prev)
         elif self.core=='GRU':
             h_shape = h_prev.shape # record the shape
             h_prev = h_prev.reshape((h_shape[0],-1)) # flatten
-            _, h_new = self.rim_model(encoded_input.unsqueeze(1), 
+            _, h_new = self.rnn_model(encoded_input.unsqueeze(1), 
                                         h_prev.unsqueeze(0))
             h_new = h_new.reshape(h_shape)
         elif self.core=='LSTM':
