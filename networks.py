@@ -287,6 +287,7 @@ class BallModel(nn.Module):
             out_ = self.Decoder(h_masked.view(h.shape[0],-1)) # (BS, 1, 64, 64)
             out_list_.append(out_.unsqueeze(1))
         out_ = torch.cat(out_list_, dim=1) # (BS, num_blocks, 1, 64, 64)
+        return out_
 
 def clamp(input_tensor):
     return torch.clamp(input_tensor, min=-1e6, max=1e6)
