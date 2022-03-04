@@ -160,9 +160,11 @@ def main():
             test_f1 = metrics['f1']
             test_ssim = metrics['ssim']
             rim_actv = metrics['rim_actv']
+            rim_actv_mask = metrics['rim_actv_mask']
             dec_actv = metrics['dec_actv']
-            print(f"epoch [{epoch}] train loss: {epoch_loss:.4f}; test loss: {test_loss:.4f}; test mse: {test_mse:.4f}; \
-                test F1 score: {test_f1:.4f}; test SSIM: {test_ssim:.4f}")
+            blocked_dec = metrics['blocked_dec']
+            print(f"epoch [{epoch}] train loss: {epoch_loss:.4f}; test loss: {test_loss:.4f}; test mse: {test_mse:.4f}; "+\
+                f"test F1 score: {test_f1:.4f}; test SSIM: {test_ssim:.4f}")
             writer.add_scalar(f'Loss/Test Loss ({args.loss_fn.upper()})', test_loss, epoch)
 
             writer.add_scalar(f'Metrics/MSE', test_mse, epoch)
@@ -170,12 +172,14 @@ def main():
             writer.add_scalar(f'Metrics/SSIM', test_ssim, epoch)
 
             writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
+            writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
             writer.add_image('Stats/RIM Decoder Utilization', dec_actv[0], epoch, dataformats='HW')
             cat_video = torch.cat(
                 (data[0:4, 1:, :, :, :],prediction[0:4]),
                 dim = 3 # join in height
-            )
+            ) # N T C H W
             writer.add_video('Predicted Videos', cat_video, epoch)
+            writer.add_video('Blocked Predictions', blocked_dec[0]) # N=num_blocks T 1 H W
 
             hidden = model.init_hidden(data.shape[0]).to(args.device)
             writer.add_graph(model, (data[:, 0, :, :, :], hidden))

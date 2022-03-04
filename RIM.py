@@ -11,7 +11,8 @@ from abc import ABC, abstractmethod
 
 Ctx = namedtuple('RunningContext',
     [
-        'input_attn'
+        'input_attn',
+        'input_attn_mask'
     ])
 
 class blocked_grad(torch.autograd.Function):
@@ -377,80 +378,6 @@ class RIMCell(nn.Module):
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
 
-    # def input_attention_mask(self, x, h):
-    #     """
-    #     Input : x (batch_size, 2, input_size) [The null input is appended along the first dimension]
-    #             h (batch_size, num_units, hidden_size)
-    #     Output: inputs (list of size num_units with each element of shape (batch_size, input_value_size))
-    #             mask_ binary array of shape (batch_size, num_units) where 1 indicates active and 0 indicates inactive
-    #     """
-    #     key_layer = self.key(x) # input size 1 or fullsize??
-    #     value_layer = self.value(x)
-    #     query_layer = self.query(h)
-
-    #     key_layer = self.transpose_for_scores(key_layer,  self.num_input_heads, self.input_key_size)
-    #     value_layer = torch.mean(self.transpose_for_scores(value_layer,  self.num_input_heads, self.input_value_size), dim = 1)
-    #     query_layer = self.transpose_for_scores(query_layer, self.num_input_heads, self.input_query_size)
-
-    #     attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2)) / math.sqrt(self.input_key_size) 
-    #     attention_scores = torch.mean(attention_scores, dim = 1)
-    #     mask_ = torch.zeros(x.size(0), self.num_units).to(self.device)
-
-    #     not_null_scores = attention_scores[:,:, 0]
-    #     topk1 = torch.topk(not_null_scores,self.k,  dim = 1)
-    #     batch_indices = torch.arange(x.shape[0]).unsqueeze(1)
-    #     row_to_activate = batch_indices.repeat((1,self.k)) # repeat to the same shape as topk1.indices
-
-    #     mask_[row_to_activate.view(-1), topk1.indices.view(-1)] = 1
-    #     self.nan_hook(attention_scores)
-    #     self.inf_hook(attention_scores)
-    #     attention_probs = self.input_dropout(nn.Softmax(dim = -1)(attention_scores))
-    #     inputs = torch.matmul(attention_probs, value_layer) * mask_.unsqueeze(2)
-
-    #     return inputs, mask_, not_null_scores
-
-    # def communication_attention(self, h, mask):
-    #     """
-    #     Input : h (batch_size, num_units, hidden_size)
-    #             mask obtained from the input_attention_mask() function
-    #     Output: context_layer (batch_size, num_units, hidden_size). New hidden states after communication
-    #     """
-    #     query_layer = []
-    #     key_layer = []
-    #     value_layer = []
-        
-    #     query_layer = self.query_(h)
-    #     key_layer = self.key_(h)
-    #     value_layer = self.value_(h)
-
-    #     query_layer = self.transpose_for_scores(query_layer, self.num_comm_heads, self.comm_query_size)
-    #     key_layer = self.transpose_for_scores(key_layer, self.num_comm_heads, self.comm_key_size)
-    #     value_layer = self.transpose_for_scores(value_layer, self.num_comm_heads, self.comm_value_size)
-    #     # query_layer = torch.clamp(query_layer, min=-1e6, max=1e6)
-    #     # key_layer = torch.clamp(key_layer, min=-1e6, max=1e6)
-    #     # value_layer = torch.clamp(value_layer, min=-1e6, max=1e6)
-    #     attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
-    #     # attention_scores = torch.clamp(attention_scores, min=-1e7, max=1e7)
-    #     attention_scores = attention_scores / math.sqrt(self.comm_key_size)
-    #     self.inf_hook(attention_scores)
-    #     attention_probs = nn.Softmax(dim=-1)(attention_scores)
-        
-    #     mask = [mask for _ in range(attention_probs.size(1))]
-    #     mask = torch.stack(mask, dim = 1) # repeat activation mask for each head
-        
-    #     attention_probs = attention_probs * mask.unsqueeze(3) # inactive modules have zero-value query -> no context for them
-    #     self.nan_hook(attention_probs)
-    #     self.inf_hook(attention_probs)
-    #     attention_probs = self.comm_dropout(attention_probs)
-    #     context_layer = torch.matmul(attention_probs, value_layer)
-    #     context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
-    #     new_context_layer_shape = context_layer.size()[:-2] + (self.num_comm_heads * self.comm_value_size,)
-    #     context_layer = context_layer.view(*new_context_layer_shape) # concatenate all heads
-    #     context_layer = self.comm_attention_output(context_layer) # linear
-    #     context_layer = context_layer + h
-        
-    #     return context_layer
-
     def nan_hook(self, out):
         nan_mask = torch.isnan(out)
         if nan_mask.any():
@@ -480,14 +407,12 @@ class RIMCell(nn.Module):
         if cs is not None:
             c_old = cs * 1.0
         
-        self.nan_hook(inputs)
         # Compute RNN(LSTM or GRU) output
         
         if cs is not None:
             hs, cs = self.rnn(inputs, (hs, cs))
         else:
             hs = self.rnn(inputs, hs)
-        self.nan_hook(hs)
 
         # Block gradient through inactive units
         mask = mask.unsqueeze(2).detach()
@@ -498,14 +423,15 @@ class RIMCell(nn.Module):
         h_new = h_new + context
 
         # Prepare the context/intermediate value
-        ctx = Ctx(input_attn=attn_score)
+        ctx = Ctx(input_attn=attn_score,
+            input_attn_mask=mask.squeeze()
+            )
 
         # Update hs and cs and return them
         hs = mask * h_new + (1 - mask) * h_old
         if cs is not None:
             cs = mask * cs + (1 - mask) * c_old
             return hs, cs, None, mask
-        self.nan_hook(hs)
         return hs, None, None, ctx
 
 

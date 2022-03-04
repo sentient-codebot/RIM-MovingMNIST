@@ -43,6 +43,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
 
     if args.core == 'RIM':
         rim_actv = VecStack()
+        rim_actv_mask = VecStack()
     dec_actv = VecStack()
 
     mse = torch.nn.MSELoss()
@@ -56,6 +57,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
     for batch_idx, data in enumerate(test_loader): # tqdm doesn't work here?
         hidden = model.init_hidden(data.shape[0]).to(args.device)
         rim_actv.reset()
+        rim_actv_mask.reset()
         dec_actv.reset()
         start_time = time()
         data = data.to(args.device)
@@ -65,6 +67,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
         loss = 0.
         mseloss = 0.
         prediction = torch.zeros_like(data)
+        blocked_prediction = torch.zeros_like(data).unsqueeze(1) # (BS, num_blocks, T, C, H, W)
 
         for frame in range(data.shape[1]-1):
             if frame == data.shape[1]-2: # last two frame
@@ -80,6 +83,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
                 intm = intm._asdict()
                 target = data[:, frame+1, :, :, :]
                 prediction[:, frame+1, :, :, :] = output
+                blocked_prediction[:, :, frame+1, :, :, :] = intm['blocked_dec']
                 loss += loss_fn(output, target)
                 mseloss += mse(output, target)
                 f1_frame = f1_score(target, output)
@@ -89,6 +93,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
             intm["decoder_utilization"] = dec_rim_util(model, hidden, args)
             if args.core == 'RIM':
                 rim_actv.append(intm["input_attn"]) # shape (batchsize, num_units, 1) -> (BS, NU, T)
+                rim_actv_mask.append(intm["input_attn_mask"])
             dec_actv.append(intm["decoder_utilization"])
         
         ssim += pt_ssim.ssim(data[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
@@ -109,7 +114,9 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
         'ssim': ssim,
         'f1': f1_avg,
         'rim_actv': rim_actv.show(),
-        'dec_actv': dec_actv.show()
+        'rim_actv_mask': rim_actv_mask.show(),
+        'dec_actv': dec_actv.show(),
+        'blocked_dec': blocked_prediction
     }
 
 

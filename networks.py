@@ -8,7 +8,9 @@ import numpy as np
 
 Intm = namedtuple('IntermediateVariables',
     [
-        'input_attn'
+        'input_attn',
+        'input_attn_mask',
+        'blocked_dec',
     ])
 
 class MnistModel(nn.Module):
@@ -248,11 +250,18 @@ class BallModel(nn.Module):
 
         
         dec_out_ = self.Decoder(h_new.view(h_new.shape[0],-1))
-        
+        blocked_out_ = self.partial_blocked_decoder(h_new)
+
         if ctx is not None:
-            intm = Intm(input_attn=ctx.input_attn)
+            intm = Intm(input_attn=ctx.input_attn, 
+                input_attn_mask=ctx.input_attn_mask,
+                blocked_dec=blocked_out_
+                )
         else:
-            intm = Intm(input_attn=None)
+            intm = Intm(input_attn=None, 
+                input_attn_mask=None,
+                blocked_dec=blocked_out_
+                )
 
         return dec_out_, h_new, intm
 
@@ -267,6 +276,17 @@ class BallModel(nn.Module):
         nan_mask = torch.isnan(out)
         if nan_mask.any():
             raise RuntimeError(f"Found NAN in {self.__class__.__name__}: ", nan_mask.nonzero(), "where:", out[nan_mask.nonzero()[:, 0].unique(sorted=True)])
+
+    @torch.no_grad()
+    def partial_blocked_decoder(self, h):
+        out_list_ = []
+        for block_idx in range(h.shape[1]):
+            mask = torch.zeros((h.shape[0],h.shape[1],1), device=self.args.device)
+            mask[:, block_idx, :] = 1
+            h_masked = h * mask
+            out_ = self.Decoder(h_masked.view(h.shape[0],-1)) # (BS, 1, 64, 64)
+            out_list_.append(out_.unsqueeze(1))
+        out_ = torch.cat(out_list_, dim=1) # (BS, num_blocks, 1, 64, 64)
 
 def clamp(input_tensor):
     return torch.clamp(input_tensor, min=-1e6, max=1e6)
