@@ -54,7 +54,7 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args,
         if True:
             for frame in range(data.shape[1]-1):
                 output, hidden, intm = model(data[:, frame, :, :, :], hidden)
-                intm = intm._asdict()
+                # intm = intm._asdict()
                 target = data[:, frame+1, :, :, :]
                 loss += loss_fn(output, target)
                 

@@ -490,7 +490,7 @@ class RIMCell(nn.Module):
         if inf_mask.any():
             raise RuntimeError(f"Found NAN in {self.__class__.__name__}: ", inf_mask.nonzero(), "where:", _tensor[inf_mask.nonzero()[:, 0].unique(sorted=True)])
 
-    def forward(self, x, hs, cs = None):
+    def forward(self, x, hs, cs = None, get_intm=False):
         """
         Input : x (batch_size, input_size)
                 hs (batch_size, num_units, hidden_size)

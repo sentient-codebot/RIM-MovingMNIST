@@ -225,7 +225,7 @@ class BallModel(nn.Module):
             nn.Sigmoid()
         ).to(self.args.device)
 
-    def forward(self, x, h_prev):
+    def forward(self, x, h_prev, get_intm=False):
         ctx = None
         encoded_input = self.Encoder(x)
 
@@ -250,7 +250,9 @@ class BallModel(nn.Module):
 
         
         dec_out_ = self.Decoder(h_new.view(h_new.shape[0],-1))
-        blocked_out_ = self.partial_blocked_decoder(h_new)
+        blocked_out_ = None
+        if get_intm:
+            blocked_out_ = self.partial_blocked_decoder(h_new)
 
         if ctx is not None:
             intm = Intm(input_attn=ctx.input_attn, 
