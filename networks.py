@@ -283,7 +283,7 @@ class BallModel(nn.Module):
         for block_idx in range(h.shape[1]):
             mask = torch.zeros((h.shape[0],h.shape[1],1), device=self.args.device)
             mask[:, block_idx, :] = 1
-            h_masked = h * mask
+            h_masked = h * mask - (1-mask) * 1e-7 # mask==1 -> no change, mask==0 -> 1e-7
             out_ = self.Decoder(h_masked.view(h.shape[0],-1)) # (BS, 1, 64, 64)
             out_list_.append(out_.unsqueeze(1))
         out_ = torch.cat(out_list_, dim=1) # (BS, num_blocks, 1, 64, 64)

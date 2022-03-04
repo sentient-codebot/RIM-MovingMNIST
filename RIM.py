@@ -286,10 +286,11 @@ class PriorSampler(nn.Module):
     eta_0+N - nu +1 > 0
 
     """
-    def __init__(self, num_blocks, eta_0, nu_0, N):
+    def __init__(self, num_blocks, eta_0, nu_0, N, c):
         self.eta_0 = eta_0
         self.nu_0 = nu_0
         self.num_blocks = num_blocks
+        self.c = c
         self.log_beta = nn.Parameter(torch.log(nu_0+1) + 0.01 * torch.randn(num_blocks))
         self.log_alpha = nn.Parameter(torch.log(eta_0-nu_0+1) + 0.01 * torch.randn(num_blocks))
 
@@ -304,8 +305,18 @@ class PriorSampler(nn.Module):
         # TODO compensate for expectation
         E_v = E_alpha
         v = self.v_sampler.sample().reshape(bs, self.num_blocks, 1)
+        reg_loss = self.reg_loss()
 
-        return v, 1./(E_v + 1e-6)
+        return v, 1./(E_v + 1e-6), reg_loss
+    
+    def reg_loss(self):
+        nu = torch.exp(self.log_beta) - 1
+        eta = torch.exp(self.log_alpha) - 1 + nu
+        omega_part_1 = - torch.sum(torch.lgamma(eta-nu+1)-torch.lgamma(nu+1),) #first term, sum over k
+        omega_part_2 = torch.sum((eta-nu-self.eta_0+self.nu_0)*(torch.digamma(eta-nu+1)-torch.digamma(eta+2)))
+        omega_part_3 = torch.sum((nu-self.nu_0)*(torch.digamma(nu+1)-torch.digamma(eta+2)))
+        Omega_c = self.c * (omega_part_1+omega_part_2+omega_part_3)
+        return Omega_c
     
 
 
@@ -353,16 +364,17 @@ class SparseInputAttention(Attention):
         not_null_probs = attention_probs[:,:, 0]
         
         mask = torch.ones((h.shape[0], h.shape[1], 1), device=h.device) 
+        reg_loss = 0.
         if self.training:
             on_fly_sampler = torch.distributions.binomial.Binomial(p = not_null_probs)
             z = on_fly_sampler.sample(x.shape[0]).reshape(h.shape[0], h.shape[1], 1)
-            v, compensate = self.prior_sampler(bs=x.shape[0])
+            v, compensate, reg_loss = self.prior_sampler(bs=x.shape[0])
             mask = mask * v * z
         
         attention_probs = self.dropout(attention_probs)
         inputs = torch.matmul(attention_probs * compensate, value) * mask.unsqueeze(2) 
 
-        return inputs, mask, not_null_probs
+        return inputs,  mask, not_null_probs, reg_loss
 
 class CommAttention(Attention):
     """ h, h -> h 
