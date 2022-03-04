@@ -41,7 +41,8 @@ def get_grad_norm(model):
 # @torch.no_grad()
 def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
     '''test(model, test_loader, args, loss_fn, writer, rollout)'''
-
+    previous_get_intm = model.get_intm
+    model.get_intm = True
     if args.core == 'RIM':
         rim_actv = VecStack()
         rim_actv_mask = VecStack()
@@ -128,7 +129,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
         'blocked_dec': blocked_prediction
     }
 
-
+    model.get_intm = previous_get_intm
     return epoch_loss, prediction, data, metrics
 
 def dec_rim_util(model, h, args):
