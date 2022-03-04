@@ -69,9 +69,9 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
         mseloss = 0.
         prediction = torch.zeros_like(data)
         blocked_prediction = torch.zeros_like(
-            data.shape[0],
+            (data.shape[0],
             args.num_units,
-            data.shape[1:]
+            data.shape[1:])
         ) # (BS, num_blocks, T, C, H, W)
 
         for frame in range(data.shape[1]-1):
@@ -210,7 +210,7 @@ def main():
 
     # wait = input("Press any key to terminate program. ")
     writer.close()
-    
+
     return None
         
 def setup_model(args, logbook) -> torch.nn.Module:
