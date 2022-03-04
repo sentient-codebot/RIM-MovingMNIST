@@ -236,6 +236,7 @@ class InputAttention(Attention):
         vdim,
         num_heads,
         num_blocks,
+        k,
         dropout,
         ):
         super().__init__(dropout)
@@ -243,6 +244,7 @@ class InputAttention(Attention):
         self.kdim = kdim
         self.vdim = vdim
         self.num_blocks = num_blocks
+        self.k = k
 
         self.key = nn.Linear(input_size, num_heads * kdim, bias=False)
         self.value = nn.Linear(input_size, num_heads * vdim, bias=False)
@@ -368,7 +370,14 @@ class RIMCell(nn.Module):
         self.comm_dropout = nn.Dropout(p =comm_dropout)
 
         self.input_attention_mask = InputAttention(
-            input_size, hidden_size, input_key_size, input_value_size, num_input_heads, num_units, input_dropout
+            input_size, 
+            hidden_size, 
+            input_key_size, 
+            input_value_size,
+            num_input_heads, 
+            num_units, 
+            k,
+            input_dropout
         )
 
         self.communicaiton_attention = CommAttention(
