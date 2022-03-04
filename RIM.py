@@ -292,7 +292,7 @@ class CommAttention(Attention):
         self.key = GroupLinearLayer(hidden_size, kdim * num_heads, num_blocks)
         self.query = GroupLinearLayer(hidden_size, kdim * num_heads, num_blocks) 
         self.value = GroupLinearLayer(hidden_size, hidden_size * num_heads, num_blocks)
-        self.output = GroupLinearLayer(num_heads * hidden_size, hidden_size, self.num_units)
+        self.output = GroupLinearLayer(num_heads * hidden_size, hidden_size, num_blocks)
         self.dropout = nn.Dropout(p = dropout)
 
     def forward(self, h, mask):
@@ -304,7 +304,7 @@ class CommAttention(Attention):
         query = self.transpose_for_scores(query, self.num_heads, self.kdim)
         value = self.transpose_for_scores(value, self.num_heads, self.hidden_size)
 
-        scores = torch.matmul(query, key.transpose(-1, -2)) / math.sqrt(self.comm_key_size)
+        scores = torch.matmul(query, key.transpose(-1, -2)) / math.sqrt(self.kdim)
         probs = nn.Softmax(dim=-1)(scores)
 
         mask = [mask for _ in range(probs.size(1))]
