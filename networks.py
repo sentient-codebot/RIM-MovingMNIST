@@ -142,6 +142,7 @@ class BallModel(nn.Module):
         self.input_size = args.hidden_size * args.num_units # NOTE dimension of encoded input. not clearly mentioned in paper
         self.output_size = args.hidden_size * args.num_units
         self.core = args.core.upper()
+        self.get_intm = False
 
         self.Encoder = self.make_encoder().to(self.args.device)
         self.Decoder = None
@@ -225,7 +226,7 @@ class BallModel(nn.Module):
             nn.Sigmoid()
         ).to(self.args.device)
 
-    def forward(self, x, h_prev, get_intm=False):
+    def forward(self, x, h_prev):
         ctx = None
         encoded_input = self.Encoder(x)
 
@@ -251,7 +252,7 @@ class BallModel(nn.Module):
         
         dec_out_ = self.Decoder(h_new.view(h_new.shape[0],-1))
         blocked_out_ = None
-        if get_intm:
+        if self.get_intm:
             blocked_out_ = self.partial_blocked_decoder(h_new)
 
         if ctx is not None:

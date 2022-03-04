@@ -82,11 +82,11 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
                 hidden_before_last = hidden.detach()
             with torch.no_grad():
                 if not rollout:
-                    output, hidden, intm = model(data[:, frame, :, :, :], hidden, get_intm=True)
+                    output, hidden, intm = model(data[:, frame, :, :, :], hidden)
                 elif frame >= 5:
-                    output, hidden, intm = model(output, hidden, get_intm=True)
+                    output, hidden, intm = model(output, hidden)
                 else:
-                    output, hidden, intm = model(data[:, frame, :, :, :], hidden, get_intm=True)
+                    output, hidden, intm = model(data[:, frame, :, :, :], hidden)
 
                 intm = intm._asdict()
                 target = data[:, frame+1, :, :, :]
