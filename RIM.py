@@ -294,7 +294,7 @@ class CommAttention(Attention):
         self.key = GroupLinearLayer(hidden_size, kdim * num_heads, num_blocks)
         self.query = GroupLinearLayer(hidden_size, kdim * num_heads, num_blocks) 
         self.value = GroupLinearLayer(hidden_size, hidden_size * num_heads, num_blocks)
-        self.output = GroupLinearLayer(num_heads * hidden_size, hidden_size, num_blocks)
+        self.output_fc = GroupLinearLayer(num_heads * hidden_size, hidden_size, num_blocks)
         self.dropout = nn.Dropout(p = dropout)
 
     def forward(self, h, mask):
@@ -319,7 +319,7 @@ class CommAttention(Attention):
         context = context.permute(0, 2, 1, 3).contiguous()
         new_context_layer_shape = context.size()[:-2] + (self.num_heads * self.hidden_size,)
         context = context.view(*new_context_layer_shape) # concatenate all heads
-        context = self.comm_attention_output(context) # to be add to current h
+        context = self.output_fc(context) # to be add to current h
 
         return context
 
