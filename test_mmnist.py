@@ -71,7 +71,10 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
         blocked_prediction = torch.zeros(
             (data.shape[0],
             args.num_units,
-            data.shape[1:])
+            data.shape[1],
+            data.shape[2],
+            data.shape[3],
+            data.shape[4])
         ) # (BS, num_blocks, T, C, H, W)
 
         for frame in range(data.shape[1]-1):
