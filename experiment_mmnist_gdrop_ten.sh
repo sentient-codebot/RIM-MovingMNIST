@@ -1,6 +1,7 @@
 #!/bin/zsh
 echo Running on $HOSTNAME
 #source ../../cas_env/bin/activate
+conda activate pytorch
 
 experiment_name="MMNIST_dropout"
 cfg_json="configs/rim_complete/rim_complete_dropout.json"

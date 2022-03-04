@@ -161,7 +161,8 @@ def main():
             test_ssim = metrics['ssim']
             rim_actv = metrics['rim_actv']
             dec_actv = metrics['dec_actv']
-            print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}; test loss: {test_loss:.3f}; test mse: {test_mse:.3f}; test F1 score: {test_f1}; test SSIM: {test_ssim}")
+            print(f"epoch [{epoch}] train loss: {epoch_loss:.4f}; test loss: {test_loss:.4f}; test mse: {test_mse:.4f}; \
+                test F1 score: {test_f1:.4f}; test SSIM: {test_ssim:.4f}")
             writer.add_scalar(f'Loss/Test Loss ({args.loss_fn.upper()})', test_loss, epoch)
 
             writer.add_scalar(f'Metrics/MSE', test_mse, epoch)
@@ -180,7 +181,7 @@ def main():
             writer.add_graph(model, (data[:, 0, :, :, :], hidden))
 
         else:
-            print(f"epoch [{epoch}] train loss: {epoch_loss:.3f}")
+            print(f"epoch [{epoch}] train loss: {epoch_loss:.4f}")
 
         # save checkpoints here
         if args.model_persist_frequency > 0 and epoch % args.model_persist_frequency == 0 or epoch==10: # early save at 10 and regular save checkpoints
