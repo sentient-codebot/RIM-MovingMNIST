@@ -12,7 +12,6 @@ from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
 from utils.visualize import ScalarLog, plot_frames, VectorLog, SaliencyMap, VecStack
 from utils.metric import f1_score
-from box import Box
 from tqdm import tqdm
 
 import utils.pssim.pytorch_ssim as pt_ssim

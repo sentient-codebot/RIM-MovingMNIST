@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import math
 from RIM import RIMCell, SparseRIMCell, OmegaLoss, LayerNorm, Flatten, UnFlatten, Interpolate
 from backbone import GroupDropout
 from collections import namedtuple

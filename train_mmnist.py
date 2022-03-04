@@ -13,7 +13,6 @@ from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
 from utils.visualize import ScalarLog, VectorLog, HeatmapLog
 from data.MovingMNIST import MovingMNIST
-from box import Box
 from tqdm import tqdm
 from test_mmnist import dec_rim_util, test
 
