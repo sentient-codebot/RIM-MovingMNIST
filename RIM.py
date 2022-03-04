@@ -380,7 +380,7 @@ class RIMCell(nn.Module):
             input_dropout
         )
 
-        self.communicaiton_attention = CommAttention(
+        self.communication_attention = CommAttention(
             hidden_size, comm_key_size, num_comm_heads, num_units, comm_dropout
         )
 
