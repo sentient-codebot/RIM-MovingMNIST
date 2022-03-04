@@ -349,25 +349,13 @@ class RIMCell(nn.Module):
         self.comm_query_size = comm_query_size
         self.comm_value_size = comm_value_size
 
-        # inp_attn transformations
-        self.key = nn.Linear(input_size, num_input_heads * input_query_size, bias=False)
-        self.value = nn.Linear(input_size, num_input_heads * input_value_size, bias=False)
-        self.query = GroupLinearLayer(hidden_size,  input_key_size * num_input_heads, self.num_units)
-
         if self.rnn_cell == 'GRU':
             # self.rnn = GroupGRUCell(input_value_size, hidden_size, num_units)
             self.rnn = GroupTorchGRU(input_value_size, hidden_size, num_units) 
         else:
             self.rnn = GroupLSTMCell(input_value_size, hidden_size, num_units)
-        # comm_attn transformations
-        self.query_ =GroupLinearLayer(hidden_size, comm_query_size * num_comm_heads, self.num_units) 
-        self.key_ = GroupLinearLayer(hidden_size, comm_key_size * num_comm_heads, self.num_units)
-        self.value_ = GroupLinearLayer(hidden_size, comm_value_size * num_comm_heads, self.num_units)
         
-        self.comm_attention_output = GroupLinearLayer(num_comm_heads * comm_value_size, comm_value_size, self.num_units)
-        self.input_dropout = nn.Dropout(p =input_dropout)
-        self.comm_dropout = nn.Dropout(p =comm_dropout)
-
+        # attentions
         self.input_attention_mask = InputAttention(
             input_size, 
             hidden_size, 
