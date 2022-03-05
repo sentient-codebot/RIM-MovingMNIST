@@ -287,8 +287,8 @@ class PriorSampler(nn.Module):
 
     """
     def __init__(self, num_blocks, eta_0, nu_0, N):
-        self.eta_0 = eta_0
-        self.nu_0 = nu_0
+        self.eta_0 = torch.tensor(eta_0)
+        self.nu_0 = torch.tensor(nu_0)
         self.num_blocks = num_blocks
         self.log_beta = nn.Parameter(torch.log(nu_0+1) + 0.01 * torch.randn(num_blocks))
         self.log_alpha = nn.Parameter(torch.log(eta_0-nu_0+1) + 0.01 * torch.randn(num_blocks))
