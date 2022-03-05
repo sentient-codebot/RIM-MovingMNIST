@@ -634,7 +634,7 @@ class SparseRIMCell(RIMCell):
     def __init__(self, 
         device, input_size, hidden_size, num_units, k, rnn_cell, input_key_size = 64, input_value_size = 400, input_query_size = 64,
         num_input_heads = 1, input_dropout = 0.1, comm_key_size = 32, comm_value_size = 100, comm_query_size = 32, num_comm_heads = 4, comm_dropout = 0.1,
-        eta_0 = 1, nu_0 = 1
+        eta_0 = 1, nu_0 = 1, N = 32
     ):
         super().__init__(device, input_size, hidden_size, num_units, k, rnn_cell, input_key_size, input_value_size, input_query_size,
             num_input_heads, input_dropout, comm_key_size, comm_value_size, comm_query_size, num_comm_heads, comm_dropout)
@@ -650,7 +650,8 @@ class SparseRIMCell(RIMCell):
             k,
             input_dropout,
             eta_0,
-            nu_0
+            nu_0,
+            N
         )
         
         

@@ -174,7 +174,7 @@ class BallModel(nn.Module):
                                         comm_dropout = self.args.comm_dropout
                 ).to(self.args.device)
             else:
-                self.rnn_model = RIMCell(
+                self.rnn_model = SparseRIMCell(
                                         device=self.args.device,
                                         input_size=self.input_size, 
                                         num_units=self.args.num_units,
@@ -192,7 +192,8 @@ class BallModel(nn.Module):
                                         num_comm_heads = self.args.num_comm_heads, 
                                         comm_dropout = self.args.comm_dropout,
                                         eta_0 = 2,
-                                        nu_0 = 2
+                                        nu_0 = 2,
+                                        N = self.args.batch_size
                 ).to(self.args.device)
 
         elif self.core == 'GRU':
