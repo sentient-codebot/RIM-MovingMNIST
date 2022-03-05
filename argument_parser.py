@@ -172,9 +172,8 @@ def argument_parser():
     else:
         args.do_rim_dropout = True
 
-    args.id = args.core.upper() + f"_{args.hidden_size}_{args.num_units}"+\
-        f"_{args.experiment_name}_{args.lr}_num_inp_heads_{args.num_input_heads}"+\
-        f"_rim_dropout_{args.rim_dropout}"+\
+    args.id = f"{args.experiment_name}_"+ args.core.upper() + f"_{args.num_units}_{args.k}_{args.hidden_size}"+\
+        f"_dropout_{args.rim_dropout}"+\
         f"_ver_{args.version}"
 
     args.folder_log = f"./logs/{args.id}"
