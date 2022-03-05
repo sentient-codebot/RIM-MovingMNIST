@@ -9,7 +9,7 @@ import torch
 from data.MovingMNIST import MovingMNIST
 from utils.visualize import SaliencyMap
 
-set_seed(2022)
+set_seed(2022) #Nan is stupid ciao
 
 def main():
     args = argument_parser()

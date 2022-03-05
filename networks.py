@@ -1,10 +1,17 @@
 import torch
 import torch.nn as nn
-import math
 from RIM import RIMCell, SparseRIMCell, OmegaLoss, LayerNorm, Flatten, UnFlatten, Interpolate
 from backbone import GroupDropout
+from collections import namedtuple
 import numpy as np
 
+
+Intm = namedtuple('IntermediateVariables',
+    [
+        'input_attn',
+        'input_attn_mask',
+        'blocked_dec',
+    ])
 
 class MnistModel(nn.Module):
     def __init__(self, args):
@@ -135,6 +142,8 @@ class BallModel(nn.Module):
         self.input_size = args.hidden_size * args.num_units # NOTE dimension of encoded input. not clearly mentioned in paper
         self.output_size = args.hidden_size * args.num_units
         self.core = args.core.upper()
+        self.sparse = self.args.sparse
+        self.get_intm = False
 
         self.Encoder = self.make_encoder().to(self.args.device)
         self.Decoder = None
@@ -145,26 +154,49 @@ class BallModel(nn.Module):
             self.rim_dropout = GroupDropout(p=args.rim_dropout).to(self.args.device) # TODO later test different probs for different modules
 
         if self.core == 'RIM':
-            self.rim_model = RIMCell(
-                                    device=self.args.device,
-                                    input_size=self.input_size, 
-                                    num_units=self.args.num_units,
-                                    hidden_size=self.args.hidden_size,
-                                    k=self.args.k,
-                                    rnn_cell='GRU', # defalt GRU
-                                    input_key_size=self.args.input_key_size,
-                                    input_value_size=self.args.input_value_size,
-                                    input_query_size = self.args.input_query_size,
-                                    num_input_heads = self.args.num_input_heads,
-                                    input_dropout = self.args.input_dropout,
-                                    comm_key_size = self.args.comm_key_size,
-                                    comm_value_size = self.args.comm_value_size, 
-                                    comm_query_size = self.args.comm_query_size, 
-                                    num_comm_heads = self.args.num_comm_heads, 
-                                    comm_dropout = self.args.comm_dropout
-            ).to(self.args.device)
+            if not self.sparse:
+                self.rnn_model = RIMCell(
+                                        device=self.args.device,
+                                        input_size=self.input_size, 
+                                        num_units=self.args.num_units,
+                                        hidden_size=self.args.hidden_size,
+                                        k=self.args.k,
+                                        rnn_cell='GRU', # defalt GRU
+                                        input_key_size=self.args.input_key_size,
+                                        input_value_size=self.args.input_value_size,
+                                        input_query_size = self.args.input_query_size,
+                                        num_input_heads = self.args.num_input_heads,
+                                        input_dropout = self.args.input_dropout,
+                                        comm_key_size = self.args.comm_key_size,
+                                        comm_value_size = self.args.comm_value_size, 
+                                        comm_query_size = self.args.comm_query_size, 
+                                        num_comm_heads = self.args.num_comm_heads, 
+                                        comm_dropout = self.args.comm_dropout
+                ).to(self.args.device)
+            else:
+                self.rnn_model = RIMCell(
+                                        device=self.args.device,
+                                        input_size=self.input_size, 
+                                        num_units=self.args.num_units,
+                                        hidden_size=self.args.hidden_size,
+                                        k=self.args.k,
+                                        rnn_cell='GRU', # defalt GRU
+                                        input_key_size=self.args.input_key_size,
+                                        input_value_size=self.args.input_value_size,
+                                        input_query_size = self.args.input_query_size,
+                                        num_input_heads = self.args.num_input_heads,
+                                        input_dropout = self.args.input_dropout,
+                                        comm_key_size = self.args.comm_key_size,
+                                        comm_value_size = self.args.comm_value_size, 
+                                        comm_query_size = self.args.comm_query_size, 
+                                        num_comm_heads = self.args.num_comm_heads, 
+                                        comm_dropout = self.args.comm_dropout,
+                                        eta_0 = 2,
+                                        nu_0 = 2
+                ).to(self.args.device)
+
         elif self.core == 'GRU':
-            self.rim_model = nn.GRU(
+            self.rnn_model = nn.GRU(
                                     input_size=self.input_size,
                                     hidden_size=self.args.hidden_size * self.args.num_units,
                                     num_layers=1,
@@ -225,37 +257,38 @@ class BallModel(nn.Module):
         if self.rim_dropout is not None:
             h_prev = self.rim_dropout(h_prev)
 
+        reg_loss = 0.
         if self.core=='RIM':
-            h_new, foo, bar, ctx = self.rim_model(encoded_input, h_prev)
+            if not self.sparse:
+                h_new, foo, bar, ctx = self.rnn_model(encoded_input, h_prev)
+            else:
+                h_new, foo, bar, ctx, reg_loss = self.rnn_model(encoded_input, h_prev)
         elif self.core=='GRU':
             h_shape = h_prev.shape # record the shape
             h_prev = h_prev.reshape((h_shape[0],-1)) # flatten
-            _, h_new = self.rim_model(encoded_input.unsqueeze(1), 
+            _, h_new = self.rnn_model(encoded_input.unsqueeze(1), 
                                         h_prev.unsqueeze(0))
             h_new = h_new.reshape(h_shape)
         elif self.core=='LSTM':
             raise ValueError('LSTM core not implemented yet!')
         
-        # --- here just for test    ---
-        # module_mask = torch.tensor([1,1,1,0,0,0]).reshape(1,-1,1).to(self.args.device)
-        # h_new = h_new*module_mask
-        # --- above for test        ---
-
-        
         dec_out_ = self.Decoder(h_new.view(h_new.shape[0],-1))
-        
-        if ctx is not None:
-            intm = ctx
-        else:
-            intm = {}
+        blocked_out_ = torch.zeros(1)
+        if self.get_intm:
+            blocked_out_ = self.partial_blocked_decoder(h_new)
 
-        """ 
-        [
-            "input_attn",
-            # "decoder_activation"
-        ]
-        """
-        return dec_out_, h_new, intm
+        if ctx is not None:
+            intm = Intm(input_attn=ctx.input_attn, 
+                input_attn_mask=ctx.input_attn_mask,
+                blocked_dec=blocked_out_
+                )
+        else:
+            intm = intm = Intm(input_attn=torch.zeros(1), 
+                input_attn_mask=torch.zeros(1),
+                blocked_dec=blocked_out_
+                )
+        
+        return dec_out_, h_new, reg_loss, intm
 
     def init_hidden(self, batch_size): 
         # assert False, "don't call this"
@@ -268,6 +301,18 @@ class BallModel(nn.Module):
         nan_mask = torch.isnan(out)
         if nan_mask.any():
             raise RuntimeError(f"Found NAN in {self.__class__.__name__}: ", nan_mask.nonzero(), "where:", out[nan_mask.nonzero()[:, 0].unique(sorted=True)])
+
+    @torch.no_grad()
+    def partial_blocked_decoder(self, h):
+        out_list_ = [self.Decoder(h.view(h.shape[0],-1)).unsqueeze(1)] # all-pass
+        for block_idx in range(h.shape[1]):
+            mask = torch.zeros((h.shape[0],h.shape[1],1), device=self.args.device)
+            mask[:, block_idx, :] = 1
+            h_masked = h * mask - (1-mask) * 1e-7 # mask==1 -> no change, mask==0 -> 1e-7
+            out_ = self.Decoder(h_masked.view(h.shape[0],-1)) # (BS, 1, 64, 64)
+            out_list_.append(out_.unsqueeze(1))
+        out_ = torch.cat(out_list_, dim=1) # (BS, num_blocks, 1, 64, 64)
+        return out_
 
 def clamp(input_tensor):
     return torch.clamp(input_tensor, min=-1e6, max=1e6)

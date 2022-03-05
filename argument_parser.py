@@ -155,7 +155,8 @@ def argument_parser():
     parser.add_argument('--num_comm_heads', type=int, default=4)
     parser.add_argument('--core', type=str, default='RIM')
     parser.add_argument('--loss_fn', type=str2loss_fn, default='BCE')
-    parser.add_argument('--rim_dropout', type=float, default=-1)
+    parser.add_argument('--rim_dropout', type=float, default=0.)
+    parser.add_argument('--sparse', type=str2bool, default=False)
 
     args, left_argv = config_parser.parse_known_args() # if passed args BESIDES defined in cfg_parser, store in left_argv
 
@@ -171,8 +172,8 @@ def argument_parser():
     else:
         args.do_rim_dropout = True
 
-    args.id = args.core.upper() + f"_{args.hidden_size}_{args.num_units}"+\
-        f"_{args.experiment_name}_{args.lr}_num_inp_heads_{args.num_input_heads}"+\
+    args.id = f"{args.experiment_name}_"+ args.core.upper() + f"_{args.num_units}_{args.k}_{args.hidden_size}"+\
+        f"_dropout_{args.rim_dropout}"+\
         f"_ver_{args.version}"
 
     args.folder_log = f"./logs/{args.id}"
