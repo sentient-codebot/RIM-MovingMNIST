@@ -142,6 +142,7 @@ class BallModel(nn.Module):
         self.input_size = args.hidden_size * args.num_units # NOTE dimension of encoded input. not clearly mentioned in paper
         self.output_size = args.hidden_size * args.num_units
         self.core = args.core.upper()
+        self.sparse = self.args.sparse
         self.get_intm = False
 
         self.Encoder = self.make_encoder().to(self.args.device)
@@ -153,24 +154,47 @@ class BallModel(nn.Module):
             self.rim_dropout = GroupDropout(p=args.rim_dropout).to(self.args.device) # TODO later test different probs for different modules
 
         if self.core == 'RIM':
-            self.rnn_model = RIMCell(
-                                    device=self.args.device,
-                                    input_size=self.input_size, 
-                                    num_units=self.args.num_units,
-                                    hidden_size=self.args.hidden_size,
-                                    k=self.args.k,
-                                    rnn_cell='GRU', # defalt GRU
-                                    input_key_size=self.args.input_key_size,
-                                    input_value_size=self.args.input_value_size,
-                                    input_query_size = self.args.input_query_size,
-                                    num_input_heads = self.args.num_input_heads,
-                                    input_dropout = self.args.input_dropout,
-                                    comm_key_size = self.args.comm_key_size,
-                                    comm_value_size = self.args.comm_value_size, 
-                                    comm_query_size = self.args.comm_query_size, 
-                                    num_comm_heads = self.args.num_comm_heads, 
-                                    comm_dropout = self.args.comm_dropout
-            ).to(self.args.device)
+            if not self.sparse:
+                self.rnn_model = RIMCell(
+                                        device=self.args.device,
+                                        input_size=self.input_size, 
+                                        num_units=self.args.num_units,
+                                        hidden_size=self.args.hidden_size,
+                                        k=self.args.k,
+                                        rnn_cell='GRU', # defalt GRU
+                                        input_key_size=self.args.input_key_size,
+                                        input_value_size=self.args.input_value_size,
+                                        input_query_size = self.args.input_query_size,
+                                        num_input_heads = self.args.num_input_heads,
+                                        input_dropout = self.args.input_dropout,
+                                        comm_key_size = self.args.comm_key_size,
+                                        comm_value_size = self.args.comm_value_size, 
+                                        comm_query_size = self.args.comm_query_size, 
+                                        num_comm_heads = self.args.num_comm_heads, 
+                                        comm_dropout = self.args.comm_dropout
+                ).to(self.args.device)
+            else:
+                self.rnn_model = RIMCell(
+                                        device=self.args.device,
+                                        input_size=self.input_size, 
+                                        num_units=self.args.num_units,
+                                        hidden_size=self.args.hidden_size,
+                                        k=self.args.k,
+                                        rnn_cell='GRU', # defalt GRU
+                                        input_key_size=self.args.input_key_size,
+                                        input_value_size=self.args.input_value_size,
+                                        input_query_size = self.args.input_query_size,
+                                        num_input_heads = self.args.num_input_heads,
+                                        input_dropout = self.args.input_dropout,
+                                        comm_key_size = self.args.comm_key_size,
+                                        comm_value_size = self.args.comm_value_size, 
+                                        comm_query_size = self.args.comm_query_size, 
+                                        num_comm_heads = self.args.num_comm_heads, 
+                                        comm_dropout = self.args.comm_dropout,
+                                        eta_0 = 2,
+                                        nu_0 = 2
+                ).to(self.args.device)
+
         elif self.core == 'GRU':
             self.rnn_model = nn.GRU(
                                     input_size=self.input_size,
@@ -233,8 +257,12 @@ class BallModel(nn.Module):
         if self.rim_dropout is not None:
             h_prev = self.rim_dropout(h_prev)
 
+        reg_loss = 0.
         if self.core=='RIM':
-            h_new, foo, bar, ctx = self.rnn_model(encoded_input, h_prev)
+            if not self.sparse:
+                h_new, foo, bar, ctx = self.rnn_model(encoded_input, h_prev)
+            else:
+                h_new, foo, bar, ctx, reg_loss = self.rnn_model(encoded_input, h_prev)
         elif self.core=='GRU':
             h_shape = h_prev.shape # record the shape
             h_prev = h_prev.reshape((h_shape[0],-1)) # flatten
@@ -243,12 +271,6 @@ class BallModel(nn.Module):
             h_new = h_new.reshape(h_shape)
         elif self.core=='LSTM':
             raise ValueError('LSTM core not implemented yet!')
-        
-        # --- here just for test    ---
-        # module_mask = torch.tensor([1,1,1,0,0,0]).reshape(1,-1,1).to(self.args.device)
-        # h_new = h_new*module_mask
-        # --- above for test        ---
-
         
         dec_out_ = self.Decoder(h_new.view(h_new.shape[0],-1))
         blocked_out_ = torch.zeros(1)
@@ -265,8 +287,8 @@ class BallModel(nn.Module):
                 input_attn_mask=torch.zeros(1),
                 blocked_dec=blocked_out_
                 )
-
-        return dec_out_, h_new, intm
+        
+        return dec_out_, h_new, reg_loss, intm
 
     def init_hidden(self, batch_size): 
         # assert False, "don't call this"

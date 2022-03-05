@@ -374,7 +374,7 @@ class SparseInputAttention(Attention):
         attention_probs = self.dropout(attention_probs)
         inputs = torch.matmul(attention_probs * compensate, value) * mask.unsqueeze(2) 
 
-        return inputs,  mask, not_null_probs, reg_loss
+        return inputs, mask, not_null_probs, reg_loss
 
 class CommAttention(Attention):
     """ h, h -> h 
@@ -640,6 +640,18 @@ class SparseRIMCell(RIMCell):
             num_input_heads, input_dropout, comm_key_size, comm_value_size, comm_query_size, num_comm_heads, comm_dropout)
         self.eta_0 = eta_0,
         self.nu_0 = nu_0
+        self.input_attention = SparseInputAttention(
+            input_size,
+            hidden_size,
+            input_key_size,
+            input_value_size,
+            num_input_heads,
+            num_units,
+            k,
+            input_dropout,
+            eta_0,
+            nu_0
+        )
         
         
     def forward(self, x, hs, cs = None):
@@ -655,7 +667,7 @@ class SparseRIMCell(RIMCell):
         x = torch.cat((x.unsqueeze(1), null_input), dim = 1)
 
         # Compute input attention
-        inputs, mask, attn_score = self.input_attention_mask(x, hs)
+        inputs, mask, attn_score, reg_loss = self.input_attention(x, hs)
         h_old = hs * 1.0
         if cs is not None:
             c_old = cs * 1.0
@@ -684,8 +696,8 @@ class SparseRIMCell(RIMCell):
         hs = mask * h_new + (1 - mask) * h_old
         if cs is not None:
             cs = mask * cs + (1 - mask) * c_old
-            return hs, cs, None, mask
-        return hs, None, None, ctx
+            return hs, cs, None, mask, reg_loss
+        return hs, None, None, ctx, reg_loss
 
 
 class LayerNorm(nn.Module):

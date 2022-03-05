@@ -53,12 +53,12 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args,
         # with autograd.detect_anomaly():
         if True:
             for frame in range(data.shape[1]-1):
-                output, hidden, intm = model(data[:, frame, :, :, :], hidden)
+                output, hidden, reg_loss, intm = model(data[:, frame, :, :, :], hidden)
                 # intm = intm._asdict()
                 target = data[:, frame+1, :, :, :]
                 loss += loss_fn(output, target)
                 
-            loss.backward()
+            (loss+reg_loss).backward()
             grad_norm = get_grad_norm(model)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=True) 
             optimizer.step()
