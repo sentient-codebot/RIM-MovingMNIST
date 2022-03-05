@@ -286,11 +286,10 @@ class PriorSampler(nn.Module):
     eta_0+N - nu +1 > 0
 
     """
-    def __init__(self, num_blocks, eta_0, nu_0, N, c):
+    def __init__(self, num_blocks, eta_0, nu_0, N):
         self.eta_0 = eta_0
         self.nu_0 = nu_0
         self.num_blocks = num_blocks
-        self.c = c
         self.log_beta = nn.Parameter(torch.log(nu_0+1) + 0.01 * torch.randn(num_blocks))
         self.log_alpha = nn.Parameter(torch.log(eta_0-nu_0+1) + 0.01 * torch.randn(num_blocks))
 
@@ -315,7 +314,7 @@ class PriorSampler(nn.Module):
         omega_part_1 = - torch.sum(torch.lgamma(eta-nu+1)-torch.lgamma(nu+1),) #first term, sum over k
         omega_part_2 = torch.sum((eta-nu-self.eta_0+self.nu_0)*(torch.digamma(eta-nu+1)-torch.digamma(eta+2)))
         omega_part_3 = torch.sum((nu-self.nu_0)*(torch.digamma(nu+1)-torch.digamma(eta+2)))
-        Omega_c = self.c * (omega_part_1+omega_part_2+omega_part_3)
+        Omega_c = (omega_part_1+omega_part_2+omega_part_3)
         return Omega_c
     
 
