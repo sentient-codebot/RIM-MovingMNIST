@@ -5,11 +5,12 @@ import math
 import numpy as np
 import torch.multiprocessing as mp
 from torch.nn.utils.rnn import PackedSequence
-from torch.distributions.beta import Beta
+from torch.distributions.beta import Beta, Uniform
 from torch.distributions.binomial import Binomial
 
 from collections import namedtuple
 from abc import ABC, abstractmethod
+from typing import Any
 
 Ctx = namedtuple('RunningContext',
     [
@@ -287,23 +288,29 @@ class PriorSampler(nn.Module):
 
     """
     def __init__(self, num_blocks, eta_0, nu_0, N):
+        super().__init__()
         self.eta_0 = torch.tensor(eta_0)
         self.nu_0 = torch.tensor(nu_0)
+        self.beta_0 = self.nu_0+1
+        self.alpha_0 = self.eta_0-self.nu_0+1
         self.num_blocks = num_blocks
-        self.log_beta = nn.Parameter(torch.log(nu_0+1) + 0.01 * torch.randn(num_blocks))
-        self.log_alpha = nn.Parameter(torch.log(eta_0-nu_0+1) + 0.01 * torch.randn(num_blocks))
+        self.log_beta = nn.Parameter(torch.log(self.nu_0+1) + 0.01 * torch.randn(num_blocks))
+        self.log_alpha = nn.Parameter(torch.log(self.eta_0-self.nu_0+1) + 0.01 * torch.randn(num_blocks))
 
     def forward(self, bs):
-        alpha = torch.exp(self.log_beta)
-        beta = torch.exp(self.log_alpha)
+        """
+        switch' ~ Beta(alpha, beta) (reparameterization) -> switch' = g(phi, alpha, beta), phi ~ new_pdf(.)
+        """
+        alpha = torch.exp(self.log_alpha)
+        beta = torch.exp(self.log_beta)
         self.switch_prior_sampler = Beta(alpha, beta)
-        switch_prior = self.switch_prior_sampler.sample(bs).reshape(bs, self.num_blocks)
-        # TODO compensate for expectation
-        E_alpha = alpha/(alpha+beta).unsqueeze(0).repeat(bs, 1) # (1, num_blocks) * (bs, 1) -> (bs, num_blocks)
-        self.v_sampler = Binomial(probs=1-switch_prior.flatten())
+        switch_prior = self.switch_prior_sampler.rsample((bs,)).reshape(bs, self.num_blocks)
         # TODO compensate for expectation
         E_v = E_alpha
-        v = self.v_sampler.sample().reshape(bs, self.num_blocks, 1)
+        E_alpha = alpha/(alpha+beta).unsqueeze(0).repeat(bs, 1) # (1, num_blocks) * (bs, 1) -> (bs, num_blocks)
+        self.u_sampler = Uniform(-1, 1)
+        u = self.u_sampler.sample(switch_prior.shape)
+        v = smooth_sign.apply(u+switch_prior) + 1
         reg_loss = self.reg_loss()
 
         return v, 1./(E_v + 1e-6), reg_loss
@@ -317,7 +324,60 @@ class PriorSampler(nn.Module):
         Omega_c = (omega_part_1+omega_part_2+omega_part_3)
         return Omega_c
     
+class icdf_beta(torch.autograd.Function):
+    # NOTE automatically implemented by pytorch: Distribution.rsample method
+    @staticmethod
+    def forward(ctx, x, mask):
+        raise NotImplementedError('sorry not yet')
+        ctx.save_for_backward(x, mask)
+        return x
 
+    @staticmethod
+    def backward(ctx, grad_output):
+        """
+        cdf_beta(x) = P | icdf_beta(P) = x
+        d(icdf_beta(P))/dP = 1 / pdf_beta(x)
+        """
+        x, mask = ctx.saved_tensors
+        return grad_output * mask, mask * 0.0
+
+class bernoulli_rsample(nn.Module):
+    """ x ~ B(p)
+    x = sign(u' + p) + 1, u' ~ U(-1,0)
+    ctx_x = approx_sign(u + p) + 1, approx_sign(.) = tanh(k*.)
+    """
+    def __init__(self, p):
+        super().__init__()
+
+    def forward(ctx, p, shape):
+        assert isinstance(shape, tuple)
+        U = torch.distributions.Uniform(-1, 1)
+        u = U.sample((*shape, p.shape[0]))
+        x = torch.sign(u + p) + 1
+        x.requires_grad_(True)
+        med = (u+p).detach().requires_grad_(True)
+        approx_x = torch.tanh(1.*med)
+        ctx.save_for_backward(approx_x, med)
+        return x
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        approx_x, med= ctx.saved_tensors
+        approx_x.backward(grad=grad_output)
+        return med.grad
+
+class smooth_sign(torch.autograd.Function):
+    """
+    """
+    @staticmethod
+    def forward(ctx: Any, x: torch.Tensor) -> torch.Tensor:
+        ctx.save_for_backward(x)
+        return torch.sign(x)
+
+    def backward(ctx: Any, grad_output: Any) -> Any:
+        x, = ctx.saved_tensors
+        func_out, vjp = torch.autograd.functional.vjp(torch.tanh, x, grad_output)
+        return vjp
 
 class SparseInputAttention(Attention):
     def __init__(self, 
@@ -345,7 +405,7 @@ class SparseInputAttention(Attention):
         self.query = GroupLinearLayer(hidden_size, kdim * num_heads, num_blocks)
         self.dropout = nn.Dropout(p = dropout)
 
-        self.prior_sampler = PriorSampler(num_blocks, eta_0, nu_0, 64)
+        self.prior_sampler = PriorSampler(num_blocks, eta_0, nu_0, N)
 
     def forward(self, x, h):
         key = self.key(x)
@@ -363,17 +423,24 @@ class SparseInputAttention(Attention):
         not_null_probs = attention_probs[:,:, 0]
         
         mask = torch.ones((h.shape[0], h.shape[1], 1), device=h.device) 
-        reg_loss = 0.
+        reg_loss = torch.zeros(1, device=x.device)
         if self.training:
-            on_fly_sampler = torch.distributions.binomial.Binomial(p = not_null_probs)
-            z = on_fly_sampler.sample(x.shape[0]).reshape(h.shape[0], h.shape[1], 1)
+            on_fly_sampler = torch.distributions.binomial.Binomial(probs = not_null_probs) # probs (BS, num_blocks)
+            z = on_fly_sampler.rsample().reshape(h.shape[0], h.shape[1], 1)
             v, compensate, reg_loss = self.prior_sampler(bs=x.shape[0])
             mask = mask * v * z
-        
-        attention_probs = self.dropout(attention_probs)
-        inputs = torch.matmul(attention_probs * compensate, value) * mask.unsqueeze(2) 
+            compensate = compensate.unsqueeze(2).repeat(1,1,2)
+            attention_probs = attention_probs * compensate
 
-        return inputs, mask, not_null_probs, reg_loss
+        # v, compensate, reg_loss = self.prior_sampler(bs=x.shape[0])
+        # compensate = compensate.unsqueeze(2).repeat(1,1,2)
+        # attention_probs = attention_probs / compensate 
+
+        mask = mask.squeeze()
+        attention_probs = self.dropout(attention_probs)
+        inputs = torch.matmul(attention_probs, value) * mask.unsqueeze(2) 
+
+        return inputs, mask, attention_probs[:, :, 0].detach(), reg_loss
 
 class CommAttention(Attention):
     """ h, h -> h 

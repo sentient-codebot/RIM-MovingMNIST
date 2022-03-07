@@ -30,8 +30,8 @@ def nan_hook(_tensor):
 def get_grad_norm(model):
     total_norm = 0.
     for p in model.parameters():
-        param_norm = p.grad.detach().data.norm(2)
-        total_norm += param_norm.item() ** 2
+        param_norm = p.grad.detach().data.norm(2).item() if p.grad is not None else 0.
+        total_norm += param_norm ** 2
     total_norm = total_norm ** 0.5
     return total_norm
 
@@ -58,7 +58,7 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args,
                 target = data[:, frame+1, :, :, :]
                 loss += loss_fn(output, target)
                 
-            (loss+reg_loss).backward()
+            (loss+0.01*reg_loss).backward()
             grad_norm = get_grad_norm(model)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=True) 
             optimizer.step()
