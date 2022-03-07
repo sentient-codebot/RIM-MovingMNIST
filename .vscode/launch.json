@@ -63,8 +63,13 @@
                 "--model_persist_frequency",
                 "25",
                 "--sparse",
-                "true"
-            ]
+                "true",
+                "--input_dropout",
+                "0",
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "1"
+            }
         },
         {
             "name": "train/test mmnist complete: dropout",

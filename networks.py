@@ -274,7 +274,7 @@ class BallModel(nn.Module):
             raise ValueError('LSTM core not implemented yet!')
         
         dec_out_ = self.Decoder(h_new.view(h_new.shape[0],-1))
-        blocked_out_ = torch.zeros(1)
+        blocked_out_ = torch.zeros(1).to(x.device)
         if self.get_intm:
             blocked_out_ = self.partial_blocked_decoder(h_new)
 
