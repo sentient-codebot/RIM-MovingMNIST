@@ -216,24 +216,6 @@ class RIM(nn.Module):
             return x, hs, cs
         return x, hs
 
-
-# modified part
-class OmegaLoss(nn.Module):
-    def __init__(self, c, eta_0, nu_0):
-        super().__init__()
-        self.c = c
-        self.eta_0 = eta_0
-        self.nu_0 = nu_0
-
-    # nu: BATCH x K, eta_0: scaler, nu_0: scalser
-    # maar, nu should be the same for the whole batch (it's parameter)
-    def forward(self, eta, nu): 
-        omega_part_1 = -torch.sum(torch.lgamma(eta-nu+1)-torch.lgamma(nu+1),) #first term, sum over k
-        omega_part_2 = torch.sum((eta-nu-self.eta_0+self.nu_0)*(torch.digamma(eta-nu+1)-torch.digamma(eta+2)))
-        omega_part_3 = torch.sum((nu-self.nu_0)*(torch.digamma(nu+1)-torch.digamma(eta+2)))
-        Omega_c = self.c * (omega_part_1+omega_part_2+omega_part_3)
-        return Omega_c
-
 class SparseRIMCell(RIMCell):
     def __init__(self, 
         device, input_size, hidden_size, num_units, k, rnn_cell, input_key_size = 64, input_value_size = 400, input_query_size = 64,
