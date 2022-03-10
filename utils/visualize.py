@@ -379,7 +379,7 @@ class VecStack():
         self.img = None
 
     def append(self, vec: Tensor) -> Tensor:
-        if self.img == None:
+        if self.img is None:
             self.img = vec.reshape(vec.shape[0],-1,1)
         else:
             self.img = torch.cat((self.img, vec.reshape(vec.shape[0],-1,1)), dim=2)
