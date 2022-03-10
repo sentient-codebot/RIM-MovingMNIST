@@ -1,4 +1,4 @@
-from RIM import smooth_sign
+from rnn_models import smooth_sign
 import torch
 
 med = torch.rand(3, )*0.1 - 20
