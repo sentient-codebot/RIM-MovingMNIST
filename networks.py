@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from rnn_models import RIMCell, SparseRIMCell, OmegaLoss, LayerNorm, Flatten, UnFlatten, Interpolate
+from rnn_models import RIMCell, SparseRIMCell, LayerNorm, Flatten, UnFlatten, Interpolate
 from group_operations import GroupDropout
 from collections import namedtuple
 import numpy as np
@@ -27,7 +27,7 @@ class MnistModel(nn.Module):
                 args['a'], args['b'], args['threshold']).to(self.device)
             self.eta_0 = torch.tensor(args['a']+args['b']-2, device=self.device)
             self.nu_0 = torch.tensor(args['b']-1, device=self.device)
-            self.regularizer = OmegaLoss(1, self.eta_0, self.nu_0) # 1 for now
+            self.regularizer = 0. # 1 for now
         else:
             self.rim_model = RIMCell(self.device, args['input_size'], args['hidden_size'], args['num_units'], args['k'], args['rnn_cell'], args['key_size_input'], args['value_size_input'] , args['query_size_input'],
                 args['num_input_heads'], args['input_dropout'], args['key_size_comm'], args['value_size_comm'], args['query_size_comm'], args['num_input_heads'], args['comm_dropout']).to(self.device)
@@ -35,6 +35,7 @@ class MnistModel(nn.Module):
 
         self.Linear = nn.Linear(args['hidden_size'] * args['num_units'], 10)
         self.Loss = nn.CrossEntropyLoss()
+        raise NotImplementedError('not updated. ')
 
 
     def to_device(self, x):
