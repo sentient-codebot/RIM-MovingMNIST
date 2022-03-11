@@ -274,9 +274,9 @@ class SparseInputAttention(Attention):
             row_to_activate = batch_indices.repeat((1,self.num_blocks))
             mask[row_to_activate.view(-1), topk1.indices.view(-1), :] = 1
             v, compensate, reg_loss = self.prior_sampler.sample(self.log_alpha, self.log_beta, bs=x.shape[0])
-            mask = mask * v.unsqueeze(2)
+            # mask = mask * v.unsqueeze(2)
             compensate = compensate.unsqueeze(2).repeat(1,1,2)
-            attention_probs = attention_probs * compensate
+            attention_probs = attention_probs / compensate
 
 
         # v, compensate, reg_loss = self.prior_sampler(bs=x.shape[0])
