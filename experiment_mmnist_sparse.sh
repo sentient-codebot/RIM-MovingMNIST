@@ -11,5 +11,6 @@ should_resume="false"
 save_freq=25
 sparse="true"
 loss_fn="BCE"
+version=2
 
-python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --model_persist_frequency $save_freq --sparse $sparse --loss_fn $loss_fn
+python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --model_persist_frequency $save_freq --sparse $sparse --loss_fn $loss_fn --version $version
