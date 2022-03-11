@@ -20,6 +20,10 @@ import os
 from os import listdir
 from os.path import isfile, join
 
+from backpack import extend
+from cockpit import Cockpit, CockpitPlotter
+from cockpit.utils.configuration import configuration
+
 set_seed(1997)
 
 def nan_hook(_tensor):
@@ -36,7 +40,7 @@ def get_grad_norm(model):
     total_norm = total_norm ** 0.5
     return total_norm
 
-def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args, loss_fn, writer):
+def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args, loss_fn, extended_loss_fn, writer, cockpit, plotter):
     # grad_norm_log = ScalarLog(args.folder_log+'/intermediate_vars', "grad_norm", epoch=epoch)
 
     model.train()
@@ -57,9 +61,19 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args,
                 output, hidden, reg_loss, intm = model(data[:, frame, :, :, :], hidden)
                 # intm = intm._asdict()
                 target = data[:, frame+1, :, :, :]
+                extended_loss += extended_loss_fn(output, target)
                 loss += loss_fn(output, target)
                 
-            (loss+1*reg_loss).backward()
+            with cockpit(
+                epoch,
+                info={
+                    "batch_size": data.shape[0],
+                    "extended_loss": extended_loss,
+                    "loss": loss,
+                    "optimizer": optimizer
+                }
+            ):
+                (loss+1*reg_loss).backward()
             grad_norm = get_grad_norm(model)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=True) 
             optimizer.step()
@@ -84,8 +98,9 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args,
         
         # SAVE logged vectors
         pass
+    plotter.plot(cockpit)
 
-    return train_batch_idx, train_epoch_loss
+    return train_batch_idx, train_epoch_loss, cockpit
 
 
 def main():
@@ -131,8 +146,15 @@ def main():
 
     writer = SummaryWriter(log_dir='./runs/'+args.id)
 
+    # backpack and cockpit
+    model = extend(model)
+    extended_loss_fn = extend(loss_fn)
+    cockpit = Cockpit(model.parameters(), quantities=configuration('full'))
+    plotter = CockpitPlotter()
+
+
     for epoch in range(start_epoch, args.epochs+1):
-        train_batch_idx, epoch_loss = train(
+        train_batch_idx, epoch_loss, cockpit = train(
             model = model,
             train_loader = train_loader,
             optimizer = optimizer,
@@ -141,8 +163,12 @@ def main():
             train_batch_idx = train_batch_idx,
             args = args,
             loss_fn = loss_fn,
-            writer = writer
+            extended_loss_fn = extended_loss_fn,
+            writer = writer,
+            cockpit = cockpit,
+            plotter = plotter
         )
+        plotter.plot(cockpit, block=True)
 
         # test done here
         writer.add_scalar('Loss/Train Loss '+f'({args.loss_fn.upper()})', epoch_loss.detach(), epoch)
