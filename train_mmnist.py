@@ -40,7 +40,7 @@ def get_grad_norm(model):
     total_norm = total_norm ** 0.5
     return total_norm
 
-def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args, loss_fn, extended_loss_fn, writer, cockpit, plotter):
+def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args, loss_fn, individual_loss_fn, writer, cockpit, plotter):
     # grad_norm_log = ScalarLog(args.folder_log+'/intermediate_vars', "grad_norm", epoch=epoch)
 
     model.train()
@@ -55,25 +55,29 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args,
         hidden = hidden.detach()
         optimizer.zero_grad()
         loss = 0.
+        losses = 0.
         # with autograd.detect_anomaly():
         if True:
             for frame in range(data.shape[1]-1):
                 output, hidden, reg_loss, intm = model(data[:, frame, :, :, :], hidden)
                 # intm = intm._asdict()
                 target = data[:, frame+1, :, :, :]
-                extended_loss += extended_loss_fn(output, target)
                 loss += loss_fn(output, target)
-                
+                losses += individual_loss_fn(output.flatten(start_dim=1), target.flatten(start_dim=1))
+            
             with cockpit(
                 epoch,
-                info={
+                info = {
                     "batch_size": data.shape[0],
-                    "extended_loss": extended_loss,
+                    "individual_losses": losses,
                     "loss": loss,
                     "optimizer": optimizer
                 }
             ):
-                (loss+1*reg_loss).backward()
+                loss.backward(create_graph=cockpit.create_graph(epoch))
+            # loss.backward()
+            # for p in model.parameters():
+            #     assert p.grad is not None
             grad_norm = get_grad_norm(model)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=True) 
             optimizer.step()
@@ -138,17 +142,19 @@ def main():
     transfer_loader = test_loader
 
     if args.loss_fn == "BCE":
-        loss_fn = torch.nn.BCELoss() 
+        loss_fn = extend(torch.nn.BCELoss())
+        individual_loss_fn = torch.nn.BCELoss(reduction='none')
     elif args.loss_fn == "MSE":
-        loss_fn = torch.nn.MSELoss()
+        loss_fn = extend(torch.nn.MSELoss())
+        individual_loss_fn = torch.nn.MSELoss(reduction='none')
     else:
-        loss_fn = torch.nn.MSELoss()
+        loss_fn = extend(torch.nn.MSELoss())
+        individual_loss_fn = torch.nn.MSELoss(reduction='none')
 
     writer = SummaryWriter(log_dir='./runs/'+args.id)
 
     # backpack and cockpit
     model = extend(model)
-    extended_loss_fn = extend(loss_fn)
     cockpit = Cockpit(model.parameters(), quantities=configuration('full'))
     plotter = CockpitPlotter()
 
@@ -163,12 +169,11 @@ def main():
             train_batch_idx = train_batch_idx,
             args = args,
             loss_fn = loss_fn,
-            extended_loss_fn = extended_loss_fn,
+            individual_loss_fn = individual_loss_fn,
             writer = writer,
             cockpit = cockpit,
             plotter = plotter
         )
-        plotter.plot(cockpit, block=True)
 
         # test done here
         writer.add_scalar('Loss/Train Loss '+f'({args.loss_fn.upper()})', epoch_loss.detach(), epoch)

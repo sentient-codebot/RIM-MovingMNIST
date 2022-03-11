@@ -43,7 +43,11 @@
                 "MMNIST_complete",
                 "--model_persist_frequency",
                 "25"
-            ]
+            ],
+            "justMyCode": false,
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0"
+            }
         },
         {
             "name": "train/test mmnist sparse",

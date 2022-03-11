@@ -213,7 +213,7 @@ class BallModel(nn.Module):
         """Method to initialize the encoder"""
         print(self.input_size)
         return nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=4, stride=2),
+            nn.Conv2d(1, 16, kernel_size=4, stride=2), # NO GRAD???
             nn.ELU(),
             LayerNorm(),
             nn.Conv2d(16, 32, kernel_size=4, stride=2),
