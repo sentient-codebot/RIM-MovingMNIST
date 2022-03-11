@@ -270,7 +270,8 @@ class SparseInputAttention(Attention):
             # topk1 = torch.topk(not_null_probs,self.k,  dim = 1)
             topk1 = torch.topk(not_null_probs,self.num_blocks,  dim = 1)
             batch_indices = torch.arange(x.shape[0]).unsqueeze(1)
-            row_to_activate = batch_indices.repeat((1,self.k))
+            # row_to_activate = batch_indices.repeat((1,self.k))
+            row_to_activate = batch_indices.repeat((1,self.num_blocks))
             mask[row_to_activate.view(-1), topk1.indices.view(-1), :] = 1
             v, compensate, reg_loss = self.prior_sampler.sample(self.log_alpha, self.log_beta, bs=x.shape[0])
             mask = mask * v.unsqueeze(2)
