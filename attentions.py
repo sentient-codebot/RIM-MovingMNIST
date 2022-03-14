@@ -80,7 +80,7 @@ class InputAttention(Attention):
         gumbel = True
         if gumbel:
             sampled_mask = F.gumbel_softmax(attention_scores.reshape((-1, 2)), tau = 0.5, hard = True)
-            mask_ = sampled_mask
+            mask_ = sampled_mask.reshape((x.size(0), self.num_blocks))
         ## --- original from here ---
         if not gumbel:
             mask_ = torch.zeros((x.size(0), self.num_blocks), device=x.device)
