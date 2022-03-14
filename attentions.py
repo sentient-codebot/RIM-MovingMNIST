@@ -6,6 +6,7 @@ from group_operations import GroupLinearLayer
 from torch.distributions.beta import Beta
 from torch.distributions.binomial import Binomial
 from torch.distributions.uniform import Uniform
+import torch.nn.functional as F
 
 from typing import Any
 
@@ -76,13 +77,20 @@ class InputAttention(Attention):
         attention_scores = torch.matmul(query, key.transpose(-1, -2)) / math.sqrt(self.kdim) 
         attention_scores = torch.mean(attention_scores, dim = 1)
 
-        mask_ = torch.zeros((x.size(0), self.num_blocks), device=x.device)
-        not_null_scores = attention_scores[:,:, 0]
-        topk1 = torch.topk(not_null_scores,self.k,  dim = 1)
-        batch_indices = torch.arange(x.shape[0]).unsqueeze(1)
-        row_to_activate = batch_indices.repeat((1,self.k)) # repeat to the same shape as topk1.indices
+        gumbel = True
+        if gumbel:
+            sampled_mask = F.gumbel_softmax(attention_scores.reshape((-1, 2)), tau = 0.5, hard = True)
+            mask_ = sampled_mask
+        ## --- original from here ---
+        if not gumbel:
+            mask_ = torch.zeros((x.size(0), self.num_blocks), device=x.device)
+            not_null_scores = attention_scores[:,:, 0]
+            topk1 = torch.topk(not_null_scores,self.k,  dim = 1)
+            batch_indices = torch.arange(x.shape[0]).unsqueeze(1)
+            row_to_activate = batch_indices.repeat((1,self.k)) # repeat to the same shape as topk1.indices
 
-        mask_[row_to_activate.view(-1), topk1.indices.view(-1)] = 1
+            mask_[row_to_activate.view(-1), topk1.indices.view(-1)] = 1
+        ## --- original ends here ---
         attention_probs = self.dropout(nn.Softmax(dim = -1)(attention_scores))
         inputs = torch.matmul(attention_probs, value) * mask_.unsqueeze(2)
 
