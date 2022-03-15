@@ -304,7 +304,7 @@ class BallModel(nn.Module):
         if nan_mask.any():
             raise RuntimeError(f"Found NAN in {self.__class__.__name__}: ", nan_mask.nonzero(), "where:", out[nan_mask.nonzero()[:, 0].unique(sorted=True)])
 
-    @torch.no_grad()
+    @torch.no_grad() # NOTE can I do this? output is non-linear to input => not necessarily additive || each pixel's gradient to input? 
     def partial_blocked_decoder(self, h):
         out_list_ = [self.Decoder(h.view(h.shape[0],-1)).unsqueeze(1)] # all-pass
         for block_idx in range(h.shape[1]):

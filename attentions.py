@@ -89,7 +89,7 @@ class InputAttention(Attention):
         with torch.no_grad():
             out_probs = nn.Softmax(dim = -1)(attention_scores)[:,:, 0]
 
-        return inputs, mask_, out_probs, torch.linalg.norm(out_probs, ord=1).sum()
+        return inputs, mask_, out_probs, torch.linalg.norm(out_probs, ord=1, dim=1).mean()
 
 class PriorSampler():
     """

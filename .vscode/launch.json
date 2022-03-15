@@ -27,7 +27,7 @@
             ]
         },
         {
-            "name": "train/test mmnist complete",
+            "name": "train/test mmnist reg_attn_probs",
             "type": "python",
             "request": "launch",
             "program": "${file}",
@@ -40,10 +40,15 @@
                 "--should_resume",
                 "false",
                 "--experiment_name",
-                "MMNIST_complete",
+                "MMNIST_reg_attn_probs",
                 "--model_persist_frequency",
-                "25"
-            ]
+                "25",
+                "--k",
+                "6"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "1"
+            }
         },
         {
             "name": "train/test mmnist sparse",
