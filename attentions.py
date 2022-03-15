@@ -83,11 +83,11 @@ class InputAttention(Attention):
         row_to_activate = batch_indices.repeat((1,self.k)) # repeat to the same shape as topk1.indices
 
         mask_[row_to_activate.view(-1), topk1.indices.view(-1)] = 1
-        attention_probs = self.dropout(nn.Softmax(dim = -1)(attention_scores))
+        attention_probs = self.dropout(Sparsemax(dim = -1)(attention_scores))
         inputs = torch.matmul(attention_probs, value) * mask_.unsqueeze(2)
 
         with torch.no_grad():
-            out_probs = nn.Softmax(dim = -1)(attention_scores)[:,:, 0]
+            out_probs = Sparsemax(dim = -1)(attention_scores)[:,:, 0]
 
         return inputs, mask_, out_probs, torch.linalg.norm(out_probs, ord=1, dim=1).mean()
 
@@ -334,3 +334,100 @@ class CommAttention(Attention):
         context = self.output_fc(context) # to be add to current h
 
         return context
+
+class _sparse_max(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input, dim=-1):
+        """Forward function.
+
+        Args:
+            input (torch.Tensor): Input tensor. First dimension should be the batch size
+
+        Returns:
+            torch.Tensor: [batch_size x number_of_logits] Output tensor
+
+        """
+        # Sparsemax currently only handles 2-dim tensors,
+        # so we reshape to a convenient shape and reshape back after sparsemax
+        logits_dim = dim
+        input = input.transpose(0, logits_dim)
+        original_size = input.size()
+        input = input.reshape(input.size(0), -1)
+        input = input.transpose(0, 1)
+        dim = 1
+
+        number_of_logits = input.size(dim)
+
+        # Translate input by max for numerical stability
+        input = input - torch.max(input, dim=dim, keepdim=True)[0].expand_as(input)
+
+        # Sort input in descending order.
+        # (NOTE: Can be replaced with linear time selection method described here:
+        # http://stanford.edu/~jduchi/projects/DuchiShSiCh08.html)
+        zs = torch.sort(input=input, dim=dim, descending=True)[0]
+        range = torch.arange(start=1, end=number_of_logits + 1, step=1, device=input.device, dtype=input.dtype).view(1, -1)
+        range = range.expand_as(zs)
+
+        # Determine sparsity of projection
+        bound = 1 + range * zs
+        cumulative_sum_zs = torch.cumsum(zs, dim)
+        is_gt = torch.gt(bound, cumulative_sum_zs).type(input.type())
+        k = torch.max(is_gt * range, dim, keepdim=True)[0]
+
+        # Compute threshold function
+        zs_sparse = is_gt * zs
+
+        # Compute taus
+        taus = (torch.sum(zs_sparse, dim, keepdim=True) - 1) / k
+        taus = taus.expand_as(input)
+
+        # Sparsemax
+        ctx_output = torch.max(torch.zeros_like(input), input - taus)
+        ctx.save_for_backward(ctx_output)
+
+        # Reshape back to original shape
+        output = ctx_output
+        output = output.transpose(0, 1)
+        output = output.reshape(original_size)
+        output = output.transpose(0, logits_dim)
+
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        """Backward function."""
+        ctx_output, = ctx.saved_tensors
+        dim = 1
+        nonzeros = torch.ne(ctx_output, 0)
+        sum = torch.sum(grad_output.flatten(start_dim=0, end_dim=-2) * nonzeros, dim=dim) / torch.sum(nonzeros, dim=dim)
+        sum = sum.view(grad_output.shape[:-1])
+        grad_input = nonzeros.reshape_as(grad_output) * (grad_output - sum.unsqueeze(-1).expand_as(grad_output))
+
+        return grad_input, None
+
+
+class Sparsemax(nn.Module):
+    """Sparsemax function."""
+
+    def __init__(self, dim=-1):
+        """Initialize sparsemax activation
+        
+        Args:
+            dim (int, optional): The dimension over which to apply the sparsemax function.
+        """
+        super(Sparsemax, self).__init__()
+        self.dim = dim
+
+    def forward(self, input):
+        """Forward function.
+
+        Args:
+            input (torch.Tensor): Input tensor. First dimension should be the batch size
+
+        Returns:
+            torch.Tensor: [batch_size x number_of_logits] Output tensor
+
+        """
+        output = _sparse_max.apply(input, self.dim)
+
+        return output
