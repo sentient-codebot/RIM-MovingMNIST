@@ -109,7 +109,7 @@ class RIMCell(nn.Module):
         x = torch.cat((x.unsqueeze(1), null_input), dim = 1)
 
         # Compute input attention
-        inputs, mask, attn_score = self.input_attention_mask(x, hs)
+        inputs, mask, attn_score, attn_prob_norm = self.input_attention_mask(x, hs)
         h_old = hs * 1.0
         if cs is not None:
             c_old = cs * 1.0
@@ -138,8 +138,8 @@ class RIMCell(nn.Module):
         hs = mask * h_new + (1 - mask) * h_old
         if cs is not None:
             cs = mask * cs + (1 - mask) * c_old
-            return hs, cs, None, mask
-        return hs, None, None, ctx
+            return hs, cs, None, mask, attn_prob_norm
+        return hs, None, None, ctx, attn_prob_norm
 
 
 class RIM(nn.Module):

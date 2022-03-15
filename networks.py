@@ -262,7 +262,7 @@ class BallModel(nn.Module):
         reg_loss = 0.
         if self.core=='RIM':
             if not self.sparse:
-                h_new, foo, bar, ctx = self.rnn_model(encoded_input, h_prev)
+                h_new, foo, bar, ctx, reg_loss = self.rnn_model(encoded_input, h_prev)
             else:
                 h_new, foo, bar, ctx, reg_loss = self.rnn_model(encoded_input, h_prev)
         elif self.core=='GRU':
