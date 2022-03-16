@@ -66,13 +66,9 @@ class InputAttention(Attention):
 
     def forward(self, x, h):
         bs = x.shape[0]
-        key = self.key(x).reshape(bs, 1, self.num_heads, self.kdim, 2)
-        value = self.value(x).reshape(bs, self.num_blocks, self.num_heads, self.vdim, 2)
-        query = self.query(h).reshape(bs, self.num_blocks, self.num_heads, self.kdim, 1)
-
-        # key = self.transpose_for_scores(key, self.num_heads, self.kdim)
-        # value = torch.mean(self.transpose_for_scores(value,  self.num_heads, self.vdim), dim = 1)
-        # query = self.transpose_for_scores(query, self.num_heads, self.kdim)
+        key = self.key(x.unsqueeze(1)).reshape(bs, 1, self.num_heads, 2, self.kdim).transpose(-2, -1)
+        value = self.value(x.unsqueeze(1)).reshape(bs, self.num_blocks, self.num_heads, 2, self.vdim).transpose(-2, -1)
+        query = self.query(h).reshape(bs, self.num_blocks, self.num_heads, 1, self.kdim).transpose(-2, -1)
 
         attention_scores = torch.matmul(key.transpose(-1, -2), query) / math.sqrt(self.kdim)  # (bs, 1, n_head, 2, dk) @ (bs, n_block, n_head, 2, dk, 1)
         selection_scores = torch.mean(attention_scores, dim = 2).squeeze(-1) # before mean: (bs, n_block, n_head, 2, 1); mean over heads -> (bs, n_block, 2)
@@ -88,7 +84,7 @@ class InputAttention(Attention):
         attention_probs = self.dropout(nn.Softmax(dim = -1)(attention_scores))
         # attention_probs: (bs, nb, nh, 2, 1), value: (bs, nb, nh, dv, 2)
         # after matmul: (bs, nb, nh, dv, 1)
-        inputs = torch.matmul(value, attention_probs) 
+        inputs = torch.matmul(value, attention_probs).squeeze(-1)
         inputs = torch.mean(inputs, dim = 2) # mean over heads -> (bs, nb, dv)
         inputs = inputs * mask_.unsqueeze(2) # (bs, nb, dv) * (bs, nb, 1) -> setting inactivated inputs to zero. NOTE necessary? see as for comp efficiency reason
 

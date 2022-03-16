@@ -9,14 +9,10 @@ class GroupLinearLayer(nn.Module):
 
     self.w: (num_blocks, din, dout)
 
-    x: (batch_size, num_blocks, din)
-        -> permute: (num_blocks, batch_size, din)
-        -> bmm with self.w: (num_blocks, batch_size, din) (bmm) (num_blocks, din, dout)
-                            for each block in range(num_blocks):
-                                do (batch_size, din) mat_mul (din, dout)
-                                concatenate
-                            result (num_blocks, batch_size, dout)
-        -> permute: (batch_size, num_blocks, dout)
+    x: (batch_size, num_blocks, (ncols), din)
+        -> (bs, nb, ncols, din)
+        -> @ self.w as (nb, din, dout) (broadcast: last two dims match, then former dims are broadcastable)
+        -> (bs, nb, (ncols), out)
 
     """
     def __init__(self, din, dout, num_blocks):
@@ -25,10 +21,13 @@ class GroupLinearLayer(nn.Module):
         self.w = nn.Parameter(0.01 * torch.randn(num_blocks,din,dout))
 
     def forward(self,x):
-        x = x.permute(1,0,2)
-        
-        x = torch.bmm(x,self.w)
-        return x.permute(1,0,2)
+        in_dim = x.dim()
+        if in_dim == 3:
+            x = x.unsqueeze(-2) # add column dimension
+        y = torch.matmul(x, self.w)
+        if in_dim == 3:
+            y = y.squeeze()
+        return y
 
 
 class GroupLSTMCell(nn.Module):

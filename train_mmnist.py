@@ -59,7 +59,7 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args,
                 target = data[:, frame+1, :, :, :]
                 loss += loss_fn(output, target)
                 
-            (loss+1*reg_loss).backward()
+            (loss).backward()
             grad_norm = get_grad_norm(model)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=True) 
             optimizer.step()
