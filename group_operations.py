@@ -4,7 +4,7 @@ import math
 
 
 class GroupLinearLayer(nn.Module):
-    """
+    r"""
     for num_blocks blocks, do linear transformations independently
 
     self.w: (num_blocks, din, dout)

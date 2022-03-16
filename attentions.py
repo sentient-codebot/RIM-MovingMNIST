@@ -59,35 +59,41 @@ class InputAttention(Attention):
         self.num_blocks = num_blocks
         self.k = k
 
-        self.key = nn.Linear(input_size, num_heads * kdim, bias=False)
-        self.value = nn.Linear(input_size, num_heads * vdim, bias=False)
-        self.query = GroupLinearLayer(hidden_size, kdim * num_heads, num_blocks)
+        self.key = GroupLinearLayer(input_size, num_heads * kdim, 1) # same for every block
+        self.value = GroupLinearLayer(input_size, num_heads * vdim, num_blocks)
+        self.query = GroupLinearLayer(hidden_size, num_heads * kdim, num_blocks)
         self.dropout = nn.Dropout(p = dropout)
 
     def forward(self, x, h):
-        key = self.key(x)
-        value = self.value(x)
-        query = self.query(h)
+        bs = x.shape[0]
+        key = self.key(x).reshape(bs, 1, self.num_heads, self.kdim, 2)
+        value = self.value(x).reshape(bs, self.num_blocks, self.num_heads, self.vdim, 2)
+        query = self.query(h).reshape(bs, self.num_blocks, self.num_heads, self.kdim, 1)
 
-        key = self.transpose_for_scores(key, self.num_heads, self.kdim)
-        value = torch.mean(self.transpose_for_scores(value,  self.num_heads, self.vdim), dim = 1)
-        query = self.transpose_for_scores(query, self.num_heads, self.kdim)
+        # key = self.transpose_for_scores(key, self.num_heads, self.kdim)
+        # value = torch.mean(self.transpose_for_scores(value,  self.num_heads, self.vdim), dim = 1)
+        # query = self.transpose_for_scores(query, self.num_heads, self.kdim)
 
-        attention_scores = torch.matmul(query, key.transpose(-1, -2)) / math.sqrt(self.kdim) 
-        attention_scores = torch.mean(attention_scores, dim = 1)
+        attention_scores = torch.matmul(key.transpose(-1, -2), query) / math.sqrt(self.kdim)  # (bs, 1, n_head, 2, dk) @ (bs, n_block, n_head, 2, dk, 1)
+        selection_scores = torch.mean(attention_scores, dim = 2).squeeze(-1) # before mean: (bs, n_block, n_head, 2, 1); mean over heads -> (bs, n_block, 2)
 
         mask_ = torch.zeros((x.size(0), self.num_blocks), device=x.device)
-        not_null_scores = attention_scores[:,:, 0]
+        not_null_scores = selection_scores[:,:, 0]
         topk1 = torch.topk(not_null_scores,self.k,  dim = 1)
         batch_indices = torch.arange(x.shape[0]).unsqueeze(1)
         row_to_activate = batch_indices.repeat((1,self.k)) # repeat to the same shape as topk1.indices
 
-        mask_[row_to_activate.view(-1), topk1.indices.view(-1)] = 1
+        mask_[row_to_activate.view(-1), topk1.indices.view(-1)] = 1 # (bs, nb)
+
         attention_probs = self.dropout(nn.Softmax(dim = -1)(attention_scores))
-        inputs = torch.matmul(attention_probs, value) * mask_.unsqueeze(2) # inputs = (bs, num_blocks, vdim), all value vectors are just scaled version of each other. 
+        # attention_probs: (bs, nb, nh, 2, 1), value: (bs, nb, nh, dv, 2)
+        # after matmul: (bs, nb, nh, dv, 1)
+        inputs = torch.matmul(value, attention_probs) 
+        inputs = torch.mean(inputs, dim = 2) # mean over heads -> (bs, nb, dv)
+        inputs = inputs * mask_.unsqueeze(2) # (bs, nb, dv) * (bs, nb, 1) -> setting inactivated inputs to zero. NOTE necessary? see as for comp efficiency reason
 
         with torch.no_grad():
-            out_probs = nn.Softmax(dim = -1)(attention_scores)[:,:, 0]
+            out_probs = nn.Softmax(dim = -1)(selection_scores)[:,:, 0]
 
         return inputs, mask_, out_probs
 
