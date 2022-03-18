@@ -83,13 +83,13 @@ class InputAttention(Attention):
         row_to_activate = batch_indices.repeat((1,self.k)) # repeat to the same shape as topk1.indices
 
         mask_[row_to_activate.view(-1), topk1.indices.view(-1)] = 1
-        attention_probs = self.dropout(Sparsemax(dim = -1)(attention_scores))
+        attention_probs = self.dropout(nn.Softmax(dim = -1)(attention_scores))
         inputs = torch.matmul(attention_probs, value) * mask_.unsqueeze(2)
 
-        with torch.no_grad():
-            out_probs = Sparsemax(dim = -1)(attention_scores)[:,:, 0]
+        
+        out_probs = nn.Softmax(dim = -1)(attention_scores)[:,:, 0]
 
-        return inputs, mask_, out_probs, torch.linalg.norm(out_probs, ord=1, dim=1).mean()
+        return inputs, mask_, out_probs.detach(), torch.linalg.norm(out_probs, ord=1, dim=1).mean()
 
 class PriorSampler():
     """

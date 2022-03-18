@@ -4,10 +4,10 @@ echo Running on $HOSTNAME
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate pytorch
 
-experiment_name="MMNIST_reg_attn_probs"
+experiment_name="MMNIST_reg_attn_probs_001_sof"
 cfg_json="configs/rim_complete/rim_complete.json"
 core="RIM"
-should_resume="true"
+should_resume="false"
 save_freq=25
 k=6
 
