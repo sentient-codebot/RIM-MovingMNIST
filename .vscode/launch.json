@@ -46,6 +46,25 @@
             ]
         },
         {
+            "name": "train/test mmnist gumbel",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "--cfg_json",
+                "configs/rim_complete/rim_complete.json",
+                "--core",
+                "RIM",
+                "--should_resume",
+                "false",
+                "--experiment_name",
+                "MMNIST_complete",
+                "--model_persist_frequency",
+                "25"
+            ]
+        },
+        {
             "name": "train/test mmnist sparse",
             "type": "python",
             "request": "launch",
