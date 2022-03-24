@@ -4,6 +4,8 @@ from rnn_models import RIMCell, SparseRIMCell, LayerNorm, Flatten, UnFlatten, In
 from group_operations import GroupDropout
 from collections import namedtuple
 import numpy as np
+from slot_attn.decoder_cnn import WrappedDecoder
+# from slot_attn.pos_embed import SoftPositionEmbed
 
 
 Intm = namedtuple('IntermediateVariables',
@@ -148,7 +150,9 @@ class BallModel(nn.Module):
 
         self.Encoder = self.make_encoder().to(self.args.device)
         self.Decoder = None
-        self.make_decoder()
+        # self.make_decoder()
+        self.Decoder = WrappedDecoder(args.hidden_size)
+
 
         self.rim_dropout = None
         if self.args.do_rim_dropout:
@@ -274,7 +278,8 @@ class BallModel(nn.Module):
         elif self.core=='LSTM':
             raise ValueError('LSTM core not implemented yet!')
         
-        dec_out_ = self.Decoder(h_new.view(h_new.shape[0],-1))
+        # dec_out_ = self.Decoder(h_new.view(h_new.shape[0],-1))
+        dec_out_ = self.Decoder(h_new)
         blocked_out_ = torch.zeros(1).to(x.device)
         if self.get_intm:
             blocked_out_ = self.partial_blocked_decoder(h_new)
