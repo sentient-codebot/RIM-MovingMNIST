@@ -201,7 +201,7 @@ def main():
     writer.close()
         
 def setup_model(args, logbook):
-    model = BallModel(args)
+    model = BallModel(args).to(args.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     start_epoch = 1
     train_batch_idx = 0

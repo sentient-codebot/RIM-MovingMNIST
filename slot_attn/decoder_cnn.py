@@ -2,7 +2,7 @@ from turtle import back
 from numpy import broadcast
 import torch
 import torch.nn as nn
-from pos_embed import SoftPositionEmbed
+from .pos_embed import SoftPositionEmbed
 
 class LayerNorm(nn.Module):
     def __init__(self):

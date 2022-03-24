@@ -30,7 +30,7 @@ class SoftPositionEmbed(nn.Module):
         
         Input:
             `inputs`: size same as resolution [bs, C, *resolution] """
-        pos_embed = self.dense(self.grid) # shape: (1, *resolution, hidden_size)
+        pos_embed = self.dense(self.grid.to(inputs.device)) # shape: (1, *resolution, hidden_size)
         pos_embed = torch.movedim(pos_embed, -1, 1) # shape: (1, hidden_size, *resolution)
         return inputs + pos_embed # shape: (bs, hs, *resolution)
 
