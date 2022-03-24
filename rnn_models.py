@@ -7,9 +7,11 @@ import torch.multiprocessing as mp
 
 from collections import namedtuple
 from abc import ABC, abstractmethod
+from typing import Any
 
 from group_operations import GroupLinearLayer, GroupTorchGRU, GroupLSTMCell
 from attentions import InputAttention, CommAttention, SparseInputAttention
+
 
 Ctx = namedtuple('RunningContext',
     [
@@ -237,7 +239,7 @@ class SparseRIMCell(RIMCell):
             input_dropout,
             eta_0,
             nu_0,
-            N
+            device
         )
         
         
@@ -267,23 +269,26 @@ class SparseRIMCell(RIMCell):
             hs = self.rnn(inputs, hs)
 
         # Block gradient through inactive units
-        mask = mask.unsqueeze(2).detach()
+        mask = mask.unsqueeze(2).detach() # make a detached copy
         h_new = blocked_grad.apply(hs, mask)
+        # mask = mask.unsqueeze(2)
+        # h_new = hs
 
-        # Compute communication attention
+        # 1. Compute communication attention
         context = self.communication_attention(h_new, mask.squeeze(2))
         h_new = h_new + context
 
+        # 2. Update hs and cs and return them
+        hs = mask * h_new + (1 - mask) * h_old
+        if cs is not None:
+            cs = mask * cs + (1 - mask) * c_old
+            return hs, cs, None, mask, reg_loss
+        
         # Prepare the context/intermediate value
         ctx = Ctx(input_attn=attn_score,
             input_attn_mask=mask.squeeze()
             )
 
-        # Update hs and cs and return them
-        hs = mask * h_new + (1 - mask) * h_old
-        if cs is not None:
-            cs = mask * cs + (1 - mask) * c_old
-            return hs, cs, None, mask, reg_loss
         return hs, None, None, ctx, reg_loss
 
 
