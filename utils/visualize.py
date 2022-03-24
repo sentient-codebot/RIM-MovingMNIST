@@ -391,6 +391,25 @@ class VecStack():
     def show(self) -> Union[Tensor, None]:
         return self.img
 
+def norm_of_jacobian(inputs, function, ord=2):
+    """calculates the norm of gradient
+    inputs: (BS, *size_in)
+    function output:    (BS, *size_out)
+    jacobian shape:     (BS, *size_out, BS, *size_in)
+    reduced jac shape:  (BS, *size_out, *size_in)
+    returen shape:      (BS, *size_out)
+    """
+    jacobian = torch.autograd.functional.jacobian(function, inputs)
+    inputs_dim = inputs.dim()
+    jac_dim = jacobian.dim()
+    red_jac = torch.diagonal(jacobian, dim1=0, dim2=jac_dim-inputs_dim)
+    red_jac = torch.movedim(red_jac, -1, 0)
+    flat_jac = red_jac.flatten(start_dim = -inputs_dim+1) # flatten all input dim except batch dim
+    jac_norm = torch.linalg.norm(flat_jac, dim=-1, ord=ord)
+
+    return jac_norm
+
+
 def main():
     # data = torch.rand((64,51,1,64,64))
     # pred = torch.rand((64,50,1,64,64))
@@ -399,13 +418,21 @@ def main():
     # _t = _t.unsqueeze(2)
     # plot_frames(_t, _t, 0, 18, 6)
 
-    '''test saliency'''
-    background = torch.round(torch.rand((3, 64, 64)))
-    saliency = torch.zeros_like(background) + torch.rand_like(background)*0.05
-    saliency[1, 32:, 32:] = 0.3
-    saliency[1, 48:, 48:] = 0.8
-    saliency[1, 60:, 60:] = 5
-    plot_saliency(background, saliency, 'test variable', 'epoch', 10, '.')
+    # '''test saliency'''
+    # background = torch.round(torch.rand((3, 64, 64)))
+    # saliency = torch.zeros_like(background) + torch.rand_like(background)*0.05
+    # saliency[1, 32:, 32:] = 0.3
+    # saliency[1, 48:, 48:] = 0.8
+    # saliency[1, 60:, 60:] = 5
+    # plot_saliency(background, saliency, 'test variable', 'epoch', 10, '.')
+
+    '''test jacobian'''
+    inputs = torch.rand(8, 10)
+    loss_fn = torch.nn.MSELoss()
+    target = torch.rand(8, 10)
+    func = lambda inputs: loss_fn(inputs, target)
+    jac = torch.autograd.functional.jacobian(func, inputs)
+    print(jac.data)
 
 
 if __name__ == "__main__":
