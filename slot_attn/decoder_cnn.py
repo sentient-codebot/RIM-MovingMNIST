@@ -41,11 +41,11 @@ def make_decoder():
     return nn.Sequential(
         nn.ConvTranspose2d(100, 64, 5, 2, padding=2, output_padding=1), # 8*2 + 3 - 4 + 1 = 16
         nn.ReLU(),
-        nn.ConvTranspose2d(64, 64, 5, 2, padding=2, output_padding=1), # 16*2 + 3 - 4 + 1 = 32
+        nn.ConvTranspose2d(64, 32, 5, 2, padding=2, output_padding=1), # 16*2 + 3 - 4 + 1 = 32
         nn.ReLU(),
-        nn.ConvTranspose2d(64, 64, 3, 2, padding=1, output_padding=1), # 32*2 +1 -2 +1 = 64
+        nn.ConvTranspose2d(32, 32, 3, 2, padding=1, output_padding=1), # 32*2 +1 -2 +1 = 64
         nn.ReLU(),
-        nn.ConvTranspose2d(64, 2, 3, 1, padding=1), # 64 + 2 - 2 = 64
+        nn.ConvTranspose2d(32, 2, 3, 1, padding=1), # 64 + 2 - 2 = 64
     )
 
 def unstack_and_split(x, batch_size, num_channels=3):
@@ -95,22 +95,22 @@ class WrappedDecoder(nn.Module):
 
 
 if __name__ == '__main__':
-    decoder = make_decoder()
+    decoder = WrappedDecoder(100)
 
     # broadcast_hidden = torch.randn(2*6, 100, 8, 8)
     # hidden = torch.arange(2*6*100).reshape(2, 6, 100)
     hidden = torch.randn(2, 6, 100)
-    broadcast_hidden = spatial_broadcast(hidden, (8, 8))
 
-    out = decoder(broadcast_hidden)
+    out = decoder(hidden)
     print(out.shape)
 
-    c, m = unstack_and_split(out, batch_size=2, num_channels=1) # (N, K, *, H, W)
-    m = torch.nn.Softmax(dim=1)(m) # (N, <K>, 1, H, W)
-    masked_c = c*m # first ele-wise prod to apply mask (equally) for every RGB channel
-    # masked_c: (N, K, 3/1, H, W)
-    fused = torch.sum(masked_c, dim=1) # sum over K dim (slot dimension)
+    num_params = 0
+    for p in decoder.decoder.parameters():
+        num_params+=1
+    for p in decoder.pos_embed.parameters():
+        num_params+=1
 
-    print(fused.shape)
+    print(f"num of params: {num_params}")
+    
 
     pass

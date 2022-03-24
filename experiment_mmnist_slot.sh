@@ -4,7 +4,7 @@ echo Running on $HOSTNAME
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate pytorch
 
-experiment_name="MMNIST_ind_dec"
+experiment_name="MMNIST_ind_dec_pos_emb"
 cfg_json="configs/rim_complete/rim_complete.json"
 core="RIM"
 should_resume="false"
