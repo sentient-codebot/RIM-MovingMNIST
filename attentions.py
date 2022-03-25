@@ -51,6 +51,7 @@ class InputAttention(Attention):
         num_blocks,
         k,
         dropout,
+        epsilon=1e-8
         ):
         super().__init__(dropout)
         self.num_heads = num_heads
@@ -63,6 +64,7 @@ class InputAttention(Attention):
         self.value = nn.Linear(input_size, num_heads * vdim, bias=False)
         self.query = GroupLinearLayer(hidden_size, kdim * num_heads, num_blocks)
         self.dropout = nn.Dropout(p = dropout)
+        self.epsilon = epsilon
 
     def forward(self, x, h):
         key = self.key(x)
@@ -83,12 +85,13 @@ class InputAttention(Attention):
         row_to_activate = batch_indices.repeat((1,self.k)) # repeat to the same shape as topk1.indices
 
         mask_[row_to_activate.view(-1), topk1.indices.view(-1)] = 1
-        attention_probs = self.dropout(nn.Softmax(dim = -1)(attention_scores))
-        attention_probs = attention_probs / torch.sum(attention_probs, keepdim=True)
-        inputs = torch.matmul(attention_probs, value) * mask_.unsqueeze(2) # inputs = (bs, num_blocks, vdim), all value vectors are just scaled version of each other. 
+        attention_probs = nn.Softmax(dim = 1)(attention_scores)
+        attention_probs += self.epsilon # in case of unstability
+        attention_probs = attention_probs / torch.sum(attention_probs, dim=2, keepdim=True)
+        inputs = torch.matmul(self.dropout(attention_probs), value) * mask_.unsqueeze(2) # inputs = (bs, num_blocks, vdim), all value vectors are just scaled version of each other. 
 
         with torch.no_grad():
-            out_probs = nn.Softmax(dim = -1)(attention_scores)[:,:, 0]
+            out_probs = attention_probs[:,:, 0]
 
         return inputs, mask_, out_probs
 
