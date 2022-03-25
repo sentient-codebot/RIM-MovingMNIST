@@ -84,6 +84,7 @@ class InputAttention(Attention):
 
         mask_[row_to_activate.view(-1), topk1.indices.view(-1)] = 1
         attention_probs = self.dropout(nn.Softmax(dim = -1)(attention_scores))
+        attention_probs = attention_probs / torch.sum(attention_probs, keepdim=True)
         inputs = torch.matmul(attention_probs, value) * mask_.unsqueeze(2) # inputs = (bs, num_blocks, vdim), all value vectors are just scaled version of each other. 
 
         with torch.no_grad():
