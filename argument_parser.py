@@ -19,6 +19,8 @@ def str2loss_fn(_str):
         return 'MSE'
     if 'BCE' in _str:
         return 'BCE'
+    if 'MAE' in _str:
+        return 'MAE'
     raise argparse.ArgumentTypeError('Unrecognized loss function type.')
 
 def argument_parser():

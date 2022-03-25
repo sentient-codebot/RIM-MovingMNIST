@@ -46,7 +46,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
     if args.core == 'RIM':
         rim_actv = VecStack()
         rim_actv_mask = VecStack()
-    dec_actv = VecStack()
+    # dec_actv = VecStack()
 
     mse = torch.nn.MSELoss()
 
@@ -60,7 +60,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
         hidden = model.init_hidden(data.shape[0]).to(args.device)
         rim_actv.reset()
         rim_actv_mask.reset()
-        dec_actv.reset()
+        # dec_actv.reset()
         start_time = time()
         data = data.to(args.device)
         if data.dim()==4:
@@ -92,18 +92,19 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
                 intm = intm._asdict()
                 target = data[:, frame+1, :, :, :]
                 prediction[:, frame+1, :, :, :] = output
-                blocked_prediction[:, :, frame+1, :, :, :] = intm['blocked_dec']
+                blocked_prediction[:, 0, frame+1, :, :, :] = output
+                blocked_prediction[:, 1:, frame+1, :, :, :] = intm['blocked_dec']
                 loss += loss_fn(output, target)
                 mseloss += mse(output, target)
                 f1_frame = f1_score(target, output)
                 # writer.add_scalar(f'Metrics/F1 at Frame {frame}', f1_frame, epoch)
                 f1 += f1_frame
 
-            intm["decoder_utilization"] = dec_rim_util(model, hidden, args)
+            # intm["decoder_utilization"] = dec_rim_util(model, hidden, args)
             if args.core == 'RIM':
                 rim_actv.append(intm["input_attn"]) # shape (batchsize, num_units, 1) -> (BS, NU, T)
                 rim_actv_mask.append(intm["input_attn_mask"])
-            dec_actv.append(intm["decoder_utilization"])
+            # dec_actv.append(intm["decoder_utilization"])
         
         ssim += pt_ssim.ssim(data[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
                         prediction[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
@@ -125,7 +126,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
         'f1': f1_avg,
         'rim_actv': rim_actv.show(),
         'rim_actv_mask': rim_actv_mask.show(),
-        'dec_actv': dec_actv.show(),
+        # 'dec_actv': dec_actv.show(),
         'blocked_dec': blocked_prediction
     }
 
@@ -188,8 +189,8 @@ def main():
     test_ssim = metrics['ssim']
     rim_actv = metrics['rim_actv']
     rim_actv_mask = metrics['rim_actv_mask']
-    dec_actv = metrics['dec_actv']
-    blocked_dec = metrics['blocked_dec']
+    # dec_actv = metrics['dec_actv']
+    # blocked_dec = metrics['blocked_dec']
     print(f"epoch [{epoch}] test loss: {test_loss:.4f}; test mse: {test_mse:.4f}; "+\
         f"test F1 score: {test_f1:.4f}; test SSIM: {test_ssim:.4f}")
     writer.add_scalar(f'Loss/Test Loss ({args.loss_fn.upper()})', test_loss, epoch)
@@ -200,13 +201,13 @@ def main():
 
     writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
     writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
-    writer.add_image('Stats/RIM Decoder Utilization', dec_actv[0], epoch, dataformats='HW')
+    # writer.add_image('Stats/RIM Decoder Utilization', dec_actv[0], epoch, dataformats='HW')
     cat_video = torch.cat(
         (data[0:4, 1:, :, :, :],prediction[0:4]),
         dim = 3 # join in height
     ) # N T C H W
     writer.add_video('Predicted Videos', cat_video, epoch)
-    writer.add_video('Blocked Predictions', blocked_dec[0]) # N=num_blocks T 1 H W
+    # writer.add_video('Blocked Predictions', blocked_dec[0]) # N=num_blocks T 1 H W
 
     hidden = model.init_hidden(data.shape[0]).to(args.device)
     writer.add_graph(model, (data[:, 0, :, :, :], hidden))

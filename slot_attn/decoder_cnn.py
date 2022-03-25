@@ -29,23 +29,46 @@ class Interpolate(nn.Module):
         x = self.interp(x, scale_factor=self.scale_factor, mode=self.mode, align_corners=False)
         return x
 
-def make_decoder():
+def make_decoder_transconv():
     """make decoder
     decoder same as slot decoder. 
         using transposedConv2d 
         not using interpolate+conv2d
     
-    `input`: size (BS*num_blocks, C==hidden_size, init_H, init_W)"""
+    `input`: size (BS*num_blocks, C=hidden_size, init_H, init_W)"""
 
     # H out​ =(H in​−1)×stride[0]−2×padding[0]+dilation[0]×(kernel_size[0]−1)+output_padding[0]+1
     return nn.Sequential(
-        nn.ConvTranspose2d(100, 64, 5, 2, padding=2, output_padding=1), # 8*2 + 3 - 4 + 1 = 16
+        nn.ConvTranspose2d(100, 64, 5, 2, padding=2, output_padding=1), # 8*2 + 3 -4+1 = 16
         nn.ReLU(),
-        nn.ConvTranspose2d(64, 32, 5, 2, padding=2, output_padding=1), # 16*2 + 3 - 4 + 1 = 32
+        LayerNorm(),
+        nn.ConvTranspose2d(64, 32, 5, 2, padding=2, output_padding=1), # 16*2 + 3 -4 + 1 = 32
         nn.ReLU(),
+        LayerNorm(),
         nn.ConvTranspose2d(32, 32, 3, 2, padding=1, output_padding=1), # 32*2 +1 -2 +1 = 64
         nn.ReLU(),
+        LayerNorm(),
         nn.ConvTranspose2d(32, 2, 3, 1, padding=1), # 64 + 2 - 2 = 64
+    )
+
+def make_decoder_interp():
+    """Method to initialize the decoder"""
+    return nn.Sequential(
+        LayerNorm(),
+        nn.Conv2d(100, 64, kernel_size=1, stride=1, padding=0),
+        nn.ReLU(),
+        Interpolate(scale_factor=2, mode='bilinear'),
+        nn.ReplicationPad2d(2),
+        nn.Conv2d(64, 32, kernel_size=4, stride=1, padding=0),
+        nn.ReLU(),
+        LayerNorm(),
+        Interpolate(scale_factor=2, mode='bilinear'),
+        nn.ReplicationPad2d(1),
+        nn.Conv2d(32, 16, kernel_size=4, stride=1, padding=0),
+        nn.ReLU(),
+        LayerNorm(),
+        Interpolate(scale_factor=2, mode='bilinear'),
+        nn.Conv2d(16, 2, kernel_size=3, stride=1, padding=0),
     )
 
 def unstack_and_split(x, batch_size, num_channels=3):
@@ -77,9 +100,12 @@ class WrappedDecoder(nn.Module):
     
     Input:
         `hidden`: (BS, K, d_slot) """
-    def __init__(self, hidden_size):
+    def __init__(self, hidden_size, decoder='interp'):
         super().__init__()
-        self.decoder = make_decoder()
+        if 'interp' in decoder:
+            self.decoder = make_decoder_interp()
+        else:
+            self.decoder = make_decoder_transconv()
         self.pos_embed = SoftPositionEmbed(hidden_size, (8,8))
 
     def forward(self, hidden):
@@ -87,11 +113,12 @@ class WrappedDecoder(nn.Module):
         broadcast_hidden = self.pos_embed(broadcast_hidden)
         dec_out = self.decoder(broadcast_hidden) # (BS*K, 2, 64, 64)
         channels, alpha_mask = unstack_and_split(dec_out, batch_size=hidden.shape[0], num_channels=1) # (BS, K, *, H, W)
+        channels = nn.Sigmoid()(channels)
         alpha_mask = torch.nn.Softmax(dim=1)(alpha_mask) # (BS, <K>, 1, H, W)
         masked_channels = channels*alpha_mask
         fused = torch.sum(masked_channels, dim=1)
 
-        return fused
+        return fused, channels, alpha_mask
 
 
 if __name__ == '__main__':
@@ -101,7 +128,7 @@ if __name__ == '__main__':
     # hidden = torch.arange(2*6*100).reshape(2, 6, 100)
     hidden = torch.randn(2, 6, 100)
 
-    out = decoder(hidden)
+    out, *_ = decoder(hidden)
     print(out.shape)
 
     num_params = 0

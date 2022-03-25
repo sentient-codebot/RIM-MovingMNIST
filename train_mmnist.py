@@ -126,6 +126,8 @@ def main():
         loss_fn = torch.nn.BCELoss() 
     elif args.loss_fn == "MSE":
         loss_fn = torch.nn.MSELoss()
+    elif args.loss_fn == 'MAE':
+        loss_fn = torch.nn.L1Loss()
     else:
         loss_fn = torch.nn.MSELoss()
 
@@ -162,7 +164,7 @@ def main():
             test_ssim = metrics['ssim']
             rim_actv = metrics['rim_actv']
             rim_actv_mask = metrics['rim_actv_mask']
-            dec_actv = metrics['dec_actv']
+            # dec_actv = metrics['dec_actv']
             blocked_dec = metrics['blocked_dec']
             print(f"epoch [{epoch}] train loss: {epoch_loss:.4f}; test loss: {test_loss:.4f}; test mse: {test_mse:.4f}; "+\
                 f"test F1 score: {test_f1:.4f}; test SSIM: {test_ssim:.4f}")
@@ -174,13 +176,13 @@ def main():
 
             writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
             writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
-            writer.add_image('Stats/RIM Decoder Utilization', dec_actv[0], epoch, dataformats='HW')
+            # writer.add_image('Stats/RIM Decoder Utilization', dec_actv[0], epoch, dataformats='HW')
             cat_video = torch.cat(
                 (data[0:4, 1:, :, :, :],prediction[0:4]),
                 dim = 3 # join in height
             ) # N T C H W
             writer.add_video('Predicted Videos', cat_video, epoch)
-            writer.add_video('Blocked Predictions', blocked_dec[0]) # N=num_blocks T 1 H W
+            writer.add_video('Blocked Predictions', blocked_dec[0], epoch) # N=num_blocks T 1 H W
 
             hidden = model.init_hidden(data.shape[0]).to(args.device)
             # writer.add_graph(model, (data[:, 0, :, :, :], hidden))

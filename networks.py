@@ -151,7 +151,7 @@ class BallModel(nn.Module):
         self.Encoder = self.make_encoder().to(self.args.device)
         self.Decoder = None
         # self.make_decoder()
-        self.Decoder = WrappedDecoder(args.hidden_size)
+        self.Decoder = WrappedDecoder(args.hidden_size, decoder='transconv').to(self.args.device)
 
 
         self.rim_dropout = None
@@ -279,10 +279,10 @@ class BallModel(nn.Module):
             raise ValueError('LSTM core not implemented yet!')
         
         # dec_out_ = self.Decoder(h_new.view(h_new.shape[0],-1))
-        dec_out_ = self.Decoder(h_new)
+        dec_out_, channels, alpha_mask = self.Decoder(h_new)
         blocked_out_ = torch.zeros(1).to(x.device)
         if self.get_intm:
-            blocked_out_ = self.partial_blocked_decoder(h_new)
+            blocked_out_ = channels*alpha_mask
 
         if ctx is not None:
             intm = Intm(input_attn=ctx.input_attn, 
