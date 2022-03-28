@@ -11,7 +11,7 @@ class LayerNorm(nn.Module):
 
     def forward(self, x):
         x = self.layernorm(x, list(x.size()[1:]))
-#         return x
+        return x
 
 # class UnFlatten(nn.Module):
 #     def forward(self, input):

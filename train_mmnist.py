@@ -76,14 +76,9 @@ def train(model, train_loader, optimizer, epoch, logbook, train_batch_idx, args,
             }
             logbook.write_metric_logs(metrics=metrics)
 
-        train_epoch_loss += loss.detach()
+        train_epoch_loss = train_epoch_loss.detach() + loss.detach()
 
     train_epoch_loss = train_epoch_loss / (batch_idx+1)
-    
-    if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0:
-        
-        # SAVE logged vectors
-        pass
 
     return train_batch_idx, train_epoch_loss
 

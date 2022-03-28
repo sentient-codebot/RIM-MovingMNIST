@@ -3,7 +3,7 @@ import torch
 import math
 
 from collections import namedtuple
-from .pos_embed import LayerNorm
+from .decoder_cnn import LayerNorm
 
 # Ctx = namedtuple('RunningContext',
 #     [
@@ -79,8 +79,8 @@ class SlotAttention(nn.Module):
         v = self.project_v(inputs) # Shape: (batch_size, num_inputs, slot_size).
 
         # Initialize slots. Shape: (batch_size, num_slots, slot_size).
-        slots = self.slots_mu + torch.exp(self.slots_log_sigma) * torch.randn(
-            inputs.shape[0], self.num_slots, self.slot_size)
+        slots = self.slots_mu + torch.exp(self.slots_log_sigma).to(inputs.device) * torch.randn(
+            inputs.shape[0], self.num_slots, self.slot_size).to(inputs.device)
 
         # Multiple rounds of attention.
         for _ in range(self.num_iterations):

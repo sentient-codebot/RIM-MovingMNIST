@@ -155,12 +155,12 @@ class BallModel(nn.Module):
         self.Encoder = self.make_slot_encoder().to(self.args.device)
         self.slot_attention = SlotAttention(
             num_iterations=self.num_iterations,
-            num_slots=self.args.num_slots,
+            num_slots=self.num_slots,
             slot_size=self.args.hidden_size,
             mlp_hidden_size=128,
             epsilon=1e-8,
             input_size=self.input_size,
-        )
+        ).to(self.args.device)
         self.Decoder = None
         # self.make_decoder()
         self.Decoder = WrappedDecoder(args.hidden_size, decoder='transconv').to(self.args.device)
@@ -260,8 +260,8 @@ class BallModel(nn.Module):
             LayerNorm(),
             SoftPositionEmbed(64, (6, 6)), # Shape: (batch_size, 64, 6, 6)
             SpatialFlatten(), # Shape: [batch_size, 6*6, 64] 
-            nn.Linear(64, 64), # Shape: [batch_size, 6*6, 64]
-            nn.ELU(),
+            # nn.Linear(64, 64), # Shape: [batch_size, 6*6, 64]
+            # nn.ELU(),
             nn.Linear(64, self.input_size) # Shape: [batch_size, 6*6, self.input_size]
         )
     
@@ -366,18 +366,18 @@ def main():
     print(f'sparse regularization loss is {sparse_l}')
 
 class SpatialFlatten(nn.Module):
-        def forward(self, input):
-            """
-            Inputs:
-                `input`: a float tensor with shape [batch_size, C, H, W].
-                
-            Returns:
-                `output`: a float tensor with shape [batch_size, H*W, C]."""
-            output = input.permute(0, 2, 3, 1)
-            output = output.contiguous()
-            output = output.view(output.size(0), -1, output.size(3))
+    def forward(self, input):
+        """
+        Inputs:
+            `input`: a float tensor with shape [batch_size, C, H, W].
+            
+        Returns:
+            `output`: a float tensor with shape [batch_size, H*W, C]."""
+        output = input.permute(0, 2, 3, 1)
+        output = output.contiguous()
+        output = output.view(output.size(0), -1, output.size(3))
 
-            return output
+        return output
 
 if __name__ == "__main__":
     main()
