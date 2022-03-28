@@ -11,11 +11,11 @@ class LayerNorm(nn.Module):
 
     def forward(self, x):
         x = self.layernorm(x, list(x.size()[1:]))
-        return x
+#         return x
 
-class UnFlatten(nn.Module):
-    def forward(self, input):
-        return input.view(input.size(0), 64, 8, 8)
+# class UnFlatten(nn.Module):
+#     def forward(self, input):
+#         return input.view(input.size(0), 64, 8, 8)
 
 
 class Interpolate(nn.Module):

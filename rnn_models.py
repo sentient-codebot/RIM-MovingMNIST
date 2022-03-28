@@ -98,15 +98,21 @@ class RIMCell(nn.Module):
 
     def forward(self, x, hs, cs = None, get_intm=False):
         """
-        Input : x (batch_size, input_size)
+        Input : x (batch_size, num_inputs, input_size)
                 hs (batch_size, num_units, hidden_size)
                 cs (batch_size, num_units, hidden_size)
         Output: new hs, cs for LSTM
                 new hs for GRU
         """
         size = x.size()
-        null_input = torch.zeros(size[0], 1, size[1]).float().to(self.device)
-        x = torch.cat((x.unsqueeze(1), null_input), dim = 1)
+        if x.dim() == 2: # Shape: (batch_size, input_size)
+            null_input = torch.zeros(size[0], 1, size[1]).float().to(self.device)
+            x = torch.cat((x.unsqueeze(1), null_input), dim = 1) # Shape: [batch_size, 1+1, input_size]
+        elif x.dim() == 3: # Shape: [batch_size, num_inputs, input_size]
+            null_input =  torch.zeros(size[0], 1, size[2]).float().to(self.device)
+            x = torch.cat((x, null_input), dim = 1) # Shape: [batch_size, num_inputs+1, input_size]
+        else:
+            raise RuntimeError("Invalid input size")
 
         # Compute input attention
         inputs, mask, attn_score = self.input_attention_mask(x, hs)

@@ -5,7 +5,8 @@ from group_operations import GroupDropout
 from collections import namedtuple
 import numpy as np
 from slot_attn.decoder_cnn import WrappedDecoder
-# from slot_attn.pos_embed import SoftPositionEmbed
+from slot_attn.slot_attn import SlotAttention
+from slot_attn.pos_embed import SoftPositionEmbed
 
 
 Intm = namedtuple('IntermediateVariables',
@@ -142,13 +143,24 @@ class BallModel(nn.Module):
     def __init__(self, args):
         super().__init__()
         self.args = args
-        self.input_size = args.hidden_size * args.num_units # NOTE dimension of encoded input. not clearly mentioned in paper
+        # self.input_size = args.hidden_size * args.num_units # NOTE dimension of encoded input. not clearly mentioned in paper
+        self.input_size = args.input_size
         self.output_size = args.hidden_size * args.num_units
+        self.num_iterations = args.num_iterations
+        self.num_slots = args.num_units
         self.core = args.core.upper()
         self.sparse = self.args.sparse
         self.get_intm = False
 
-        self.Encoder = self.make_encoder().to(self.args.device)
+        self.Encoder = self.make_slot_encoder().to(self.args.device)
+        self.slot_attention = SlotAttention(
+            num_iterations=self.num_iterations,
+            num_slots=self.args.num_slots,
+            slot_size=self.args.hidden_size,
+            mlp_hidden_size=128,
+            epsilon=1e-8,
+            input_size=self.input_size,
+        )
         self.Decoder = None
         # self.make_decoder()
         self.Decoder = WrappedDecoder(args.hidden_size, decoder='transconv').to(self.args.device)
@@ -226,10 +238,31 @@ class BallModel(nn.Module):
             nn.Conv2d(32, 64, kernel_size=4, stride=2),
             nn.ELU(),
             LayerNorm(),
-            Flatten(),
+            Flatten(), # Shape: (batch_size, 64, 6, 6)
             nn.Linear(2304, self.input_size),
             nn.ELU(),
             LayerNorm(),
+        )
+    
+    
+
+    def make_slot_encoder(self):
+        """Method to initialize the encoder"""
+        return nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=4, stride=2),
+            nn.ELU(),
+            LayerNorm(),
+            nn.Conv2d(16, 32, kernel_size=4, stride=2),
+            nn.ELU(),
+            LayerNorm(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2),
+            nn.ELU(),
+            LayerNorm(),
+            SoftPositionEmbed(64, (6, 6)), # Shape: (batch_size, 64, 6, 6)
+            SpatialFlatten(), # Shape: [batch_size, 6*6, 64] 
+            nn.Linear(64, 64), # Shape: [batch_size, 6*6, 64]
+            nn.ELU(),
+            nn.Linear(64, self.input_size) # Shape: [batch_size, 6*6, self.input_size]
         )
     
     def make_decoder(self):
@@ -258,7 +291,8 @@ class BallModel(nn.Module):
 
     def forward(self, x, h_prev):
         ctx = None
-        encoded_input = self.Encoder(x)
+        encoded_input = self.Encoder(x) # Shape: (batch_size, 6*6, self.input_size)
+        slotted_input = self.slot_attention(encoded_input) # Shape: [batch_size, num_slots, slot_size]
 
         if self.rim_dropout is not None:
             h_prev = self.rim_dropout(h_prev)
@@ -330,6 +364,20 @@ def main():
     beta = torch.rand(10,6)
     sparse_l = sparse_loss(beta, gamma)
     print(f'sparse regularization loss is {sparse_l}')
+
+class SpatialFlatten(nn.Module):
+        def forward(self, input):
+            """
+            Inputs:
+                `input`: a float tensor with shape [batch_size, C, H, W].
+                
+            Returns:
+                `output`: a float tensor with shape [batch_size, H*W, C]."""
+            output = input.permute(0, 2, 3, 1)
+            output = output.contiguous()
+            output = output.view(output.size(0), -1, output.size(3))
+
+            return output
 
 if __name__ == "__main__":
     main()
