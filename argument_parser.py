@@ -160,6 +160,9 @@ def argument_parser():
     parser.add_argument('--rim_dropout', type=float, default=0.)
     parser.add_argument('--sparse', type=str2bool, default=False)
 
+    parser.add_argument('--input_size', type=int, default=64)
+    parser.add_argument('--num_iterations', type=int, default=5)
+
     args, left_argv = config_parser.parse_known_args() # if passed args BESIDES defined in cfg_parser, store in left_argv
 
     if args.cfg_json is not None:

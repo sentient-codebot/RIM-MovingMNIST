@@ -67,7 +67,7 @@ class InputAttention(Attention):
         self.epsilon = epsilon
 
     def forward(self, x, h):
-        key = self.key(x)
+        key = self.key(x) # Shape: [batch_size, num_heads, kdim]
         value = self.value(x)
         query = self.query(h)
 
@@ -79,7 +79,7 @@ class InputAttention(Attention):
         attention_scores = torch.mean(attention_scores, dim = 1)
 
         mask_ = torch.zeros((x.size(0), self.num_blocks), device=x.device)
-        not_null_scores = attention_scores[:,:, 0]
+        not_null_scores = 1.-attention_scores[:,:, -1] # Shape: [batch_size, num_blocks, num_inputs+1]
         topk1 = torch.topk(not_null_scores,self.k,  dim = 1)
         batch_indices = torch.arange(x.shape[0]).unsqueeze(1)
         row_to_activate = batch_indices.repeat((1,self.k)) # repeat to the same shape as topk1.indices
