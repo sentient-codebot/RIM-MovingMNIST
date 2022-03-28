@@ -42,9 +42,7 @@
                 "--experiment_name",
                 "MMNIST_temp",
                 "--model_persist_frequency",
-                "25",
-                "--batch_size",
-                "16"
+                "25"
             ],
             "env":{
                 "CUDA_VISIBLE_DEVICES": "1"

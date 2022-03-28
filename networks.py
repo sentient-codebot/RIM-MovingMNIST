@@ -139,6 +139,46 @@ def sparse_loss(beta, gamma):
     loss = torch.mean(loss_sum)
     return loss
 
+class SlotEncoder(nn.Module):
+    """nn.Module for slot attention encoder"""
+    def __init__(self, input_size):
+        super().__init__()
+        self.input_size = input_size
+        self.cnn = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=4, stride=2),
+            nn.ELU(),
+            LayerNorm(),
+            nn.Conv2d(16, 32, kernel_size=4, stride=2),
+            nn.ELU(),
+            LayerNorm(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2),
+            nn.ELU(),
+            LayerNorm()
+        )
+        self.pos_emb = SoftPositionEmbed(64, (6, 6))
+        self.mlp = nn.Sequential(
+            nn.Linear(64, 64), # Shape: [batch_size, 6*6, 64]
+            nn.ELU(),
+            nn.Linear(64, self.input_size) # Shape: [batch_size, 6*6, input_size]
+        )
+
+    def forward(self, x):
+        """
+        Inputs:
+            `x`: image of shape [batch_size, 1, 64, 64]
+
+        Returns:
+            `features`: feature vectors [batch_size, num_inputs, input_size]
+        """
+        x = self.cnn(x) # Shape: [batch_size, 64, 6, 6]
+        x = self.pos_emb(x) # Shape: [batch_size, 64, 6, 6]
+        x = x.permute(0, 2, 3, 1) # Shape: [batch_size, 6, 6, 64]
+        x = x.contiguous()
+        x = x.view(x.shape[0], -1, x.shape[-1]) # Shape: [batch_size, 6*6, 64]
+        x = self.mlp(x) # Shape: [batch_size, 6*6, input_size]
+
+        return x
+
 class BallModel(nn.Module):
     def __init__(self, args):
         super().__init__()
@@ -152,7 +192,7 @@ class BallModel(nn.Module):
         self.sparse = self.args.sparse
         self.get_intm = False
 
-        self.Encoder = self.make_slot_encoder().to(self.args.device)
+        self.Encoder = SlotEncoder(self.input_size).to(self.args.device)
         self.slot_attention = SlotAttention(
             num_iterations=self.num_iterations,
             num_slots=self.num_slots,
@@ -246,24 +286,7 @@ class BallModel(nn.Module):
     
     
 
-    def make_slot_encoder(self):
-        """Method to initialize the encoder"""
-        return nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=4, stride=2),
-            nn.ELU(),
-            LayerNorm(),
-            nn.Conv2d(16, 32, kernel_size=4, stride=2),
-            nn.ELU(),
-            LayerNorm(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2),
-            nn.ELU(),
-            LayerNorm(),
-            SoftPositionEmbed(64, (6, 6)), # Shape: (batch_size, 64, 6, 6)
-            SpatialFlatten(), # Shape: [batch_size, 6*6, 64] 
-            # nn.Linear(64, 64), # Shape: [batch_size, 6*6, 64]
-            # nn.ELU(),
-            nn.Linear(64, self.input_size) # Shape: [batch_size, 6*6, self.input_size]
-        )
+
     
     def make_decoder(self):
         """Method to initialize the decoder"""

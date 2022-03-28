@@ -103,7 +103,7 @@ class SlotAttention(nn.Module):
                 slots.view(batch_size*self.num_slots, self.slot_size).unsqueeze(0)
             )
             slots = slots.view(batch_size, self.num_slots, self.slot_size)
-            slots += self.mlp(self.norm_mlp(slots))
+            slots = slots + self.mlp(self.norm_mlp(slots))
 
         return slots
 
