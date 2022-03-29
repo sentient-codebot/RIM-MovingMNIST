@@ -58,8 +58,9 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
     ssim = 0.
     for batch_idx, data in enumerate(test_loader): # tqdm doesn't work here?
         hidden = model.init_hidden(data.shape[0]).to(args.device)
-        rim_actv.reset()
-        rim_actv_mask.reset()
+        if args.core == 'RIM':
+            rim_actv.reset()
+            rim_actv_mask.reset()
         # dec_actv.reset()
         start_time = time()
         data = data.to(args.device)
@@ -120,15 +121,23 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
     ssim = ssim / (batch_idx+1)
     f1_avg = f1 / (batch_idx+1) / (data.shape[1]-1)
 
-    metrics = {
-        'mse': epoch_mseloss,
-        'ssim': ssim,
-        'f1': f1_avg,
-        'rim_actv': rim_actv.show(),
-        'rim_actv_mask': rim_actv_mask.show(),
-        # 'dec_actv': dec_actv.show(),
-        'blocked_dec': blocked_prediction
-    }
+    if args.core == 'RIM':
+        metrics = {
+            'mse': epoch_mseloss,
+            'ssim': ssim,
+            'f1': f1_avg,
+            'rim_actv': rim_actv.show(),
+            'rim_actv_mask': rim_actv_mask.show(),
+            # 'dec_actv': dec_actv.show(),
+            'blocked_dec': blocked_prediction
+        }
+    else:
+        metrics = {
+            'mse': epoch_mseloss,
+            'ssim': ssim,
+            'f1': f1_avg,
+            'blocked_dec': blocked_prediction
+        }
 
     model.get_intm = previous_get_intm
     return epoch_loss, prediction, data, metrics

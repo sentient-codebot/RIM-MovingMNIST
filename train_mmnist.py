@@ -157,8 +157,9 @@ def main():
             test_mse = metrics['mse']
             test_f1 = metrics['f1']
             test_ssim = metrics['ssim']
-            rim_actv = metrics['rim_actv']
-            rim_actv_mask = metrics['rim_actv_mask']
+            if args.core == 'RIM':
+                rim_actv = metrics['rim_actv']
+                rim_actv_mask = metrics['rim_actv_mask']
             # dec_actv = metrics['dec_actv']
             blocked_dec = metrics['blocked_dec']
             print(f"epoch [{epoch}] train loss: {epoch_loss:.4f}; test loss: {test_loss:.4f}; test mse: {test_mse:.4f}; "+\
@@ -169,8 +170,9 @@ def main():
             writer.add_scalar(f'Metrics/F1 Score', test_f1, epoch)
             writer.add_scalar(f'Metrics/SSIM', test_ssim, epoch)
 
-            writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
-            writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
+            if args.core == 'RIM':
+                writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
+                writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
             # writer.add_image('Stats/RIM Decoder Utilization', dec_actv[0], epoch, dataformats='HW')
             cat_video = torch.cat(
                 (data[0:4, 1:, :, :, :],prediction[0:4]),
