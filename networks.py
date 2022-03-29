@@ -189,6 +189,7 @@ class BallModel(nn.Module):
         self.slot_size = args.hidden_size
         self.num_iterations = args.num_iterations
         self.num_slots = args.num_units
+        self.num_inputs = 36 # output of SlotEncoder
         self.core = args.core.upper()
         self.sparse = self.args.sparse
         self.get_intm = False
@@ -217,7 +218,7 @@ class BallModel(nn.Module):
             if not self.sparse:
                 self.rnn_model = RIMCell(
                                         device=self.args.device,
-                                        input_size=self.slot_size if self.slot_input else self.input_size, 
+                                        input_size=self.slot_size if self.slot_input else self.input_size, # NOTE: non-sensetive to num_inputs
                                         num_units=self.args.num_units,
                                         hidden_size=self.args.hidden_size,
                                         k=self.args.k,
@@ -258,7 +259,7 @@ class BallModel(nn.Module):
 
         elif self.core == 'GRU':
             self.rnn_model = nn.GRU(
-                                    input_size=self.input_size,
+                                    input_size=self.slot_size*self.num_slots if self.slot_input else self.input_size*self.num_inputs, # NOTE: sensetive to num_inputs
                                     hidden_size=self.args.hidden_size * self.args.num_units,
                                     num_layers=1,
                                     batch_first=True,
@@ -341,7 +342,7 @@ class BallModel(nn.Module):
                 _, h_new = self.rnn_model(encoded_input.unsqueeze(1), 
                                             h_prev.unsqueeze(0))
             else:
-                _, h_new = self.rnn_model(slotted_input.unsqueeze(1), 
+                _, h_new = self.rnn_model(slotted_input.flatten(start_dim=1).unsqueeze(1), 
                                             h_prev.unsqueeze(0))
             h_new = h_new.reshape(h_shape)
         elif self.core=='LSTM':

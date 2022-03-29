@@ -106,7 +106,10 @@
                 "GRU",
                 "--experiment_name",
                 "MMNIST_GRU"
-            ]
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "1"
+            }
         }
     ]
 }
