@@ -1,10 +1,14 @@
-from rnn_models import smooth_sign
 import torch
+import matplotlib.pyplot as plt
 
-med = torch.rand(3, )*0.1 - 20
-med.requires_grad_(True)
-out = smooth_sign.apply(med)
-out.sum().backward()
-print(f"med: {med}")
-print(f"out: {out}")
-print(f"med.grad: {med.grad}")
+def main():
+    attention_probs = torch.load('attention_probs.pt', map_location='cpu')
+
+    fig, axs = plt.subplots(1, 1, figsize=(5, 5))
+    im = axs.imshow(attention_probs[0, :, :])
+    fig.colorbar(im, ax=axs)
+    plt.savefig('attention_probs.png')
+    pass
+
+if __name__ == "__main__":
+    main()

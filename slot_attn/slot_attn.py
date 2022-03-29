@@ -93,7 +93,7 @@ class SlotAttention(nn.Module):
             attn = torch.softmax(attn_logits, dim=-1) # Shape: (batch_size, num_inputs, num_slots).
 
             # Weighted mean.
-            attn += self.epsilon
+            attn = attn + self.epsilon
             attn = attn / attn.sum(dim=-2, keepdim=True) # NOTE what is the sum of `attn`?
             updates = torch.matmul(attn.transpose(1,2), v) # Shape: (batch_size, num_slots, slot_size).
 

@@ -214,7 +214,7 @@ class BallModel(nn.Module):
             if not self.sparse:
                 self.rnn_model = RIMCell(
                                         device=self.args.device,
-                                        input_size=self.input_size, 
+                                        input_size=self.args.hidden_size, 
                                         num_units=self.args.num_units,
                                         hidden_size=self.args.hidden_size,
                                         k=self.args.k,
@@ -323,7 +323,8 @@ class BallModel(nn.Module):
         reg_loss = 0.
         if self.core=='RIM':
             if not self.sparse:
-                h_new, foo, bar, ctx = self.rnn_model(encoded_input, h_prev)
+                # h_new, foo, bar, ctx = self.rnn_model(encoded_input, h_prev) # NOTE first experiment: no slot but spatial flatten
+                h_new, foo, bar, ctx = self.rnn_model(slotted_input, h_prev) # NOTE first experiment: slot 
             else:
                 h_new, foo, bar, ctx, reg_loss = self.rnn_model(encoded_input, h_prev)
         elif self.core=='GRU':
