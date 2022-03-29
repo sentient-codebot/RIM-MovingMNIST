@@ -186,21 +186,24 @@ class BallModel(nn.Module):
         # self.input_size = args.hidden_size * args.num_units # NOTE dimension of encoded input. not clearly mentioned in paper
         self.input_size = args.input_size
         self.output_size = args.hidden_size * args.num_units
+        self.slot_size = args.hidden_size
         self.num_iterations = args.num_iterations
         self.num_slots = args.num_units
         self.core = args.core.upper()
         self.sparse = self.args.sparse
         self.get_intm = False
+        self.slot_input = True
 
         self.Encoder = SlotEncoder(self.input_size).to(self.args.device)
-        self.slot_attention = SlotAttention(
-            num_iterations=self.num_iterations,
-            num_slots=self.num_slots,
-            slot_size=self.args.hidden_size,
-            mlp_hidden_size=128,
-            epsilon=1e-8,
-            input_size=self.input_size,
-        ).to(self.args.device)
+        if self.slot_input:
+            self.slot_attention = SlotAttention(
+                num_iterations=self.num_iterations,
+                num_slots=self.num_slots,
+                slot_size=self.slot_size,
+                mlp_hidden_size=128,
+                epsilon=1e-8,
+                input_size=self.input_size,
+            ).to(self.args.device)
         self.Decoder = None
         # self.make_decoder()
         self.Decoder = WrappedDecoder(args.hidden_size, decoder='transconv').to(self.args.device)
@@ -214,7 +217,7 @@ class BallModel(nn.Module):
             if not self.sparse:
                 self.rnn_model = RIMCell(
                                         device=self.args.device,
-                                        input_size=self.args.hidden_size, 
+                                        input_size=self.slot_size if self.slot_input else self.input_size, 
                                         num_units=self.args.num_units,
                                         hidden_size=self.args.hidden_size,
                                         k=self.args.k,
@@ -233,7 +236,7 @@ class BallModel(nn.Module):
             else:
                 self.rnn_model = SparseRIMCell(
                                         device=self.args.device,
-                                        input_size=self.input_size, 
+                                        input_size=self.slot_size if self.slot_input else self.input_size, 
                                         num_units=self.args.num_units,
                                         hidden_size=self.args.hidden_size,
                                         k=self.args.k,
@@ -315,7 +318,8 @@ class BallModel(nn.Module):
     def forward(self, x, h_prev):
         ctx = None
         encoded_input = self.Encoder(x) # Shape: (batch_size, 6*6, self.input_size)
-        slotted_input = self.slot_attention(encoded_input) # Shape: [batch_size, num_slots, slot_size]
+        if self.slot_input:
+            slotted_input = self.slot_attention(encoded_input) # Shape: [batch_size, num_slots, slot_size]
 
         if self.rim_dropout is not None:
             h_prev = self.rim_dropout(h_prev)
@@ -323,15 +327,22 @@ class BallModel(nn.Module):
         reg_loss = 0.
         if self.core=='RIM':
             if not self.sparse:
-                # h_new, foo, bar, ctx = self.rnn_model(encoded_input, h_prev) # NOTE first experiment: no slot but spatial flatten
-                h_new, foo, bar, ctx = self.rnn_model(slotted_input, h_prev) # NOTE first experiment: slot 
+                if not self.slot_input:
+                    h_new, foo, bar, ctx = self.rnn_model(encoded_input, h_prev) # NOTE first experiment: no slot but spatial flatten
+                else:
+                    h_new, foo, bar, ctx = self.rnn_model(slotted_input, h_prev) # NOTE first experiment: slot 
             else:
+                raise NotImplementedError('Sparse RIM not configured for slot input yet')
                 h_new, foo, bar, ctx, reg_loss = self.rnn_model(encoded_input, h_prev)
         elif self.core=='GRU':
-            h_shape = h_prev.shape # record the shape
-            h_prev = h_prev.reshape((h_shape[0],-1)) # flatten
-            _, h_new = self.rnn_model(encoded_input.unsqueeze(1), 
-                                        h_prev.unsqueeze(0))
+            h_shape = h_prev.shape # Shape: [batch_size, num_units, hidden_size]
+            h_prev = h_prev.reshape((h_shape[0],-1)) # flatten, Shape: [batch_size, num_units*hidden_size]
+            if not self.slot_input:
+                _, h_new = self.rnn_model(encoded_input.unsqueeze(1), 
+                                            h_prev.unsqueeze(0))
+            else:
+                _, h_new = self.rnn_model(slotted_input.unsqueeze(1), 
+                                            h_prev.unsqueeze(0))
             h_new = h_new.reshape(h_shape)
         elif self.core=='LSTM':
             raise ValueError('LSTM core not implemented yet!')
