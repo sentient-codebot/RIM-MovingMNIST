@@ -158,7 +158,7 @@ def main():
             )
             writer.add_scalar('Loss/Test Loss '+f'({args.loss_fn.upper()})', test_loss.detach(), epoch)
             for key, val in metrics.items():
-                writer.add_scalar(f'Metrics/{key}', val.detach(), epoch)
+                writer.add_scalar(f'Metrics/{key}', val, epoch)
             print(f"Epoch {epoch} | Train Loss {epoch_loss.detach():.4f} | Test Loss {test_loss.detach():.4f} | "+\
                 f"Test MSE: {metrics['mse']:.4f} | "+\
                 f"Test F1 score: {metrics['f1']:.4f} | Test SSIM: {metrics['ssim']:.4f}")
