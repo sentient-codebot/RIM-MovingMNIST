@@ -99,11 +99,11 @@ def main():
     args = argument_parser()
 
     if not args.should_resume:
-        make_dir(f"{args.folder_log}/checkpoints")
-        make_dir(f"{args.folder_log}/model")
+        make_dir(f"{args.folder_log}/pretrain/checkpoints")
+        make_dir(f"{args.folder_log}/pretrain/model")
         torch.save({
             "args": vars(args)
-        }, f"{args.folder_log}/model/args")
+        }, f"{args.folder_log}/pretrain/model/args")
 
     cudable = torch.cuda.is_available()
     args.device = torch.device("cuda" if cudable else "cpu")
@@ -167,7 +167,7 @@ def main():
 
         # save checkpoints here
         if args.model_persist_frequency > 0 and epoch % args.model_persist_frequency == 0: # regularly save checkpoints
-            print(f"Saving model to {args.folder_log}/checkpoints/{epoch}")
+            print(f"Saving model to {args.folder_log}/pretrain/checkpoints/{epoch}")
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
