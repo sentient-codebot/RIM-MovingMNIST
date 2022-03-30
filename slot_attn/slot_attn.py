@@ -26,6 +26,12 @@ class SlotAttention(nn.Module):
             epsilon (float): epsilon for softmax,
             input_size (int): size of input,
 
+        Inputs:
+            `inputs`: (batch_size, num_inputs, input_size)
+        
+        Returns:
+            `output`: (batch_size, num_slots, slot_size)
+
         reference: https://github.com/google-research/google-research/blob/master/slot_attention/model.py
         """
         super().__init__()

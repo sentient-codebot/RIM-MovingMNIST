@@ -15,7 +15,7 @@
             "name": "minimal: only for debugging code",
             "type": "python",
             "request": "launch",
-            "program": "./train_mmnist.py",
+            "program": "${file}",
             "console": "integratedTerminal",
             "args": [
                 "--cfg_json",
