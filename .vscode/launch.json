@@ -27,7 +27,7 @@
             ]
         },
         {
-            "name": "train/test mmnist temp",
+            "name": "train/test mmnist slotrim real",
             "type": "python",
             "request": "launch",
             "program": "${file}",
@@ -40,9 +40,11 @@
                 "--should_resume",
                 "false",
                 "--experiment_name",
-                "MMNIST_temp",
+                "MMNIST_slotrim_real",
                 "--model_persist_frequency",
-                "25"
+                "25",
+                "--k",
+                "3",
             ],
             "env":{
                 "CUDA_VISIBLE_DEVICES": "1"

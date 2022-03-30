@@ -199,7 +199,7 @@ def main():
     rim_actv = metrics['rim_actv']
     rim_actv_mask = metrics['rim_actv_mask']
     # dec_actv = metrics['dec_actv']
-    # blocked_dec = metrics['blocked_dec']
+    blocked_dec = metrics['blocked_dec']
     print(f"epoch [{epoch}] test loss: {test_loss:.4f}; test mse: {test_mse:.4f}; "+\
         f"test F1 score: {test_f1:.4f}; test SSIM: {test_ssim:.4f}")
     writer.add_scalar(f'Loss/Test Loss ({args.loss_fn.upper()})', test_loss, epoch)
@@ -216,7 +216,7 @@ def main():
         dim = 3 # join in height
     ) # N T C H W
     writer.add_video('Predicted Videos', cat_video, epoch)
-    # writer.add_video('Blocked Predictions', blocked_dec[0]) # N=num_blocks T 1 H W
+    writer.add_video('Blocked Predictions', blocked_dec[0]) # N=num_blocks T 1 H W
 
     hidden = model.init_hidden(data.shape[0]).to(args.device)
     writer.add_graph(model, (data[:, 0, :, :, :], hidden))

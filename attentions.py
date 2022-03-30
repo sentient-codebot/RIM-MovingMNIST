@@ -77,23 +77,25 @@ class InputAttention(Attention):
 
         attention_scores = torch.matmul(query, key.transpose(-1, -2)) / math.sqrt(self.kdim) 
         attention_scores = torch.mean(attention_scores, dim = 1)
+        attention_probs = nn.Softmax(dim = 1)(attention_scores) # (batch_size, num_slots, num_inputs=2) NOTE for each input, rims compete with each other
 
         mask_ = torch.zeros((x.size(0), self.num_blocks), device=x.device)
-        not_null_scores = 1.-attention_scores[:,:, -1] # Shape: [batch_size, num_blocks, num_inputs+1]
-        topk1 = torch.topk(not_null_scores,self.k,  dim = 1)
+        not_null_probs = 1.-torch.sum(attention_probs[:, :, :-1], dim=2) # Shape: [batch_size, num_blocks, ]
+        topk1 = torch.topk(not_null_probs, self.k, dim = 1)
         batch_indices = torch.arange(x.shape[0]).unsqueeze(1)
         row_to_activate = batch_indices.repeat((1,self.k)) # repeat to the same shape as topk1.indices
 
         mask_[row_to_activate.view(-1), topk1.indices.view(-1)] = 1
-        attention_probs = nn.Softmax(dim = 1)(attention_scores) # (batch_size, num_slots, num_inputs=2)
+        
+        # For each rim, give them normalized summation weights (for each rim, the weights all sum to 1) NOTE is this necessary? 
         attention_probs = attention_probs + self.epsilon # in case of unstability
         attention_probs = attention_probs / torch.sum(attention_probs, dim=2, keepdim=True)
         inputs = torch.matmul(self.dropout(attention_probs), value) * mask_.unsqueeze(2) # inputs = (bs, num_blocks, vdim), all value vectors are just scaled version of each other. 
 
-        with torch.no_grad():
-            out_probs = 1.-attention_probs[:,:, -1]
+        # with torch.no_grad():
+        #     out_probs = 1.-attention_probs[:,:, -1]
 
-        return inputs, mask_, out_probs
+        return inputs, mask_, not_null_probs.detach()
 
 class PriorSampler():
     """
