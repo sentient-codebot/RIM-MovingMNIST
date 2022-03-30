@@ -70,15 +70,15 @@ def test(model, test_loader, args, loss_fn):
             with torch.no_grad():
                 output = model(data[:, frame, :, :, :])
                 target = data[:, frame, :, :, :]
-                prediction[:, frame+1, :, :, :] = output
+                prediction[:, frame, :, :, :] = output
 
                 loss += loss_fn(output, target)
                 mseloss += mse(output, target)
                 f1_frame = f1_score(target, output)
                 f1 += f1_frame
 
-        ssim += pt_ssim.ssim(data[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
-                            prediction[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
+        ssim += pt_ssim.ssim(data[:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
+                            prediction[:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
         epoch_loss += loss.detach()
         epoch_mseloss += mseloss.detach()
 
