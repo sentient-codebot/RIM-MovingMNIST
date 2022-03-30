@@ -140,7 +140,17 @@ def sparse_loss(beta, gamma):
     return loss
 
 class SlotEncoder(nn.Module):
-    """nn.Module for slot attention encoder"""
+    """nn.Module for slot attention encoder
+    
+    Args:
+        `input_size`: size of input
+
+    Inputs:
+            `x`: image of shape [batch_size, 1, 64, 64]
+
+    Outputs:
+            `features`: feature vectors [batch_size, num_inputs, input_size]    
+    """
     def __init__(self, input_size):
         super().__init__()
         self.input_size = input_size
@@ -414,6 +424,38 @@ class SpatialFlatten(nn.Module):
         output = output.view(output.size(0), -1, output.size(3))
 
         return output
+
+class SlotAttentionAutoEncoder(nn.Module):
+    """AutoEncoder using SlotAttention for pretraining"""
+    def __init__(self, input_size, num_iterations, num_slots, slot_size,):
+        super().__init__()
+        self.input_size = input_size
+        self.num_iterations = num_iterations
+        self.num_slots = num_slots
+        self.slot_size = slot_size
+        self.Encoder = SlotEncoder(input_size=self.input_size) # output shape: [batch_size, num_inputs, input_size]
+        self.slot_attention = SlotAttention(
+                num_iterations=self.num_iterations,
+                num_slots=self.num_slots,
+                slot_size=self.slot_size,
+                mlp_hidden_size=128,
+                epsilon=1e-8,
+                input_size=self.input_size,
+            ) # output shape: [batch_size, num_slots, slot_size]
+        self.Decoder = WrappedDecoder(hidden_size=self.slot_size, decoder='transconv') # input shape: [batch_size, num_slots, slot_size]
+
+    def forward(self, x):
+        """
+        Inputs:
+            `x`: a float tensor with shape [batch_size, C, H, W].
+            
+        Returns:
+            `output`: a float tensor with shape [batch_size, C, H, W]."""
+        encoded_input = self.Encoder(x)
+        slot_attn = self.slot_attention(encoded_input)
+        fused, channels, alpha_mask = self.Decoder(slot_attn)
+        return fused
+
 
 if __name__ == "__main__":
     main()
