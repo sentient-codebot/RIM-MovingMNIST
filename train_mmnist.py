@@ -227,6 +227,9 @@ def setup_model(args, logbook):
 
     return model, optimizer, start_epoch, train_batch_idx
 
+def param_count(model: torch.nn.Module) -> int:
+    return sum(p.numel() for p in model.parameters())
+
 if __name__ == '__main__':
     main()
 
