@@ -20,6 +20,8 @@ import os
 from os import listdir
 from os.path import isfile, join
 
+print("This process has the PID: ", os.getpid())
+
 set_seed(1997)
 
 def nan_hook(_tensor):

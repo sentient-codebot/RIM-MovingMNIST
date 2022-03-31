@@ -21,6 +21,8 @@ import os
 from os import listdir
 from os.path import isfile, join
 
+print("This process has the PID: ", os.getpid())
+
 set_seed(1997)
 
 def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn):

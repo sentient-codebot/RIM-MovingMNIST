@@ -40,7 +40,7 @@
                 "--should_resume",
                 "false",
                 "--experiment_name",
-                "MMNIST_slotrim_better_actvation",
+                "MMNIST_slotrim_final_activation",
                 "--model_persist_frequency",
                 "25",
                 "--k",

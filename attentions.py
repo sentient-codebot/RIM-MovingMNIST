@@ -79,20 +79,19 @@ class InputAttention(Attention):
         attention_scores = torch.mean(attention_scores, dim = 1)
         attention_probs = nn.Softmax(dim = 1)(attention_scores) # (batch_size, num_slots, num_inputs=2) NOTE for each input, rims compete with each other
 
+        # For each rim, give them normalized summation weights (for each rim, the weights all sum to 1) NOTE is this necessary? 
+        attention_probs = attention_probs + self.epsilon # in case of unstability
+        attention_probs = attention_probs / torch.sum(attention_probs, dim=2, keepdim=True)
+
         mask_ = torch.zeros((x.size(0), self.num_blocks), device=x.device)
-        not_null_probs = torch.sum(attention_probs[:, :, :-1], dim=2) # Shape: [batch_size, num_blocks, ] 
+        not_null_probs = 1. - attention_probs[:, :, -1] # Shape: [batch_size, num_blocks, ] NOTE how much focus is NOT on the null input
         topk1 = torch.topk(not_null_probs, self.k, dim = 1)
         batch_indices = torch.arange(x.shape[0]).unsqueeze(1)
         row_to_activate = batch_indices.repeat((1,self.k)) # repeat to the same shape as topk1.indices
-
         mask_[row_to_activate.view(-1), topk1.indices.view(-1)] = 1
-        
-        # For each rim, give them normalized summation weights (for each rim, the weights all sum to 1) NOTE is this necessary? 
-        hard_argmax = True
-        if not hard_argmax:
-            attention_probs = attention_probs + self.epsilon # in case of unstability
-            attention_probs = attention_probs / torch.sum(attention_probs, dim=2, keepdim=True)
-        else:
+
+        hard_argmax = False
+        if hard_argmax:
             attention_probs = ArgMax.apply(attention_probs).float() # Shape: (batch_size, num_slots, num_inputs)
         inputs = torch.matmul(self.dropout(attention_probs), value) * mask_.unsqueeze(2) # inputs = (bs, num_blocks, vdim), all value vectors are just scaled version of each other. 
 
