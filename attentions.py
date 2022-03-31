@@ -88,8 +88,12 @@ class InputAttention(Attention):
         mask_[row_to_activate.view(-1), topk1.indices.view(-1)] = 1
         
         # For each rim, give them normalized summation weights (for each rim, the weights all sum to 1) NOTE is this necessary? 
-        attention_probs = attention_probs + self.epsilon # in case of unstability
-        attention_probs = attention_probs / torch.sum(attention_probs, dim=2, keepdim=True)
+        hard_argmax = True
+        if not hard_argmax:
+            attention_probs = attention_probs + self.epsilon # in case of unstability
+            attention_probs = attention_probs / torch.sum(attention_probs, dim=2, keepdim=True)
+        else:
+            attention_probs = ArgMax.apply(attention_probs).float() # Shape: (batch_size, num_slots, num_inputs)
         inputs = torch.matmul(self.dropout(attention_probs), value) * mask_.unsqueeze(2) # inputs = (bs, num_blocks, vdim), all value vectors are just scaled version of each other. 
 
         # with torch.no_grad():
@@ -206,6 +210,28 @@ class smooth_sign(torch.autograd.Function):
         x, = ctx.saved_tensors
         scaled_tanh = lambda x: torch.tanh(100*x)
         func_out, vjp = torch.autograd.functional.vjp(scaled_tanh, x, grad_output)
+        return vjp
+
+class ArgMax(torch.autograd.Function):
+    """forward the hard argmax function, while backward as the soft(arg)max
+
+    Inputs:
+        `x`: a tensor of shape `[batch_size, num_slots, num_inputs]`
+
+    Outputs:
+        `y`: a one-hot tensor of shape `[batch_size, num_slots]` 
+    """
+    @staticmethod
+    def forward(ctx: Any, x: torch.Tensor) -> torch.Tensor:
+        ctx.save_for_backward(x)
+        indices = torch.argmax(x, dim=2) # Shape: [batch_size, num_slots]
+        y = torch.nn.functional.one_hot(indices, x.shape[2]) # Shape: [batch_size, num_slots, num_inputs]
+        return y
+
+    @staticmethod
+    def backward(ctx: Any, grad_output: Any) -> Any:
+        x, = ctx.saved_tensors
+        func_out, vjp = torch.autograd.functional.vjp(torch.nn.Softmax(dim=2), x, grad_output)
         return vjp
 
 class SparseInputAttention(Attention):
@@ -340,3 +366,17 @@ class CommAttention(Attention):
         context = self.output_fc(context) # to be add to current h
 
         return context
+
+def main():
+    x = torch.rand(2, 3, 4, requires_grad=False)
+    mlp = nn.Linear(4, 4)
+    x = mlp(x)
+    argmax_x = ArgMax.apply(x)
+    y = torch.matmul(argmax_x.float(), torch.randn(2, 4, 4))
+    y = y.norm()
+    y.backward()
+    for p in mlp.parameters():
+        print(p.grad)
+
+if __name__ == "__main__":
+    main()

@@ -166,7 +166,7 @@ def main():
             print(f"Epoch {epoch} | Train Loss: {epoch_loss:.4f}")
 
         # save checkpoints here
-        if args.model_persist_frequency > 0 and epoch % args.model_persist_frequency == 0: # regularly save checkpoints
+        if args.model_persist_frequency > 0 and epoch % args.model_persist_frequency == 0 or epoch==1: # regularly save checkpoints
             print(f"Saving model to {args.folder_log}/pretrain/checkpoints/{epoch}")
             torch.save({
                 'epoch': epoch,
