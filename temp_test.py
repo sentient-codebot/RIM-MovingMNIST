@@ -1,13 +1,16 @@
 import torch
 import matplotlib.pyplot as plt
+import torchvision
 
 def main():
-    attention_probs = torch.load('attention_probs_0.pt', map_location='cpu')
+    _tensor = torch.load('attention_probs_1.pt', map_location='cpu')
 
     fig, axs = plt.subplots(1, 1, figsize=(5, 5))
-    im = axs.imshow(attention_probs[0, :, :])
+    _tensor = _tensor[0]
+    # _tensor = torchvision.utils.make_grid(_tensor).permute(1, 2, 0)
+    im = axs.imshow(_tensor)
     fig.colorbar(im, ax=axs)
-    plt.savefig('attention_probs_0.png')
+    plt.savefig('attention_probs_1.png')
     pass
 
 if __name__ == "__main__":

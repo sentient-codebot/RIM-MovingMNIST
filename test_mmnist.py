@@ -219,7 +219,7 @@ def main():
     writer.add_video('Blocked Predictions', blocked_dec[0]) # N=num_blocks T 1 H W
 
     hidden = model.init_hidden(data.shape[0]).to(args.device)
-    writer.add_graph(model, (data[:, 0, :, :, :], hidden))
+    # writer.add_graph(model, (data[:, 0, :, :, :], hidden))
     # plot_frames(prediction, data, start_frame=1, end_frame=data.shape[1]-2, sample=[0,2,7,17,29,-1])
 
     # wait = input("Press any key to terminate program. ")
