@@ -80,7 +80,7 @@ class InputAttention(Attention):
         attention_probs = nn.Softmax(dim = 1)(attention_scores) # (batch_size, num_slots, num_inputs=2) NOTE for each input, rims compete with each other
 
         mask_ = torch.zeros((x.size(0), self.num_blocks), device=x.device)
-        not_null_probs = 1.-torch.sum(attention_probs[:, :, :-1], dim=2) # Shape: [batch_size, num_blocks, ]
+        not_null_probs = torch.sum(attention_probs[:, :, :-1], dim=2) # Shape: [batch_size, num_blocks, ] 
         topk1 = torch.topk(not_null_probs, self.k, dim = 1)
         batch_indices = torch.arange(x.shape[0]).unsqueeze(1)
         row_to_activate = batch_indices.repeat((1,self.k)) # repeat to the same shape as topk1.indices
