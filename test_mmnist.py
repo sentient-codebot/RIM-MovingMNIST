@@ -48,7 +48,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
         rim_actv_mask = VecStack()
     # dec_actv = VecStack()
 
-    mse = torch.nn.MSELoss()
+    mse = lambda x, y: ((x - y)**2).mean(dim=(0,1,2)).sum() # x Shape: [batch_size, T, C, H, W]
 
     model.eval()
 
@@ -85,7 +85,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
             with torch.no_grad():
                 if not rollout:
                     output, hidden, reg_loss, intm = model(data[:, frame, :, :, :], hidden)
-                elif frame >= 5:
+                elif frame >= 10:
                     output, hidden, reg_loss, intm = model(output, hidden)
                 else:
                     output, hidden, reg_loss, intm = model(data[:, frame, :, :, :], hidden)
@@ -96,7 +96,9 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
                 blocked_prediction[:, 0, frame+1, :, :, :] = output
                 blocked_prediction[:, 1:, frame+1, :, :, :] = intm['blocked_dec']
                 loss += loss_fn(output, target)
-                mseloss += mse(output, target)
+                # if not rollout or frame >= 10:
+                if True:
+                    mseloss += mse(output, target)
                 f1_frame = f1_score(target, output)
                 # writer.add_scalar(f'Metrics/F1 at Frame {frame}', f1_frame, epoch)
                 f1 += f1_frame
@@ -106,9 +108,12 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
                 rim_actv.append(intm["input_attn"]) # shape (batchsize, num_units, 1) -> (BS, NU, T)
                 rim_actv_mask.append(intm["input_attn_mask"])
             # dec_actv.append(intm["decoder_utilization"])
-        
-        ssim += pt_ssim.ssim(data[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
+        if not rollout:
+            ssim += pt_ssim.ssim(data[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
                         prediction[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
+        else:
+            ssim += pt_ssim.ssim(data[:,10:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
+                        prediction[:,10:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
         epoch_loss += loss.detach()
         epoch_mseloss += mseloss.detach()
         if args.device == torch.device("cpu"):
@@ -156,6 +161,8 @@ def dec_rim_util(model, h, args):
 
 def main():
     args = argument_parser()
+    print(f"Loading args from "+f"{args.folder_log}/model/args")
+    args.__dict__.update(torch.load(f"{args.folder_log}/model/args"))
 
     print(args)
     logbook = LogBook(config = args)
@@ -190,7 +197,7 @@ def main():
         args = args,
         loss_fn = loss_fn,
         writer = writer,
-        rollout = False,
+        rollout = True,
         epoch = epoch
     )
     test_mse = metrics['mse']

@@ -27,7 +27,7 @@
             ]
         },
         {
-            "name": "train/test mmnist slotrim real",
+            "name": "train/test mmnist slotrim full",
             "type": "python",
             "request": "launch",
             "program": "${file}",
@@ -40,18 +40,20 @@
                 "--should_resume",
                 "false",
                 "--experiment_name",
-                "MMNIST_slotrim_final_activation",
+                "MMNIST_slotrim_full_activation",
                 "--model_persist_frequency",
                 "25",
+                "--num_units",
+                "6",
                 "--k",
-                "3",
+                "6",
             ],
             "env":{
                 "CUDA_VISIBLE_DEVICES": "1"
             }
         },
         {
-            "name": "train/test mmnist sparse",
+            "name": "train/test mmnist complete",
             "type": "python",
             "request": "launch",
             "program": "${file}",
@@ -64,13 +66,13 @@
                 "--should_resume",
                 "false",
                 "--experiment_name",
-                "MMNIST_sparse",
+                "MMNIST_complete",
                 "--model_persist_frequency",
                 "25",
-                "--sparse",
-                "true",
-                "--input_dropout",
-                "0",
+                "--num_units",
+                "6",
+                "--k",
+                "6",
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "1"

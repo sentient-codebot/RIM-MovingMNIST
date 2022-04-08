@@ -3,14 +3,22 @@ import matplotlib.pyplot as plt
 import torchvision
 
 def main():
-    _tensor = torch.load('attention_probs_1.pt', map_location='cpu')
+    pred_dict = torch.load('predictions.pt', map_location='cpu')
+    data = pred_dict['data']
+    prediction = pred_dict['prediction']
 
-    fig, axs = plt.subplots(1, 1, figsize=(5, 5))
-    _tensor = _tensor[0]
-    # _tensor = torchvision.utils.make_grid(_tensor).permute(1, 2, 0)
-    im = axs.imshow(_tensor)
-    fig.colorbar(im, ax=axs)
-    plt.savefig('attention_probs_1.png')
+    fig, axs = plt.subplots(2, 20, figsize=(20, 3))
+    for i in range(20):
+        axs[0, i].xaxis.set_visible(False)
+        axs[1, i].xaxis.set_visible(False)
+        axs[0, i].yaxis.set_visible(False)
+        axs[1, i].yaxis.set_visible(False)
+        axs[0, i].imshow(data[0, i, 0, :, :].numpy(), cmap='Greys')
+        if i==0:
+            axs[1, i].imshow(torch.zeros_like(data[0, i, 0, :, :]).numpy(), cmap='Greys')
+        else:
+            axs[1, i].imshow(prediction[0, i-1, 0, :, :].numpy(), cmap='Greys')
+    plt.savefig('prediction.png')
     pass
 
 if __name__ == "__main__":
