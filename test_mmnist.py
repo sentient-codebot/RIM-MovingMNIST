@@ -96,9 +96,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
                 blocked_prediction[:, 0, frame+1, :, :, :] = output
                 blocked_prediction[:, 1:, frame+1, :, :, :] = intm['blocked_dec']
                 loss += loss_fn(output, target)
-                # if not rollout or frame >= 10:
-                if True:
-                    mseloss += mse(output, target)
+
                 f1_frame = f1_score(target, output)
                 # writer.add_scalar(f'Metrics/F1 at Frame {frame}', f1_frame, epoch)
                 f1 += f1_frame
@@ -109,11 +107,14 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
                 rim_actv_mask.append(intm["input_attn_mask"])
             # dec_actv.append(intm["decoder_utilization"])
         if not rollout:
-            ssim += pt_ssim.ssim(data[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
-                        prediction[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
+            ssim += pt_ssim.ssim(data[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
+                        prediction[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
+            mseloss += mse(data[:,1:,:,:,:], prediction[:,10:,:,:,:]) # Shape: [N, T, C, H, W]
         else:
-            ssim += pt_ssim.ssim(data[:,10:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
-                        prediction[:,10:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
+            ssim += pt_ssim.ssim(data[:,10:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
+                        prediction[:,10:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
+            mseloss += mse(data[:,10:,:,:,:], prediction[:,10:,:,:,:]) # Shape: [N, T, C, H, W]
+            
         epoch_loss += loss.detach()
         epoch_mseloss += mseloss.detach()
         if args.device == torch.device("cpu"):
