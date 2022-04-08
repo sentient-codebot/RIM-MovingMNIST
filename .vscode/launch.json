@@ -27,7 +27,7 @@
             ]
         },
         {
-            "name": "train/test mmnist slotrim full",
+            "name": "train/test mmnist modified",
             "type": "python",
             "request": "launch",
             "program": "${file}",
