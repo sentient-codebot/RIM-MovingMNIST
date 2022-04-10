@@ -1,27 +1,32 @@
 {
-    "train_dataset"             : "balls3curtain64.h5",
+    "version"                   : 0,
+
     "batch_size"                : 64,
     "epochs"                    : 400,
     "should_resume"             : false,
-    "model_persist_frequency"   : 20,
-    "log_intm_frequency"        : 10,
-    "should_save_csv"           : false,
+    "save_frequency"            : 20,
+    "test_frequency"            : 10,
     "lr"                        : 0.0007,
     "loss_fn"                   : "MSE",
 
+    "core"                      : "RIM",
+    "input_size"                : 64,
     "hidden_size"               : 100,
-    "num_units"                 : 6,
+    "num_hidden"                : 6,
+    
+    "encoder_type"              : "FLATTEN",
+    "decoder_type"              : "CAT_BASIC",
+
     "k"                         : 4,
     "num_input_heads"           : 1,
-    "version"                   : 0,
-    "rnn_cell"                  : "GRU",
     "input_key_size"            : 64,
     "input_value_size"          : 400,
-    "input_query_size"          : 64,
-    "input_dropout"             : 0.1,
+    
+    "rnn_cell"                  : "GRU",
     "comm_key_size"             : 32,
     "comm_value_size"           : 32,
-    "comm_query_size"           : 32,
     "num_comm_heads"            : 2,
+
+    "input_dropout"             : 0.1,
     "comm_dropout"              : 0.1
 }

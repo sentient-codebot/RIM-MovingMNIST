@@ -1,0 +1,38 @@
+{
+    "version"                   : 0,
+
+    "batch_size"                : 64,
+    "epochs"                    : 400,
+    "should_resume"             : false,
+    "save_frequency"            : 20,
+    "test_frequency"            : 10,
+    "lr"                        : 0.0007,
+    "loss_fn"                   : "MSE",
+
+    "core"                      : "RIM",
+    "input_size"                : 64,
+    "hidden_size"               : 100,
+    "num_hidden"                : 6,
+    
+    "encoder_type"              : "NONFLATTEN",
+    "decoder_type"              : "SEP_SBD",
+
+    "k"                         : 4,
+    "num_input_heads"           : 1,
+    "input_key_size"            : 64,
+    "input_value_size"          : 400,
+    
+    "rnn_cell"                  : "GRU",
+    "comm_key_size"             : 32,
+    "comm_value_size"           : 32,
+    "num_comm_heads"            : 2,
+
+    "input_dropout"             : 0.1,
+    "comm_dropout"              : 0.1,
+
+    "use_slot_attention"        : true,
+    "slot_size"                 : 100,
+    "num_slots"                 : 6,
+    "num_iterations_slot"       : 5
+
+}

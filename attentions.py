@@ -51,6 +51,7 @@ class InputAttention(Attention):
         num_blocks,
         k,
         dropout,
+        epsilon=1e-8
         ):
         super().__init__(dropout)
         self.num_heads = num_heads
@@ -63,9 +64,10 @@ class InputAttention(Attention):
         self.value = nn.Linear(input_size, num_heads * vdim, bias=False)
         self.query = GroupLinearLayer(hidden_size, kdim * num_heads, num_blocks)
         self.dropout = nn.Dropout(p = dropout)
+        self.epsilon = epsilon
 
     def forward(self, x, h):
-        key = self.key(x)
+        key = self.key(x) # Shape: [batch_size, num_heads, kdim]
         value = self.value(x)
         query = self.query(h)
 
@@ -75,21 +77,28 @@ class InputAttention(Attention):
 
         attention_scores = torch.matmul(query, key.transpose(-1, -2)) / math.sqrt(self.kdim) 
         attention_scores = torch.mean(attention_scores, dim = 1)
+        attention_probs = nn.Softmax(dim = 1)(attention_scores) # (batch_size, num_slots, num_inputs=2) NOTE for each input, rims compete with each other
+
+        # For each rim, give them normalized summation weights (for each rim, the weights all sum to 1) NOTE is this necessary? 
+        attention_probs = attention_probs + self.epsilon # in case of unstability
+        attention_probs = attention_probs / torch.sum(attention_probs, dim=2, keepdim=True)
 
         mask_ = torch.zeros((x.size(0), self.num_blocks), device=x.device)
-        not_null_scores = attention_scores[:,:, 0]
-        topk1 = torch.topk(not_null_scores,self.k,  dim = 1)
+        not_null_probs = 1. - attention_probs[:, :, -1] # Shape: [batch_size, num_blocks, ] NOTE how much focus is NOT on the null input
+        topk1 = torch.topk(not_null_probs, self.k, dim = 1)
         batch_indices = torch.arange(x.shape[0]).unsqueeze(1)
         row_to_activate = batch_indices.repeat((1,self.k)) # repeat to the same shape as topk1.indices
-
         mask_[row_to_activate.view(-1), topk1.indices.view(-1)] = 1
-        attention_probs = self.dropout(nn.Softmax(dim = -1)(attention_scores))
-        inputs = torch.matmul(attention_probs, value) * mask_.unsqueeze(2) # inputs = (bs, num_blocks, vdim), all value vectors are just scaled version of each other. 
 
-        with torch.no_grad():
-            out_probs = nn.Softmax(dim = -1)(attention_scores)[:,:, 0]
+        hard_argmax = False
+        if hard_argmax:
+            attention_probs = ArgMax.apply(attention_probs).float() # Shape: (batch_size, num_slots, num_inputs)
+        inputs = torch.matmul(self.dropout(attention_probs), value) * mask_.unsqueeze(2) # inputs = (bs, num_blocks, vdim), all value vectors are just scaled version of each other. 
 
-        return inputs, mask_, out_probs
+        # with torch.no_grad():
+        #     out_probs = 1.-attention_probs[:,:, -1]
+
+        return inputs, mask_, not_null_probs.detach()
 
 class PriorSampler():
     """
@@ -200,6 +209,28 @@ class smooth_sign(torch.autograd.Function):
         x, = ctx.saved_tensors
         scaled_tanh = lambda x: torch.tanh(100*x)
         func_out, vjp = torch.autograd.functional.vjp(scaled_tanh, x, grad_output)
+        return vjp
+
+class ArgMax(torch.autograd.Function):
+    """forward the hard argmax function, while backward as the soft(arg)max
+
+    Inputs:
+        `x`: a tensor of shape `[batch_size, num_slots, num_inputs]`
+
+    Outputs:
+        `y`: a one-hot tensor of shape `[batch_size, num_slots]` 
+    """
+    @staticmethod
+    def forward(ctx: Any, x: torch.Tensor) -> torch.Tensor:
+        ctx.save_for_backward(x)
+        indices = torch.argmax(x, dim=2) # Shape: [batch_size, num_slots]
+        y = torch.nn.functional.one_hot(indices, x.shape[2]) # Shape: [batch_size, num_slots, num_inputs]
+        return y
+
+    @staticmethod
+    def backward(ctx: Any, grad_output: Any) -> Any:
+        x, = ctx.saved_tensors
+        func_out, vjp = torch.autograd.functional.vjp(torch.nn.Softmax(dim=2), x, grad_output)
         return vjp
 
 class SparseInputAttention(Attention):
@@ -334,3 +365,17 @@ class CommAttention(Attention):
         context = self.output_fc(context) # to be add to current h
 
         return context
+
+def main():
+    x = torch.rand(2, 3, 4, requires_grad=False)
+    mlp = nn.Linear(4, 4)
+    x = mlp(x)
+    argmax_x = ArgMax.apply(x)
+    y = torch.matmul(argmax_x.float(), torch.randn(2, 4, 4))
+    y = y.norm()
+    y.backward()
+    for p in mlp.parameters():
+        print(p.grad)
+
+if __name__ == "__main__":
+    main()

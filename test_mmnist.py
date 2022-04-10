@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from networks import BallModel
 from argument_parser import argument_parser
-from data.MovingMNIST import MovingMNIST
+from datasets.MovingMNIST import MovingMNIST
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
 from utils.visualize import ScalarLog, plot_frames, VectorLog, SaliencyMap, VecStack
@@ -46,9 +46,9 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
     if args.core == 'RIM':
         rim_actv = VecStack()
         rim_actv_mask = VecStack()
-    dec_actv = VecStack()
+    # dec_actv = VecStack()
 
-    mse = torch.nn.MSELoss()
+    mse = lambda x, y: ((x - y)**2).mean(dim=(0,1,2)).sum() # x Shape: [batch_size, T, C, H, W]
 
     model.eval()
 
@@ -58,9 +58,10 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
     ssim = 0.
     for batch_idx, data in enumerate(test_loader): # tqdm doesn't work here?
         hidden = model.init_hidden(data.shape[0]).to(args.device)
-        rim_actv.reset()
-        rim_actv_mask.reset()
-        dec_actv.reset()
+        if args.core == 'RIM':
+            rim_actv.reset()
+            rim_actv_mask.reset()
+        # dec_actv.reset()
         start_time = time()
         data = data.to(args.device)
         if data.dim()==4:
@@ -71,7 +72,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
         prediction = torch.zeros_like(data)
         blocked_prediction = torch.zeros(
             (data.shape[0],
-            args.num_units+1,
+            args.num_hidden+1,
             data.shape[1],
             data.shape[2],
             data.shape[3],
@@ -84,7 +85,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
             with torch.no_grad():
                 if not rollout:
                     output, hidden, reg_loss, intm = model(data[:, frame, :, :, :], hidden)
-                elif frame >= 5:
+                elif frame >= 10:
                     output, hidden, reg_loss, intm = model(output, hidden)
                 else:
                     output, hidden, reg_loss, intm = model(data[:, frame, :, :, :], hidden)
@@ -92,21 +93,28 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
                 intm = intm._asdict()
                 target = data[:, frame+1, :, :, :]
                 prediction[:, frame+1, :, :, :] = output
-                blocked_prediction[:, :, frame+1, :, :, :] = intm['blocked_dec']
+                blocked_prediction[:, 0, frame+1, :, :, :] = output
+                blocked_prediction[:, 1:, frame+1, :, :, :] = intm['blocked_dec']
                 loss += loss_fn(output, target)
-                mseloss += mse(output, target)
+
                 f1_frame = f1_score(target, output)
                 # writer.add_scalar(f'Metrics/F1 at Frame {frame}', f1_frame, epoch)
                 f1 += f1_frame
 
-            intm["decoder_utilization"] = dec_rim_util(model, hidden, args)
+            # intm["decoder_utilization"] = dec_rim_util(model, hidden, args)
             if args.core == 'RIM':
                 rim_actv.append(intm["input_attn"]) # shape (batchsize, num_units, 1) -> (BS, NU, T)
                 rim_actv_mask.append(intm["input_attn_mask"])
-            dec_actv.append(intm["decoder_utilization"])
-        
-        ssim += pt_ssim.ssim(data[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
-                        prediction[:,1:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
+            # dec_actv.append(intm["decoder_utilization"])
+        if not rollout:
+            ssim += pt_ssim.ssim(data[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
+                        prediction[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
+            mseloss += mse(data[:,1:,:,:,:], prediction[:,10:,:,:,:]) # Shape: [N, T, C, H, W]
+        else:
+            ssim += pt_ssim.ssim(data[:,10:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
+                        prediction[:,10:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
+            mseloss += mse(data[:,10:,:,:,:], prediction[:,10:,:,:,:]) # Shape: [N, T, C, H, W]
+            
         epoch_loss += loss.detach()
         epoch_mseloss += mseloss.detach()
         if args.device == torch.device("cpu"):
@@ -119,15 +127,23 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
     ssim = ssim / (batch_idx+1)
     f1_avg = f1 / (batch_idx+1) / (data.shape[1]-1)
 
-    metrics = {
-        'mse': epoch_mseloss,
-        'ssim': ssim,
-        'f1': f1_avg,
-        'rim_actv': rim_actv.show(),
-        'rim_actv_mask': rim_actv_mask.show(),
-        'dec_actv': dec_actv.show(),
-        'blocked_dec': blocked_prediction
-    }
+    if args.core == 'RIM':
+        metrics = {
+            'mse': epoch_mseloss,
+            'ssim': ssim,
+            'f1': f1_avg,
+            'rim_actv': rim_actv.show(),
+            'rim_actv_mask': rim_actv_mask.show(),
+            # 'dec_actv': dec_actv.show(),
+            'blocked_dec': blocked_prediction
+        }
+    else:
+        metrics = {
+            'mse': epoch_mseloss,
+            'ssim': ssim,
+            'f1': f1_avg,
+            'blocked_dec': blocked_prediction
+        }
 
     model.get_intm = previous_get_intm
     return epoch_loss, prediction, data, metrics
@@ -146,6 +162,8 @@ def dec_rim_util(model, h, args):
 
 def main():
     args = argument_parser()
+    print(f"Loading args from "+f"{args.folder_log}/model/args")
+    args.__dict__.update(torch.load(f"{args.folder_log}/model/args"))
 
     print(args)
     logbook = LogBook(config = args)
@@ -180,7 +198,7 @@ def main():
         args = args,
         loss_fn = loss_fn,
         writer = writer,
-        rollout = False,
+        rollout = True,
         epoch = epoch
     )
     test_mse = metrics['mse']
@@ -188,7 +206,7 @@ def main():
     test_ssim = metrics['ssim']
     rim_actv = metrics['rim_actv']
     rim_actv_mask = metrics['rim_actv_mask']
-    dec_actv = metrics['dec_actv']
+    # dec_actv = metrics['dec_actv']
     blocked_dec = metrics['blocked_dec']
     print(f"epoch [{epoch}] test loss: {test_loss:.4f}; test mse: {test_mse:.4f}; "+\
         f"test F1 score: {test_f1:.4f}; test SSIM: {test_ssim:.4f}")
@@ -200,7 +218,7 @@ def main():
 
     writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
     writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
-    writer.add_image('Stats/RIM Decoder Utilization', dec_actv[0], epoch, dataformats='HW')
+    # writer.add_image('Stats/RIM Decoder Utilization', dec_actv[0], epoch, dataformats='HW')
     cat_video = torch.cat(
         (data[0:4, 1:, :, :, :],prediction[0:4]),
         dim = 3 # join in height
@@ -209,7 +227,7 @@ def main():
     writer.add_video('Blocked Predictions', blocked_dec[0]) # N=num_blocks T 1 H W
 
     hidden = model.init_hidden(data.shape[0]).to(args.device)
-    writer.add_graph(model, (data[:, 0, :, :, :], hidden))
+    # writer.add_graph(model, (data[:, 0, :, :, :], hidden))
     # plot_frames(prediction, data, start_frame=1, end_frame=data.shape[1]-2, sample=[0,2,7,17,29,-1])
 
     # wait = input("Press any key to terminate program. ")

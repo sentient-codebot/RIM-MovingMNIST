@@ -15,7 +15,7 @@
             "name": "minimal: only for debugging code",
             "type": "python",
             "request": "launch",
-            "program": "./train_mmnist.py",
+            "program": "${file}",
             "console": "integratedTerminal",
             "args": [
                 "--cfg_json",
@@ -27,72 +27,52 @@
             ]
         },
         {
-            "name": "train/test mmnist complete",
+            "name": "train/test mmnist slot",
             "type": "python",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
             "args": [
                 "--cfg_json",
-                "configs/rim_complete/rim_complete.json",
+                "configs/rim/rim_slorim.json",
                 "--core",
                 "RIM",
                 "--should_resume",
                 "false",
                 "--experiment_name",
-                "MMNIST_complete",
-                "--model_persist_frequency",
+                "MMNIST_slotrim_full",
+                "--save_frequency",
                 "25",
                 "--num_units",
                 "6",
                 "--k",
-                "6"
-            ]
-        },
-        {
-            "name": "train/test mmnist modifications",
-            "type": "python",
-            "request": "launch",
-            "program": "${file}",
-            "console": "integratedTerminal",
-            "args": [
-                "--cfg_json",
-                "configs/rim_complete/rim_complete.json",
-                "--core",
-                "RIM",
-                "--should_resume",
-                "false",
-                "--experiment_name",
-                "MMNIST_ind_dec_pos_emb",
-                "--model_persist_frequency",
-                "25",
-                "--num_units",
                 "6",
-                "--k",
-                "3"
             ],
-            "env": {
+            "env":{
                 "CUDA_VISIBLE_DEVICES": "1"
             }
         },
         {
-            "name": "train/test mmnist complete: dropout",
+            "name": "train/test mmnist basic",
             "type": "python",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
             "args": [
                 "--cfg_json",
-                "configs/rim_complete/rim_complete_dropout.json",
+                "configs/rim/rim_basic.json",
                 "--core",
                 "RIM",
                 "--should_resume",
                 "false",
                 "--experiment_name",
-                "MMNIST_dropout",
-                "--model_persist_frequency",
-                "25"
-            ]
+                "MMNIST_basic",
+                "--save_frequency",
+                "25",
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "1"
+            }
         },
         {
             "name": "train/test mmnist complete - GRU",
@@ -107,7 +87,10 @@
                 "GRU",
                 "--experiment_name",
                 "MMNIST_GRU"
-            ]
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "1"
+            }
         }
     ]
 }
