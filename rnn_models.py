@@ -33,8 +33,8 @@ class blocked_grad(torch.autograd.Function):
 
 class RIMCell(nn.Module):
     def __init__(self, 
-        device, input_size, hidden_size, num_units, k, rnn_cell, input_key_size = 64, input_value_size = 400, input_query_size = 64,
-        num_input_heads = 1, input_dropout = 0.1, comm_key_size = 32, comm_value_size = 100, comm_query_size = 32, num_comm_heads = 4, comm_dropout = 0.1
+        device, input_size, hidden_size, num_units, k, rnn_cell, input_key_size = 64, input_value_size = 400,
+        num_input_heads = 1, input_dropout = 0.1, comm_key_size = 32, comm_value_size = 100, num_comm_heads = 4, comm_dropout = 0.1
     ):
         super().__init__()
         if comm_value_size != hidden_size:
@@ -49,12 +49,9 @@ class RIMCell(nn.Module):
         self.num_input_heads = num_input_heads
         self.num_comm_heads = num_comm_heads
         self.input_key_size = input_key_size
-        self.input_query_size = input_query_size
-        assert input_key_size == input_query_size, "Key and query should be of same size, no? " # they must be equal! 
         self.input_value_size = input_value_size
 
         self.comm_key_size = comm_key_size
-        self.comm_query_size = comm_query_size
         self.comm_value_size = comm_value_size
 
         if self.rnn_cell == 'GRU':
