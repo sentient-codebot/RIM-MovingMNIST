@@ -27,21 +27,21 @@
             ]
         },
         {
-            "name": "train/test mmnist modified",
+            "name": "train/test mmnist slot",
             "type": "python",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
             "args": [
                 "--cfg_json",
-                "configs/rim_complete/rim_complete.json",
+                "configs/rim/rim_slorim.json",
                 "--core",
                 "RIM",
                 "--should_resume",
                 "false",
                 "--experiment_name",
-                "MMNIST_slotrim_full_activation",
-                "--model_persist_frequency",
+                "MMNIST_slotrim_full",
+                "--save_frequency",
                 "25",
                 "--num_units",
                 "6",
@@ -53,49 +53,26 @@
             }
         },
         {
-            "name": "train/test mmnist complete",
+            "name": "train/test mmnist basic",
             "type": "python",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
             "args": [
                 "--cfg_json",
-                "configs/rim_complete/rim_complete.json",
+                "configs/rim/rim_basic.json",
                 "--core",
                 "RIM",
                 "--should_resume",
                 "false",
                 "--experiment_name",
-                "MMNIST_complete",
-                "--model_persist_frequency",
+                "MMNIST_basic",
+                "--save_frequency",
                 "25",
-                "--num_units",
-                "6",
-                "--k",
-                "6",
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "1"
             }
-        },
-        {
-            "name": "train/test mmnist complete: dropout",
-            "type": "python",
-            "request": "launch",
-            "program": "${file}",
-            "console": "integratedTerminal",
-            "args": [
-                "--cfg_json",
-                "configs/rim_complete/rim_complete_dropout.json",
-                "--core",
-                "RIM",
-                "--should_resume",
-                "false",
-                "--experiment_name",
-                "MMNIST_dropout",
-                "--model_persist_frequency",
-                "25"
-            ]
         },
         {
             "name": "train/test mmnist complete - GRU",

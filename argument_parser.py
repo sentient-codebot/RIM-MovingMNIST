@@ -23,6 +23,28 @@ def str2loss_fn(_str):
         return 'MAE'
     raise argparse.ArgumentTypeError('Unrecognized loss function type.')
 
+def str2encoder(_str):
+    _str = _str.upper()
+    if _str == 'FLATTEN':
+        return 'FLATTEN'
+    elif _str == 'NONFLATTEN':
+        return 'NONFLATTEN'
+    else:
+        raise argparse.ArgumentTypeError('Unrecognized encoder type.')
+
+def str2decoder(_str):
+    _str = _str.upper()
+    if _str == 'CAT_BASIC':
+        return 'CAT_BASIC'
+    elif _str == 'CAT_SBD':
+        return 'CAT_SBD'
+    elif _str == 'SEP_BASIC':
+        return 'SEP_BASIC'
+    elif _str == 'SEP_SBD':
+        return 'SEP_SBD'
+    else:
+        raise argparse.ArgumentTypeError('Unrecognized decoder type.')
+
 def argument_parser():
     """Function to parse all the arguments"""
 
@@ -74,8 +96,18 @@ def argument_parser():
     parser.add_argument('--input_size', type=int, default=64)
     parser.add_argument('--hidden_size', type=int, default=600, metavar='hsize',
                         help='hidden_size')
+    #   encoder settings
+    parser.add_argument('--encoder_type', type=str2encoder, default='FLATTEN',
+                        help="Type of encoder to use. 'FLATTEN' or 'NONFLATTEN'")
+    #   decoder Settings
+    parser.add_argument('--decoder_type', type=str2decoder, default='CAT_BASIC')
+    #   SlotAttention settings
+    parser.add_argument('--use_slot_attention', type=str2bool, default=False)
+    parser.add_argument('--num_slots', type=int, default=None)
+    parser.add_argument("--slot_size", type=int, default=None)
+    parser.add_argument("--num_iterations_slot", type=int, default=5)
     #   RIM settings
-    parser.add_argument('--num_units', type=int, default=6, metavar='num_blocks',
+    parser.add_argument('--num_hidden', type=int, default=6, metavar='num_blocks',
                         help='Number_of_units')
     parser.add_argument('--k', type=int, default=4, metavar='topk',
                         help='Number_of_topk_blocks')
@@ -84,7 +116,7 @@ def argument_parser():
     parser.add_argument('--num_input_heads', type=int, default=1,
                         metavar='E', help='num of heads in input attention')
     parser.add_argument('--input_dropout', type=float,
-                        default=0.5, metavar='dropout', help='dropout')
+                        default=0.1, metavar='dropout', help='dropout')
     parser.add_argument('--comm_dropout', type=float, default=0.5)
 
     parser.add_argument('--input_key_size', type=int)
@@ -102,15 +134,14 @@ def argument_parser():
 
     parser.parse_args(left_argv, args) # override JSON values with command-line values
 
-    if args.rim_dropout < 0 or args.rim_dropout > 1:
-        args.do_rim_dropout = False
-    else:
-        args.do_rim_dropout = True
-
-    args.id = f"{args.experiment_name}_"+ args.core.upper() + f"_{args.num_units}_{args.hidden_size}"+\
-        f"_dropout_{args.rim_dropout}"+\
+    # processing some arguments
+    if args.use_slot_attention:
+        if args.num_slots is None:
+            args.num_slots = args.num_hidden
+        if args.slot_size is None:
+            args.slot_size = args.hidden_size
+    args.id = f"{args.experiment_name}_"+ args.core.upper() + f"_{args.num_hidden}_{args.hidden_size}"+\
         f"_ver_{args.version}"
-
     args.folder_save = f"./saves/{args.id}"
     args.folder_log = f"./logs/{args.id}"
 

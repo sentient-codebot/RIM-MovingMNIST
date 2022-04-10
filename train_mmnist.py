@@ -145,7 +145,7 @@ def main():
             blocked_dec = metrics['blocked_dec']
             # print out stats
             print(f"epoch {epoch}/{args.epochs} | train loss: {train_loss:.4f} | test loss: {test_loss:.4f} | test mse: {test_mse:.4f} | "+\
-            f"test F1 score: {test_f1:4f} | test SSIM: {test_ssim:.4f}")
+            f"test F1 score: {test_f1:.4f} | test SSIM: {test_ssim:.4f}")
 
             writer.add_scalar(f'Metrics/MSE', test_mse, epoch)
             writer.add_scalar(f'Metrics/F1 Score', test_f1, epoch)

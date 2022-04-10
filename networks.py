@@ -1,3 +1,6 @@
+from base64 import encode
+from multiprocessing.sharedctypes import Value
+from turtle import st
 import torch
 import torch.nn as nn
 from rnn_models import RIMCell, RIM, SparseRIMCell, LayerNorm, Flatten, UnFlatten, Interpolate
@@ -16,130 +19,78 @@ Intm = namedtuple('IntermediateVariables',
         'blocked_dec',
     ])
 
-class MnistModel(nn.Module):
-    def __init__(self, args):
-        super().__init__()
-        self.args = args
-        if args['cuda']:
-            self.device = torch.device('cuda')
-        else:
-            self.device = torch.device('cpu')
-        if args['sparse']:
-            self.rim_model = SparseRIMCell(self.device, args['input_size'], args['hidden_size'], args['num_units'], args['k'], args['rnn_cell'], args['key_size_input'], args['value_size_input'] , args['query_size_input'],
-                args['num_input_heads'], args['input_dropout'], args['key_size_comm'], args['value_size_comm'], args['query_size_comm'], args['num_input_heads'], args['comm_dropout'],
-                args['a'], args['b'], args['threshold']).to(self.device)
-            self.eta_0 = torch.tensor(args['a']+args['b']-2, device=self.device)
-            self.nu_0 = torch.tensor(args['b']-1, device=self.device)
-            self.regularizer = 0. # 1 for now
-        else:
-            self.rim_model = RIMCell(self.device, args['input_size'], args['hidden_size'], args['num_units'], args['k'], args['rnn_cell'], args['key_size_input'], args['value_size_input'] , args['query_size_input'],
-                args['num_input_heads'], args['input_dropout'], args['key_size_comm'], args['value_size_comm'], args['query_size_comm'], args['num_input_heads'], args['comm_dropout']).to(self.device)
-            
-
-        self.Linear = nn.Linear(args['hidden_size'] * args['num_units'], 10)
-        self.Loss = nn.CrossEntropyLoss()
-        raise NotImplementedError('not updated. ')
-
-
-    def to_device(self, x):
-        return torch.from_numpy(x).to(self.device) if type(x) is not torch.Tensor else x.to(self.device)
-
-    def forward(self, x, y = None):
-        x = x.float()
-        
-        # initialize hidden states
-        hs = torch.randn(x.size(0), self.args['num_units'], self.args['hidden_size']).to(self.device)
-        cs = None
-        if self.args['rnn_cell'] == 'LSTM':
-            cs = torch.randn(x.size(0), self.args['num_units'], self.args['hidden_size']).to(self.device)
-
-        x = x.reshape((x.shape[0],-1))
-        xs = torch.split(x, self.args["input_size"], 1)
-
-        # pass through RIMCell for all timesteps
-        for x in xs[:-1]:
-            hs, cs, nu = self.rim_model(x, hs, cs)
-        preds = self.Linear(hs.contiguous().view(x.size(0), -1))
-
-        if y is not None:
-            # Compute Loss
-            y = y.long()
-            probs = nn.Softmax(dim = -1)(preds)
-            entropy = torch.mean(torch.sum(probs*torch.log(probs), dim = 1)) # = -entropy
-            loss = self.Loss(preds, y) - entropy # what? should be + entropy
-            if self.args['sparse']:
-                eta = self.eta_0 + y.shape[0] # eta_0 + N
-                loss = loss + self.regularizer(eta, nu)
-            return probs, loss
-        return preds
-
-
-    def grad_norm(self):
-        total_norm = 0
-        for p in self.parameters():
-            if p.grad is not None:
-                param_norm = p.grad.data.norm(2)
-                total_norm += param_norm.item() ** 2
-        total_norm = total_norm ** (1. / 2)
-        return total_norm
-
-class LSTM(nn.Module):
-    def __init__(self, args):
-        super().__init__()
-        self.args = args
-        if args['cuda']:
-            self.device = torch.device('cuda')
-        else:
-            self.device = torch.device('cpu')
-        self.hidden_size = args['hidden_size']
-        self.lstm = nn.LSTMCell(args['input_size'], self.hidden_size)
-        self.Linear = nn.Linear(self.hidden_size, 10)
-        self.Loss = nn.CrossEntropyLoss()
-        #self.optimizer = torch.optim.Adam(self.parameters(), lr = 0.0001)
-
-    def to_device(self, x):
-        return x.to(self.device)
-
-    def forward(self, x, y = None):
-        x = x.float()
-        hs = torch.randn(x.size(0), self.hidden_size).to(self.device)
-        cs = torch.randn(x.size(0), self.hidden_size).to(self.device) 
-
-        x = x.reshape((x.shape[0],-1))
-        xs = torch.split(x, self.args["input_size"], 1)
-        for x in xs:
-            # x_ = torch.squeeze(x, dim = 1)
-            hs, cs = self.lstm(x, (hs, cs))
-        preds = self.Linear(hs)
-        if y is not None:
-            y = y.long()
-            probs = nn.Softmax(dim = -1)(preds)
-            entropy = torch.mean(torch.sum(probs*torch.log(probs), dim = 1))
-            loss = self.Loss(preds, y) - entropy
-            return probs, loss
-        return preds
-
+class BasicEncoder(nn.Module):
+    """basic encoder as baseline
     
-    def grad_norm(self):
-        total_norm = 0
-        for p in self.parameters():
-            param_norm = p.grad.data.norm(2)
-            total_norm += param_norm.item() ** 2
-        total_norm = total_norm ** (1. / 2)
-        return total_norm
+    Args:
+        `do_flatten`: whether to flatten the input
+        `embedding_size`: size of the embedding
+    
+    Inputs:
+        `x`: image of shape [N, 1, 64, 64]
+    Output:
+        `output`: output of the encoder; shape: [N, embedding_size]"""
+    def __init__(self, embedding_size):
+        super().__init__()
+        self.embedding_size = embedding_size
+        self.conv_layer = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=4, stride=2),
+            nn.ELU(),
+            LayerNorm(),
+            nn.Conv2d(16, 32, kernel_size=4, stride=2),
+            nn.ELU(),
+            LayerNorm(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2),
+            nn.ELU(),
+            LayerNorm() # Shape: (batch_size, 64, 6, 6)
+        )
+        self.mlp = nn.Sequential(
+            nn.Linear(64*6*6, embedding_size),  # Shape: [N, 6*6*64] -> [N, embedding_size]
+            nn.ELU(),
+            LayerNorm(),
+        )
+    def forward(self, x):
+        x = self.conv_layer(x) # Shape: [N, 64, 6, 6]
+        x = nn.Flatten(start_dim=1)(x) # Shape: [N, 64, 6, 6] -> [N, 64*6*6]
+        x = self.mlp(x) # Shape: [N, 64*6*6] -> [N, embedding_size]
+        return x.unsqueeze(1) # Shape: [N, 1, embedding_size]
 
+class BasicDecoder(nn.Module):
+    """Basic Upsampling Conv decoder that accepts concatenated hidden state vectors to decode an image
+    
+    Args:
+        `embedding_size`: size of the embedding
+        """
+    def __init__(self, embedding_size):
+        super().__init__()
+        self.embedding_size = embedding_size
+        self.layers = nn.Sequential(
+            nn.Sigmoid(),
+            LayerNorm(),
+            nn.Linear(self.embedding_size, 4096), # Shape: [N, embedding_size] -> [N, 4096]
+            nn.ReLU(),
+            LayerNorm(),
+            UnFlatten(), # Shape: [N, 4096] -> [N, 64, 8, 8]
+            Interpolate(scale_factor=2, mode='bilinear'),
+            nn.ReplicationPad2d(2),
+            nn.Conv2d(64, 32, kernel_size=4, stride=1, padding=0),
+            nn.ReLU(),
+            LayerNorm(),
+            Interpolate(scale_factor=2, mode='bilinear'),
+            nn.ReplicationPad2d(1),
+            nn.Conv2d(32, 16, kernel_size=4, stride=1, padding=0),
+            nn.ReLU(),
+            LayerNorm(),
+            Interpolate(scale_factor=2, mode='bilinear'),
+            nn.Conv2d(16, 1, kernel_size=3, stride=1, padding=0),
+            nn.Sigmoid() # Shape; [N, 1, 64, 64]
+        )
 
-def sparse_loss(beta, gamma):
-    # NOTE: loss is defined for BATCH. so it should be the average across the whole batch
-    # beta = batch x K
-    # gamma = 1x1
-    if beta.dim() > 2:
-        raise IndexError('expect beta to be (BatchSize, K)')
-    loss_sum = -gamma*torch.sum(beta/(2*gamma*beta-gamma-beta+1)*torch.log(beta/(2*gamma*beta-gamma-beta+1)), dim=1)
-    loss = torch.mean(loss_sum)
-    return loss
+    def forward(self, x):
+        x = self.layers(x)
+        return x
 
-class SlotEncoder(nn.Module):
+class NonFlattenEncoder(nn.Module):
     """nn.Module for slot attention encoder
     
     Args:
@@ -193,20 +144,32 @@ class BallModel(nn.Module):
     def __init__(self, args):
         super().__init__()
         self.args = args
-        # self.input_size = args.hidden_size * args.num_units # NOTE dimension of encoded input. not clearly mentioned in paper
         self.input_size = args.input_size
-        self.output_size = args.hidden_size * args.num_units
-        self.slot_size = args.hidden_size
-        self.num_iterations = args.num_iterations
-        self.num_slots = args.num_units
-        self.num_inputs = 36 # output of SlotEncoder
-        self.core = args.core.upper()
-        self.sparse = self.args.sparse
-        self.get_intm = False
-        self.slot_input = True
+        self.hidden_size = args.hidden_size
+        self.num_hidden = args.num_hidden # == num_rims
 
-        self.Encoder = SlotEncoder(self.input_size).to(self.args.device)
-        if self.slot_input:
+        self.slot_size = args.slot_size
+        self.num_iterations = args.num_iterations_slot
+        self.num_slots = args.num_slots
+
+        self.core = args.core.upper()
+        self.sparse = False
+        self.get_intm = False
+        self.use_slot_attention = args.use_slot_attention
+        self.encoder_type = args.encoder_type
+        self.decoder_type = args.decoder_type
+
+        if self.encoder_type == "FLATTEN":
+            self.encoder = BasicEncoder(embedding_size=self.input_size).to(self.args.device) # Shape: [batch_size, num_inputs, input_size]
+            self.num_inputs = 1 # output of BasicFlattenEncoder
+        elif self.encoder_type == "NONFLATTEN":
+            self.encoder = NonFlattenEncoder(self.input_size).to(self.args.device) # Shape: [batch_size, num_inputs, input_size]
+            self.num_inputs = 36 # output of NonFlattenEncoder
+        else:
+            raise ValueError("Invalid encoder type")
+
+        self.slot_attention = None
+        if self.use_slot_attention:
             self.slot_attention = SlotAttention(
                 num_iterations=self.num_iterations,
                 num_slots=self.num_slots,
@@ -214,37 +177,35 @@ class BallModel(nn.Module):
                 mlp_hidden_size=128,
                 epsilon=1e-8,
                 input_size=self.input_size,
-            ).to(self.args.device)
-        self.Decoder = None
-        # self.make_decoder()
-        self.Decoder = WrappedDecoder(args.hidden_size, decoder='transconv').to(self.args.device)
+            ).to(self.args.device) # Shape: [batch_size,num_inputs, input_size] -> [batch_size, num_slots, slot_size]
 
-
-        self.rim_dropout = None
-        if self.args.do_rim_dropout:
-            self.rim_dropout = GroupDropout(p=args.rim_dropout).to(self.args.device) # TODO later test different probs for different modules
+        if args.decoder_type == "CAT_BASIC":
+            self.decoder = BasicDecoder(embedding_size=self.num_hidden*self.hidden_size).to(self.args.device) # Shape: [batch_size, num_units*hidden_size] -> [batch_size, 1, 64, 64]
+        elif args.decoder_type == "SEP_SBD":
+            self.decoder = WrappedDecoder(self.hidden_size, decoder='transconv').to(self.args.device) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
+        else:
+            raise NotImplementedError("Not implemented decoder type: {}".format(args.decoder_type))
 
         if self.core == 'RIM':
             if not self.sparse:
                 self.rnn_model = RIMCell(
                                         device=self.args.device,
-                                        input_size=self.slot_size if self.slot_input else self.input_size, # NOTE: non-sensetive to num_inputs
-                                        num_units=self.args.num_units,
+                                        input_size=self.slot_size if self.use_slot_attention else self.input_size, # NOTE: non-sensetive to num_inputs
+                                        num_units=self.num_hidden,
                                         hidden_size=self.args.hidden_size,
                                         k=self.args.k,
                                         rnn_cell='GRU', # defalt GRU
                                         input_key_size=self.args.input_key_size,
                                         input_value_size=self.args.input_value_size,
-                                        input_query_size = self.args.input_query_size,
                                         num_input_heads = self.args.num_input_heads,
                                         input_dropout = self.args.input_dropout,
                                         comm_key_size = self.args.comm_key_size,
                                         comm_value_size = self.args.comm_value_size, 
-                                        comm_query_size = self.args.comm_query_size, 
                                         num_comm_heads = self.args.num_comm_heads, 
                                         comm_dropout = self.args.comm_dropout
                 ).to(self.args.device)
             else:
+                raise NotImplementedError('Sparse RIM not updated with new args yet')
                 self.rnn_model = SparseRIMCell(
                                         device=self.args.device,
                                         input_size=self.slot_size if self.slot_input else self.input_size, 
@@ -266,10 +227,9 @@ class BallModel(nn.Module):
                                         nu_0 = 2,
                                         N = self.args.batch_size
                 ).to(self.args.device)
-
         elif self.core == 'GRU':
             self.rnn_model = nn.GRU(
-                                    input_size=self.slot_size*self.num_slots if self.slot_input else self.input_size*self.num_inputs, # NOTE: sensetive to num_inputs
+                                    input_size=self.slot_size*self.num_slots if self.use_slot_attention else self.input_size*self.num_inputs, # NOTE: sensetive to num_inputs
                                     hidden_size=self.args.hidden_size * self.args.num_units,
                                     num_layers=1,
                                     batch_first=True,
@@ -279,90 +239,34 @@ class BallModel(nn.Module):
         else:
             raise ValueError('Illegal RNN Core')
 
-    def make_encoder(self):
-        """Method to initialize the encoder"""
-        print(self.input_size)
-        return nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=4, stride=2),
-            nn.ELU(),
-            LayerNorm(),
-            nn.Conv2d(16, 32, kernel_size=4, stride=2),
-            nn.ELU(),
-            LayerNorm(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2),
-            nn.ELU(),
-            LayerNorm(),
-            Flatten(), # Shape: (batch_size, 64, 6, 6)
-            nn.Linear(2304, self.input_size),
-            nn.ELU(),
-            LayerNorm(),
-        )
-    
-    
-
-
-    
-    def make_decoder(self):
-        """Method to initialize the decoder"""
-        self.Decoder = nn.Sequential(
-            nn.Sigmoid(),
-            LayerNorm(),
-            nn.Linear(self.output_size, 4096),
-            nn.ReLU(),
-            LayerNorm(),
-            UnFlatten(),
-            Interpolate(scale_factor=2, mode='bilinear'),
-            nn.ReplicationPad2d(2),
-            nn.Conv2d(64, 32, kernel_size=4, stride=1, padding=0),
-            nn.ReLU(),
-            LayerNorm(),
-            Interpolate(scale_factor=2, mode='bilinear'),
-            nn.ReplicationPad2d(1),
-            nn.Conv2d(32, 16, kernel_size=4, stride=1, padding=0),
-            nn.ReLU(),
-            LayerNorm(),
-            Interpolate(scale_factor=2, mode='bilinear'),
-            nn.Conv2d(16, 1, kernel_size=3, stride=1, padding=0),
-            nn.Sigmoid()
-        ).to(self.args.device)
-
     def forward(self, x, h_prev):
         ctx = None
-        encoded_input = self.Encoder(x) # Shape: (batch_size, 6*6, self.input_size)
-        if self.slot_input:
-            slotted_input = self.slot_attention(encoded_input) # Shape: [batch_size, num_slots, slot_size]
-
-        if self.rim_dropout is not None:
-            h_prev = self.rim_dropout(h_prev)
+        encoded_input = self.encoder(x) # Shape: (batch_size, 6*6, self.input_size) OR [batch_size, 1, self.input_size]
+        if self.use_slot_attention:
+            encoded_input = self.slot_attention(encoded_input) # Shape: [batch_size, num_slots, slot_size]
 
         reg_loss = 0.
         if self.core=='RIM':
             if not self.sparse:
-                if not self.slot_input:
-                    h_new, foo, bar, ctx = self.rnn_model(encoded_input, h_prev) # NOTE first experiment: no slot but spatial flatten
-                else:
-                    h_new, foo, bar, ctx = self.rnn_model(slotted_input, h_prev) # NOTE first experiment: slot 
+                h_new, foo, bar, ctx = self.rnn_model(encoded_input, h_prev) 
             else:
                 raise NotImplementedError('Sparse RIM not configured for slot input yet')
-                h_new, foo, bar, ctx, reg_loss = self.rnn_model(encoded_input, h_prev)
         elif self.core=='GRU':
             h_shape = h_prev.shape # Shape: [batch_size, num_units, hidden_size]
             h_prev = h_prev.reshape((h_shape[0],-1)) # flatten, Shape: [batch_size, num_units*hidden_size]
-            if not self.slot_input:
-                _, h_new = self.rnn_model(encoded_input.unsqueeze(1), 
-                                            h_prev.unsqueeze(0))
-            else:
-                _, h_new = self.rnn_model(slotted_input.flatten(start_dim=1).unsqueeze(1), 
-                                            h_prev.unsqueeze(0))
+            _, h_new = self.rnn_model(encoded_input.flatten(start_dim=1).unsqueeze(1), # input shape: [N, 1, num_inputs*input_size|slot_size]
+                                        h_prev.unsqueeze(0)) # h shape: [1, N, num_units*hidden_size]
             h_new = h_new.reshape(h_shape)
         elif self.core=='LSTM':
-            raise ValueError('LSTM core not implemented yet!')
+            raise NotImplementedError('LSTM core not implemented yet!')
         
-        # dec_out_ = self.Decoder(h_new.view(h_new.shape[0],-1))
-        dec_out_, channels, alpha_mask = self.Decoder(h_new)
         blocked_out_ = torch.zeros(1).to(x.device)
-        if self.get_intm:
-            blocked_out_ = channels*alpha_mask
+        if "SEP" in self.decoder_type:
+            dec_out_, channels, alpha_mask = self.decoder(h_new)
+            if self.get_intm:
+                blocked_out_ = channels*alpha_mask
+        else:
+            dec_out_ = self.decoder(h_new.view(h_new.shape[0],-1)) # Shape: [batch_size, 1, 64, 64]
 
         if ctx is not None:
             intm = Intm(input_attn=ctx.input_attn, 
@@ -378,9 +282,8 @@ class BallModel(nn.Module):
         return dec_out_, h_new, reg_loss, intm
 
     def init_hidden(self, batch_size): 
-        # assert False, "don't call this"
         return torch.rand((batch_size, 
-            self.args.num_units, 
+            self.args.num_hidden, 
             self.args.hidden_size), 
             requires_grad=False)
 
@@ -389,27 +292,10 @@ class BallModel(nn.Module):
         if nan_mask.any():
             raise RuntimeError(f"Found NAN in {self.__class__.__name__}: ", nan_mask.nonzero(), "where:", out[nan_mask.nonzero()[:, 0].unique(sorted=True)])
 
-    @torch.no_grad()
-    def partial_blocked_decoder(self, h):
-        out_list_ = [self.Decoder(h.view(h.shape[0],-1)).unsqueeze(1)] # all-pass
-        for block_idx in range(h.shape[1]):
-            mask = torch.zeros((h.shape[0],h.shape[1],1), device=self.args.device)
-            mask[:, block_idx, :] = 1
-            h_masked = h * mask - (1-mask) * 1e-7 # mask==1 -> no change, mask==0 -> 1e-7
-            out_ = self.Decoder(h_masked.view(h.shape[0],-1)) # (BS, 1, 64, 64)
-            out_list_.append(out_.unsqueeze(1))
-        out_ = torch.cat(out_list_, dim=1) # (BS, num_blocks, 1, 64, 64)
-        return out_
-
-def clamp(input_tensor):
-    return torch.clamp(input_tensor, min=-1e6, max=1e6)
 
 def main():
     gamma = 0.1
-    K = 6
-    beta = torch.rand(10,6)
-    sparse_l = sparse_loss(beta, gamma)
-    print(f'sparse regularization loss is {sparse_l}')
+    pass
 
 class SpatialFlatten(nn.Module):
     def forward(self, input):
@@ -433,7 +319,7 @@ class SlotAttentionAutoEncoder(nn.Module):
         self.num_iterations = num_iterations
         self.num_slots = num_slots
         self.slot_size = slot_size
-        self.Encoder = SlotEncoder(input_size=self.input_size) # output shape: [batch_size, num_inputs, input_size]
+        self.Encoder = NonFlattenEncoder(input_size=self.input_size) # output shape: [batch_size, num_inputs, input_size]
         self.slot_attention = SlotAttention(
                 num_iterations=self.num_iterations,
                 num_slots=self.num_slots,
@@ -455,71 +341,6 @@ class SlotAttentionAutoEncoder(nn.Module):
         slot_attn = self.slot_attention(encoded_input)
         fused, channels, alpha_mask = self.Decoder(slot_attn)
         return fused
-
-class BlockPVRModel(nn.Module):
-    """Model for block style pointer value retrieval style task. 
-    
-    Args:
-        `args`: a Namespace object containing the following attributes:
-            `num_units`: number of units in the RNN cell
-            `hidden_size`: size of the hidden state of the RNN cell
-            `num_blocks`: number of blocks in the RNN cell
-            `num_iterations`: number of iterations in the SlotAttention module
-    
-    Inputs:
-        `x`: batch of images of shape: [batch_size, 3, 80, 80]
-        
-    Outputs:
-        `output`: batch of one hot vectors of shape: [batch_size, C]"""
-    def __init__(self, args):
-        super().__init__()
-        self.args = args
-        
-        self.input_size = args.input_size
-        self.num_units = args.num_units
-        self.hidden_size = args.hidden_size
-        self.num_classes = args.num_classes
-        
-
-        # Network Components: encoder -> iteration of rims -> mlp 
-        self.encoder = SlotEncoder(self.input_size).to(self.args.device) # [N, C, 80, 80] -> [batch_size, ?*?, input_size]
-        self.rnn_model = RIM(
-            device = args.device,
-            input_size = self.input_size,
-            hidden_size = self.hidden_size,
-            num_units = self.num_units,
-            k = self.args.k,
-            rnn_cell = self.args.rnn_cell,
-            num_iterations = self.args.num_iterations,
-            input_key_size=self.args.input_key_size,
-            input_value_size=self.args.input_value_size,
-            input_query_size = self.args.input_query_size,
-            num_input_heads = self.args.num_input_heads,
-            input_dropout = self.args.input_dropout,
-            comm_key_size = self.args.comm_key_size,
-            comm_value_size = self.args.comm_value_size, 
-            comm_query_size = self.args.comm_query_size, 
-            num_comm_heads = self.args.num_comm_heads, 
-            comm_dropout = self.args.comm_dropout
-        ) # ([N, num_units, hidden_size], [N, 6*6, input_size]) -> [N, num_units, hidden_size]
-        self.fc = nn.Sequential(
-            nn.Linear(self.num_units*self.hidden_size, self.num_classes),
-            nn.Softmax(dim=1),
-            nn.ReLU(),
-        )
-
-    def forward(self, x):
-        """Forward pass of the model.
-        
-        Args:
-            `x`: batch of images of shape: [batch_size, 3, 80, 80]
-            
-        Returns:
-            `output`: a one hot tensor with shape [batch_size, C], C being number of classes."""
-        encoded_input = self.encoder(x)
-        rim_vectors = self.rnn_model(encoded_input) # internally iterate few times
-        output = self.fc(rim_vectors.view(rim_vectors.shape[0],-1))
-        return output
 
 if __name__ == "__main__":
     main()
