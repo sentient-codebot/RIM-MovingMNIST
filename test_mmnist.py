@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from networks import BallModel
 from argument_parser import argument_parser
-from data.MovingMNIST import MovingMNIST
+from datasets.MovingMNIST import MovingMNIST
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
 from utils.visualize import ScalarLog, plot_frames, VectorLog, SaliencyMap, VecStack

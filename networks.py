@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from rnn_models import RIMCell, SparseRIMCell, LayerNorm, Flatten, UnFlatten, Interpolate
+from rnn_models import RIMCell, RIM, SparseRIMCell, LayerNorm, Flatten, UnFlatten, Interpolate
 from group_operations import GroupDropout
 from collections import namedtuple
 import numpy as np
@@ -456,6 +456,70 @@ class SlotAttentionAutoEncoder(nn.Module):
         fused, channels, alpha_mask = self.Decoder(slot_attn)
         return fused
 
+class BlockPVRModel(nn.Module):
+    """Model for block style pointer value retrieval style task. 
+    
+    Args:
+        `args`: a Namespace object containing the following attributes:
+            `num_units`: number of units in the RNN cell
+            `hidden_size`: size of the hidden state of the RNN cell
+            `num_blocks`: number of blocks in the RNN cell
+            `num_iterations`: number of iterations in the SlotAttention module
+    
+    Inputs:
+        `x`: batch of images of shape: [batch_size, 3, 80, 80]
+        
+    Outputs:
+        `output`: batch of one hot vectors of shape: [batch_size, C]"""
+    def __init__(self, args):
+        super().__init__()
+        self.args = args
+        
+        self.input_size = args.input_size
+        self.num_units = args.num_units
+        self.hidden_size = args.hidden_size
+        self.num_classes = args.num_classes
+        
+
+        # Network Components: encoder -> iteration of rims -> mlp 
+        self.encoder = SlotEncoder(self.input_size).to(self.args.device) # [N, C, 80, 80] -> [batch_size, ?*?, input_size]
+        self.rnn_model = RIM(
+            device = args.device,
+            input_size = self.input_size,
+            hidden_size = self.hidden_size,
+            num_units = self.num_units,
+            k = self.args.k,
+            rnn_cell = self.args.rnn_cell,
+            num_iterations = self.args.num_iterations,
+            input_key_size=self.args.input_key_size,
+            input_value_size=self.args.input_value_size,
+            input_query_size = self.args.input_query_size,
+            num_input_heads = self.args.num_input_heads,
+            input_dropout = self.args.input_dropout,
+            comm_key_size = self.args.comm_key_size,
+            comm_value_size = self.args.comm_value_size, 
+            comm_query_size = self.args.comm_query_size, 
+            num_comm_heads = self.args.num_comm_heads, 
+            comm_dropout = self.args.comm_dropout
+        ) # ([N, num_units, hidden_size], [N, 6*6, input_size]) -> [N, num_units, hidden_size]
+        self.fc = nn.Sequential(
+            nn.Linear(self.num_units*self.hidden_size, self.num_classes),
+            nn.Softmax(dim=1),
+            nn.ReLU(),
+        )
+
+    def forward(self, x):
+        """Forward pass of the model.
+        
+        Args:
+            `x`: batch of images of shape: [batch_size, 3, 80, 80]
+            
+        Returns:
+            `output`: a one hot tensor with shape [batch_size, C], C being number of classes."""
+        encoded_input = self.encoder(x)
+        rim_vectors = self.rnn_model(encoded_input) # internally iterate few times
+        output = self.fc(rim_vectors.view(rim_vectors.shape[0],-1))
+        return output
 
 if __name__ == "__main__":
     main()

@@ -13,7 +13,7 @@ from utils.util import set_seed, make_dir
 from utils.visualize import ScalarLog, VectorLog, HeatmapLog
 from utils.metric import f1_score
 import utils.pssim.pytorch_ssim as pt_ssim
-from data.MovingMNIST import MovingMNIST
+from datasets.MovingMNIST import MovingMNIST
 from tqdm import tqdm
 from test_mmnist import dec_rim_util, test
 
