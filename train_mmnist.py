@@ -6,6 +6,7 @@ import numpy as np
 import torch 
 from torch import autograd
 from torch.utils.tensorboard import SummaryWriter
+import wandb
 
 from networks import BallModel
 from argument_parser import argument_parser
@@ -79,6 +80,10 @@ def main():
             "args": vars(args)
         }, f"{args.folder_save}/args/args")
 
+    # wandb setup
+    project, name = args.experiment_name.split('_',1)
+    wandb.init(project=project, name=name, config=vars(args), entity='nan-team')
+
     # data setup
     train_set = MovingMNIST(root='./data', train=True, download=True, mini=False)
     test_set = MovingMNIST(root='./data', train=False, download=True)
@@ -147,9 +152,12 @@ def main():
             print(f"epoch {epoch}/{args.epochs} | train loss: {train_loss:.4f} | test loss: {test_loss:.4f} | test mse: {test_mse:.4f} | "+\
             f"test F1 score: {test_f1:.4f} | test SSIM: {test_ssim:.4f}")
 
+            # tensorboard
+
             writer.add_scalar(f'Metrics/MSE', test_mse, epoch)
             writer.add_scalar(f'Metrics/F1 Score', test_f1, epoch)
             writer.add_scalar(f'Metrics/SSIM', test_ssim, epoch)
+            
 
             if args.core == 'RIM':
                 writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
@@ -160,11 +168,35 @@ def main():
                 dim = 3 # join in height
             ) # N T C H W
             writer.add_video('Predicted Videos', cat_video, epoch)
-            writer.add_video('Blocked Predictions', blocked_dec[0], epoch) # N=num_blocks T 1 H W
+            writer.add_video('Individual Predictions', blocked_dec[0], epoch) # N=num_blocks T 1 H W
+
+            # wandb
+            metric_dict = {
+                'MSE': test_mse,
+                'F1 Score': test_f1,
+                'SSIM': test_ssim
+            }
+            stat_dict = {
+                'RIM Input Attention': wandb.Image(rim_actv[0].cpu()*256),
+                'RIM Activation Mask': wandb.Image(rim_actv_mask[0].cpu()*256),
+            }
+            video_dict = {
+                'Predicted Videos': wandb.Video(cat_video.cpu()*256, fps=4),
+                'Individual Predictions': wandb.Video(blocked_dec[0].cpu()*256, fps=4),
+            }
+            wandb.log({
+                'Loss': loss_dict,
+                'Metrics': metric_dict,
+                'Stats': stat_dict,
+                'Videos': video_dict,
+            }, step=epoch)
         else:
             print(f"epoch {epoch}/{args.epochs} | "+\
                 f"train loss: {train_loss:.4f}"
             )
+            wandb.log({
+                'Loss': loss_dict,
+            }, step=epoch)
         writer.add_scalars(f'Loss/{args.loss_fn.upper()}', 
             loss_dict, 
             epoch

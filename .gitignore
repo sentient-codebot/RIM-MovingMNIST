@@ -135,5 +135,6 @@ utils/test_variable
 
 nohup_out/
 runs/
+wandb/
 
 saves/

@@ -14,6 +14,7 @@ from utils.util import set_seed, make_dir
 from utils.visualize import ScalarLog, plot_frames, VectorLog, SaliencyMap, VecStack
 from utils.metric import f1_score
 from tqdm import tqdm
+import wandb
 
 import utils.pssim.pytorch_ssim as pt_ssim
 
@@ -162,11 +163,12 @@ def dec_rim_util(model, h, args):
 
 def main():
     args = argument_parser()
-    print(f"Loading args from "+f"{args.folder_log}/model/args")
-    args.__dict__.update(torch.load(f"{args.folder_log}/model/args"))
+    print(f"Loading args from "+f"{args.folder_log}/args/args")
+    args.__dict__.update(torch.load(f"{args.folder_save}/args/args"))
 
+    project, name = args.experiment_name.split('_',1)
+    wandb.init(project=project, name=name+'_test', config=vars(args), entity='nan-team')
     print(args)
-    logbook = LogBook(config = args)
 
     if not args.should_resume:
         args.should_resume = True
@@ -174,7 +176,7 @@ def main():
     cudable = torch.cuda.is_available()
     args.device = torch.device("cuda" if cudable else "cpu")
 
-    model, epoch = setup_model(args=args, logbook=logbook)
+    model, epoch = setup_model(args=args)
 
     args.directory = './data' # dataset directory
     test_set = MovingMNIST(root='./data', train=False, download=True)
@@ -226,21 +228,37 @@ def main():
     writer.add_video('Predicted Videos', cat_video, epoch)
     writer.add_video('Blocked Predictions', blocked_dec[0]) # N=num_blocks T 1 H W
 
-    hidden = model.init_hidden(data.shape[0]).to(args.device)
-    # writer.add_graph(model, (data[:, 0, :, :, :], hidden))
-    # plot_frames(prediction, data, start_frame=1, end_frame=data.shape[1]-2, sample=[0,2,7,17,29,-1])
+    # wandb
+    metric_dict = {
+        'MSE': test_mse,
+        'F1 Score': test_f1,
+        'SSIM': test_ssim
+    }
+    stat_dict = {
+        'RIM Input Attention': wandb.Image(rim_actv[0].cpu()*256),
+        'RIM Activation Mask': wandb.Image(rim_actv_mask[0].cpu()*256),
+    }
+    video_dict = {
+        'Predicted Videos': wandb.Video(cat_video.cpu()*256, fps=4),
+        'Individual Predictions': wandb.Video(blocked_dec[0].cpu()*256, fps=4),
+    }
+    wandb.log({
+        'Loss': {'test loss': test_loss},
+        'Metrics': metric_dict,
+        'Stats': stat_dict,
+        'Videos': video_dict,
+    }, step=epoch)
 
-    # wait = input("Press any key to terminate program. ")
     writer.close()
 
     return None
         
-def setup_model(args, logbook) -> torch.nn.Module:
+def setup_model(args) -> torch.nn.Module:
     model = BallModel(args)
     
     if args.should_resume:
         # Find the last checkpointed model and resume from that
-        model_dir = f"{args.folder_log}/checkpoints"
+        model_dir = f"{args.folder_save}/checkpoints"
         latest_model_idx = max(
             [int(model_idx) for model_idx in listdir(model_dir)
              if model_idx != "args"]
@@ -253,7 +271,7 @@ def setup_model(args, logbook) -> torch.nn.Module:
         model.load_state_dict(checkpoint['model_state_dict'])
         epoch = checkpoint['epoch']
     
-        logbook.write_message_logs(message=f"Resuming experiment id: {args.id} from epoch: {args.checkpoint}")
+        print(f"Resuming experiment id: {args.id} from epoch: {args.checkpoint}")
 
     return model, epoch
 
