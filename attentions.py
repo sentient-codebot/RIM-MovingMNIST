@@ -76,8 +76,8 @@ class InputAttention(Attention):
         query = self.transpose_for_scores(query, self.num_heads, self.kdim)
 
         attention_scores = torch.matmul(query, key.transpose(-1, -2)) / math.sqrt(self.kdim) 
-        attention_scores = torch.mean(attention_scores, dim = 1)
-        attention_probs = nn.Softmax(dim = 1)(attention_scores) # (batch_size, num_slots, num_inputs=2) NOTE for each input, rims compete with each other
+        attention_scores = torch.mean(attention_scores, dim = 1) # 
+        attention_probs = nn.Softmax(dim = 1)(attention_scores) # (batch_size, num_query, num_key) NOTE for each input, rims compete with each other
 
         # For each rim, give them normalized summation weights (for each rim, the weights all sum to 1) NOTE is this necessary? 
         attention_probs = attention_probs + self.epsilon # in case of unstability
@@ -99,6 +99,51 @@ class InputAttention(Attention):
         #     out_probs = 1.-attention_probs[:,:, -1]
 
         return inputs, mask_, not_null_probs.detach()
+
+class PositionAttention(Attention):
+    def __init__(self, 
+        input_size,
+        hidden_size, 
+        kdim,
+        vdim,
+        num_heads,
+        num_hidden,
+        dropout,
+        epsilon=1e-8
+        ):
+        super().__init__(dropout)
+        self.num_heads = num_heads
+        self.kdim = kdim
+        self.vdim = vdim
+        self.num_hidden = num_hidden
+
+        self.key = nn.Linear(input_size, num_heads * kdim, bias=False)
+        self.value = nn.Linear(input_size, num_heads * vdim, bias=False)
+        self.query = GroupLinearLayer(hidden_size, kdim * num_heads, num_hidden)
+        self.dropout = nn.Dropout(p = dropout)
+        self.epsilon = epsilon
+
+    def forward(self, x, h):
+        """
+        Input:
+            `x`: input tensor of shape (batch_size, num_inputs, input_size)
+            `h`: hidden state of shape (batch_size, num_hidden, hidden_size)
+        """
+        key = self.key(x) # Shape: [batch_size, num_heads, kdim]
+        value = self.value(x)
+        query = self.query(h)
+
+        key = self.transpose_for_scores(key, self.num_heads, self.kdim)
+        value = torch.mean(self.transpose_for_scores(value,  self.num_heads, self.vdim), dim = 1)
+        query = self.transpose_for_scores(query, self.num_heads, self.kdim)
+
+        attention_scores = torch.matmul(query, key.transpose(-1, -2)) / math.sqrt(self.kdim) 
+        attention_scores = torch.mean(attention_scores, dim = 1) # Shape: (batch_size, num_queries, num_keys)
+        attention_probs = nn.Softmax(dim = 2)(attention_scores) # (batch_size, num_queries, num_keys) NOTE for each query, positions compete with each other
+
+        output = torch.matmul(self.dropout(attention_probs), value) 
+
+        return output, attention_probs
 
 class PriorSampler():
     """

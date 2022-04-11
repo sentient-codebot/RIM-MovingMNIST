@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from group_operations import GroupLinearLayer, GroupTorchGRU, GroupLSTMCell
-from attentions import InputAttention, CommAttention, SparseInputAttention
+from attentions import InputAttention, CommAttention, SparseInputAttention, PositionAttention
 
 
 Ctx = namedtuple('RunningContext',
@@ -74,6 +74,141 @@ class RIMCell(nn.Module):
 
         self.communication_attention = CommAttention(
             hidden_size, comm_key_size, num_comm_heads, num_units, comm_dropout
+        )
+
+
+    def transpose_for_scores(self, x, num_attention_heads, attention_head_size):
+        new_x_shape = x.size()[:-1] + (num_attention_heads, attention_head_size)
+        x = x.view(*new_x_shape)
+        return x.permute(0, 2, 1, 3)
+
+    def nan_hook(self, out):
+        nan_mask = torch.isnan(out)
+        if nan_mask.any():
+            print("In", self.__class__.__name__)
+            raise RuntimeError(f"Found NAN in output: ", nan_mask.nonzero(), "where:", out[nan_mask.nonzero()[:, 0].unique(sorted=True)])
+
+    def inf_hook(self, _tensor):
+        inf_mask = torch.isinf(_tensor)
+        if inf_mask.any():
+            raise RuntimeError(f"Found NAN in {self.__class__.__name__}: ", inf_mask.nonzero(), "where:", _tensor[inf_mask.nonzero()[:, 0].unique(sorted=True)])
+
+    def forward(self, x, hs, cs = None, get_intm=False):
+        """
+        Input : x (batch_size, num_inputs, input_size)
+                hs (batch_size, num_units, hidden_size)
+                cs (batch_size, num_units, hidden_size)
+        Output: new hs, cs for LSTM
+                new hs for GRU
+        """
+        size = x.size()
+        if x.dim() == 2: # Shape: (batch_size, input_size)
+            null_input = torch.zeros(size[0], 1, size[1]).float().to(self.device)
+            x = torch.cat((x.unsqueeze(1), null_input), dim = 1) # Shape: [batch_size, 1+1, input_size]
+        elif x.dim() == 3: # Shape: [batch_size, num_inputs, input_size]
+            null_input =  torch.zeros(size[0], 1, size[2]).float().to(self.device)
+            x = torch.cat((x, null_input), dim = 1) # Shape: [batch_size, num_inputs+1, input_size]
+        else:
+            raise RuntimeError("Invalid input size")
+
+        # Compute input attention
+        inputs, mask, attn_score = self.input_attention_mask(x, hs)
+        h_old = hs * 1.0
+        if cs is not None:
+            c_old = cs * 1.0
+        
+        # Compute RNN(LSTM or GRU) output
+        
+        if cs is not None:
+            hs, cs = self.rnn(inputs, (hs, cs))
+        else:
+            hs = self.rnn(inputs, hs)
+
+        # Block gradient through inactive units
+        mask = mask.unsqueeze(2).detach()
+        h_new = blocked_grad.apply(hs, mask)
+
+        # Compute communication attention
+        context = self.communication_attention(h_new, mask.squeeze(2))
+        h_new = h_new + context
+
+        # Prepare the context/intermediate value
+        ctx = Ctx(input_attn=attn_score,
+            input_attn_mask=mask.squeeze()
+            )
+
+        # Update hs and cs and return them
+        hs = mask * h_new + (1 - mask) * h_old
+        if cs is not None:
+            cs = mask * cs + (1 - mask) * c_old
+            return hs, cs, None, mask
+        return hs, None, None, ctx
+
+class FastSCOFF(nn.Module):
+    """SCOFF with NPS-like way selection mechanism. 
+    All hidden states are updated. 
+
+    Terms:
+        a rule = an independent GRU
+        a hidden state = a recurrent state vector
+    Args:
+
+    
+    """
+    def __init__(self, 
+        device, input_size, hidden_size, num_hidden, num_rules, k, rnn_cell, rule_embedding_size=64, input_key_size = 64, input_value_size = 400,
+        num_input_heads = 1, input_dropout = 0.1, comm_key_size = 32, comm_value_size = 100, num_comm_heads = 4, comm_dropout = 0.1
+    ):
+        super().__init__()
+        if comm_value_size != hidden_size:
+            #print('INFO: Changing communication value size to match hidden_size')
+            comm_value_size = hidden_size
+        self.device = device
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.num_hidden = num_hidden
+        self.num_rules = num_rules
+        self.rnn_cell = rnn_cell
+        self.key_size = input_key_size
+        self.k = k
+        self.num_input_heads = num_input_heads
+        self.num_comm_heads = num_comm_heads
+        self.input_key_size = input_key_size
+        self.input_value_size = input_value_size
+
+        self.comm_key_size = comm_key_size
+        self.comm_value_size = comm_value_size
+
+        self.rule_embedding_size = rule_embedding_size
+        self.rule_embeddings = nn.parameter.Parameter(
+            data = torch.randn(self.num_rules, self.rule_embedding_size),
+        )
+        if self.rnn_cell == 'GRU':
+            self.rules = nn.ModuleList(
+                [nn.GRU(input_size=self.input_size, 
+                            hidden_size=self.hidden_size,
+                            num_layers=1,
+                            batch_first=True,
+                            bidirectional=False
+                ) for _ in range(self.num_rules)]
+            )
+        else:
+            raise NotImplementedError("Only GRU rnn_cell is supported")
+        
+        # attentions
+        self.position_attention= PositionAttention(
+            input_size=self.input_size,
+            hidden_size=self.hidden_size,
+            kdim=self.input_key_size,
+            vdim=self.input_value_size,
+            num_heads=self.num_input_heads,
+            num_hidden=self.num_hidden,
+            dropout=input_dropout,
+            epsilon=1e-8
+        ) # output shape: [batch_size, num_hidden, input_value_size]
+
+        self.communication_attention = CommAttention(
+            hidden_size, comm_key_size, num_comm_heads, num_hidden, comm_dropout
         )
 
 
