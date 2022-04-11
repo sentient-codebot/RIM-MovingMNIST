@@ -165,7 +165,7 @@ def main():
             # writer.add_image('Stats/RIM Decoder Utilization', dec_actv[0], epoch, dataformats='HW')
             cat_video = torch.cat(
                 (data[0:4, 1:, :, :, :],prediction[0:4]),
-                dim = 3 # join in height
+                dim = 4 # join in width
             ) # N T C H W
             writer.add_video('Predicted Videos', cat_video, epoch)
             writer.add_video('Individual Predictions', blocked_dec[0], epoch) # N=num_blocks T 1 H W
