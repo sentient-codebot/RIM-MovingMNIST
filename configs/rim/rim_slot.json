@@ -33,6 +33,6 @@
     "use_slot_attention"        : true,
     "slot_size"                 : 100,
     "num_slots"                 : 6,
-    "num_iterations_slot"       : 5
+    "num_iterations_slot"       : 3
 
 }
