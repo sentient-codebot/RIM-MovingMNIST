@@ -29,7 +29,7 @@ class Interpolate(nn.Module):
         x = self.interp(x, scale_factor=self.scale_factor, mode=self.mode, align_corners=False)
         return x
 
-def make_decoder_transconv():
+def make_decoder_transconv(hidden_size):
     """make decoder
     decoder same as slot decoder. 
         using transposedConv2d 
@@ -39,7 +39,7 @@ def make_decoder_transconv():
 
     # H out​ =(H in​−1)×stride[0]−2×padding[0]+dilation[0]×(kernel_size[0]−1)+output_padding[0]+1
     return nn.Sequential(
-        nn.ConvTranspose2d(100, 64, 5, 2, padding=2, output_padding=1), # 8*2 + 3 -4+1 = 16
+        nn.ConvTranspose2d(hidden_size, 64, 5, 2, padding=2, output_padding=1), # 8*2 + 3 -4+1 = 16
         nn.ReLU(),
         LayerNorm(),
         nn.ConvTranspose2d(64, 32, 5, 2, padding=2, output_padding=1), # 16*2 + 3 -4 + 1 = 32
@@ -51,11 +51,11 @@ def make_decoder_transconv():
         nn.ConvTranspose2d(32, 2, 3, 1, padding=1), # 64 + 2 - 2 = 64
     )
 
-def make_decoder_interp():
+def make_decoder_interp(hidden_size):
     """Method to initialize the decoder"""
     return nn.Sequential(
         LayerNorm(),
-        nn.Conv2d(100, 64, kernel_size=1, stride=1, padding=0),
+        nn.Conv2d(hidden_size, 64, kernel_size=1, stride=1, padding=0),
         nn.ReLU(),
         Interpolate(scale_factor=2, mode='bilinear'),
         nn.ReplicationPad2d(2),
@@ -103,9 +103,9 @@ class WrappedDecoder(nn.Module):
     def __init__(self, hidden_size, decoder='interp'):
         super().__init__()
         if 'interp' in decoder:
-            self.decoder = make_decoder_interp()
+            self.decoder = make_decoder_interp(hidden_size=hidden_size)
         else:
-            self.decoder = make_decoder_transconv()
+            self.decoder = make_decoder_transconv(hidden_size=hidden_size)
         self.pos_embed = SoftPositionEmbed(hidden_size, (8,8))
 
     def forward(self, hidden):
