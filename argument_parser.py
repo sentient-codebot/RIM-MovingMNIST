@@ -135,6 +135,8 @@ def argument_parser():
     parser.parse_args(left_argv, args) # override JSON values with command-line values
 
     # processing some arguments
+    if args.k > args.num_hidden:
+        args.k = args.num_hidden
     if args.use_slot_attention:
         if args.num_slots is None:
             args.num_slots = args.num_hidden

@@ -1,0 +1,49 @@
+program: train_mmnist.py
+method: random
+name: general_search_mmnist_slot_rim
+metric:
+  name: Metrics.MSE
+  goal: minimize
+early_terminate:
+  type: hyperband 
+  min_iter: 3 # how many times called wandb.log // iter*test_frequency = epochs
+  eta: 2 # check if training exploded every 20 epochs (if test_freq=10)
+parameters:
+  experiment_name:
+    value: "MMNIST_slotrim_sweep"
+  cfg_json: 
+    value: "configs/rim/rim_slot.json"
+  core: 
+    value: "RIM"
+  epochs:
+    value: 200
+  save_frequency: 
+    value: 50
+  batch_size:
+    value: 32
+  lr:
+    distribution: "log_uniform"
+    min: -9.57 # log(0.00007)
+    max: -4.962 # log(0.007)
+  input_size: 
+    distribution: "q_log_uniform"
+    min: 3.46 # log(32)
+    max: 4.86 # log(128)
+  hidden_size:
+    values: [50, 100, 150]
+  num_hidden:
+    values: [3, 6, 10]
+  k:
+    values: [2, 4, 6]
+  num_input_heads:
+    values: [1, 2]
+  input_value_size:
+    values: [100, 200, 400]
+  num_comm_heads:
+    values: [1, 2, 4]
+  slot_size:
+    values: [64, 100, 256]
+  num_slots:
+    values: [3, 6]
+  num_iterations_slot:
+    values: [3, 5]
