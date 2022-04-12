@@ -2,12 +2,12 @@ program: train_mmnist.py
 method: random
 name: general_search_mmnist_slot_rim
 metric:
-  name: Metrics.MSE
+  name: Loss.train loss
   goal: minimize
 early_terminate:
   type: hyperband 
-  min_iter: 17 # how many times called wandb.log // (iter-15)*test_frequency = epochs
-  eta: 2 # check if training exploded every 20 epochs (if test_freq=10)
+  min_iter: 5 # how many times called wandb.log // (iter-15)*test_frequency = epochs
+  eta: 1 # check if training exploded every 20 epochs (if test_freq=10)
 parameters:
   experiment_name:
     value: "MMNIST_slotrim_sweep"
