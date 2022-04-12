@@ -6,7 +6,7 @@ metric:
   goal: minimize
 early_terminate:
   type: hyperband 
-  min_iter: 3 # how many times called wandb.log // iter*test_frequency = epochs
+  min_iter: 17 # how many times called wandb.log // (iter-15)*test_frequency = epochs
   eta: 2 # check if training exploded every 20 epochs (if test_freq=10)
 parameters:
   experiment_name:
