@@ -9,11 +9,11 @@ def setup_dataloader(args):
     Args:
         `args`: parsed args. """
     if args.task == 'MMNIST':
-        train_set = MovingMNIST(root='./data', train=True, download=True, mini=False)
+        train_set = MovingMNIST(root=args.dataset_dir, train=True, download=True, mini=False)
         test_set = MovingMNIST(root='./data', train=False, download=True)
     elif args.task == 'BBALL':
-        train_set = BouncingBall(root='/home/nnan/BouncingBall', train=True, length=51, filename=args.ball_trainset)
-        test_set = BouncingBall(root='/home/nnan/BouncingBall', train=False, length=51, filename=args.ball_testset)
+        train_set = BouncingBall(root=args.dataset_dir, train=True, length=50, filename=args.ball_trainset)
+        test_set = BouncingBall(root=args.dataset_dir, train=False, length=50, filename=args.ball_testset)
     elif args.task == 'TRAFFIC4CAST':
         raise NotImplementedError('Traffic4Cast not implemented')
     else:

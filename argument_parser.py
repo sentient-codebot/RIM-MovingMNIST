@@ -98,6 +98,7 @@ def argument_parser():
     parser.add_argument('--ball_testset', type=str2ballset, default='678ball', help='test set for ball task')
 
     # Training Settings
+    parser.add_argument('--dataset_dir', type=str, default='')
     parser.add_argument('--batch_size', type=int, default=50, metavar='N',
                         help='ADD')
     parser.add_argument('--epochs', type=int, default=100, metavar='E',
@@ -171,6 +172,13 @@ def argument_parser():
     parser.parse_args(left_argv, args) # override JSON values with command-line values
 
     # processing some arguments
+    if args.dataset_dir == '':
+        if args.task == 'MMNIST':
+            args.dataset_dir = '/home/nnan/movingmnist/'
+        elif args.task == 'BBALL':
+            args.dataset_dir = '/home/nnan/BouncingBall/'
+        elif args.task == 'TRAFFIC4CAST':
+            args.dataset_dir = '/home/nnan/traffic4cast/'
     if args.k > args.num_hidden:
         args.k = args.num_hidden
     if args.use_slot_attention:

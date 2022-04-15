@@ -342,6 +342,14 @@ class SlotAttentionAutoEncoder(nn.Module):
         fused, channels, alpha_mask = self.Decoder(slot_attn)
         return fused
 
+class TrafficModel(nn.Module):
+    """Model for traffic4cast task"""
+    def __init__(self, args):
+        super().__init__()
+
+    def forward(self, x):
+        pass
+
 if __name__ == "__main__":
     main()
 

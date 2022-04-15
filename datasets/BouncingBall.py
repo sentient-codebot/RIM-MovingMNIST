@@ -28,7 +28,7 @@ class BouncingBall(Dataset):
     filename_list = ['balls3curtain64.h5', 'balls4mass64.h5',
                     'balls678mass64.h5']
 
-    def __init__(self, train=True, length=51, root='/Data', download=False,
+    def __init__(self, train=True, length=50, root='/Data', download=False,
                  filename="balls4mass64.h5"):
         """
         
@@ -58,8 +58,7 @@ class BouncingBall(Dataset):
         features = 1.0 * self.input_data[:self.length, index, :, :, :]
         # True, False label, conert to int
         # Convert to tensors
-        L = self.input_data.shape[0]
-        features = torch.tensor(features.reshape(L, 1, 64, 64))
+        features = torch.tensor(features.reshape(features.shape[0], 1, 64, 64))
         return features.float()
 
     def __len__(self):

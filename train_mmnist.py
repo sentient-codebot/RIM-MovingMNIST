@@ -8,7 +8,7 @@ from torch import autograd
 from torch.utils.tensorboard import SummaryWriter
 import wandb
 
-from networks import BallModel
+from networks import BallModel, TrafficModel
 from argument_parser import argument_parser
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
@@ -83,7 +83,7 @@ def main():
     wandb.init(project=project, name=name, config=vars(args), entity='nan-team')
 
     # data setup
-    train_loader, test_loader = setup_dataloader(args)
+    train_loader, test_loader = setup_dataloader(args=args)
 
     # model setup
     model, optimizer, loss_fn, start_epoch, train_batch_idx = setup_model(args=args)
@@ -221,6 +221,7 @@ def setup_model(args):
     elif args.task == 'BBALL':
         model = BallModel(args)
     elif args.task == 'TRAFFIC4CAST':
+        model = TrafficModel(args)
         raise NotImplementedError('traffic4cast not implemented')
     else:
         raise ValueError('not recognized task')
