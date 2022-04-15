@@ -1,0 +1,29 @@
+program: train_mmnist.py
+method: grid
+name: num_module_slot_rim_sweep
+metric:
+  name: Loss.train loss
+  goal: minimize
+parameters:
+  experiment_name:
+    value: "MMNIST_slotrim_num_sweep"
+  cfg_json: 
+    value: "configs/rim/rim_slot.json"
+  core: 
+    value: "RIM"
+  epochs:
+    value: 300
+  save_frequency: 
+    value: 50
+  batch_size:
+    value: 64
+  num_hidden:
+    values: [3, 6, 10]
+  k:
+    value: 10
+  input_value_size:
+    values: [200, 400]
+  slot_size:
+    values: [64, 100]
+  num_slots:
+    values: [3, 6]
