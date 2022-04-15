@@ -34,7 +34,7 @@ class BouncingBall(Dataset):
         
         """
         self.length = length
-        self.mode = 'train' if train else 'test'
+        self.mode = 'training' if train else 'test'
         self.directory = root
         self.filename = filename
         assert filename in self.filename_list, "filename unrecognized"
