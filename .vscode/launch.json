@@ -34,7 +34,7 @@
             "console": "integratedTerminal",
             "args": [
                 "--cfg_json",
-                "configs/rim/rim_slorim.json",
+                "configs/rim/rim_slot.json",
                 "--core",
                 "RIM",
                 "--should_resume",
@@ -43,7 +43,7 @@
                 "MMNIST_slotrim_full",
                 "--save_frequency",
                 "25",
-                "--num_units",
+                "--num_hidden",
                 "6",
                 "--k",
                 "6",
