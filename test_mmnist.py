@@ -51,6 +51,14 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
 
     mse = lambda x, y: ((x - y)**2).mean(dim=(0,1,2)).sum() # x Shape: [batch_size, T, C, H, W]
 
+    if args.task == 'MMNIST':
+        rollout_start = 10
+    elif args.task == 'BBALL':
+        rollout_start = 20
+    elif args.task == 'TRAFFIC4CAST':
+        raise NotImplementedError('not set yet. ')
+
+
     model.eval()
 
     epoch_loss = torch.tensor(0.).to(args.device)
@@ -86,7 +94,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
             with torch.no_grad():
                 if not rollout:
                     output, hidden, reg_loss, intm = model(data[:, frame, :, :, :], hidden)
-                elif frame >= 10:
+                elif frame >= rollout_start :
                     output, hidden, reg_loss, intm = model(output, hidden)
                 else:
                     output, hidden, reg_loss, intm = model(data[:, frame, :, :, :], hidden)
