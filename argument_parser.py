@@ -45,6 +45,37 @@ def str2decoder(_str):
     else:
         raise argparse.ArgumentTypeError('Unrecognized decoder type.')
 
+def str2task(_str):
+    _str = _str.upper()
+    if _str == "MOVINGMNIST" or _str == "MMNIST":
+        return "MMNIST"
+    elif _str == "BBALL":
+        return "BBALL"
+    elif _str == "TRAFFIC4CAST":
+        return "TRAFFIC4CAST"
+    else:
+        raise argparse.ArgumentTypeError('Unrecognized task type.')
+
+def str2ballset(inp_str):
+    inp_str = inp_str.lower()
+    if inp_str == '4ball':
+        return 'balls4mass64.h5'
+    elif inp_str == '678ball':
+        return 'balls678mass64.h5'
+    elif inp_str == 'occlusion' or 'curtain':
+        return 'balls3curtain64.h5'
+    else:
+        raise argparse.ArgumentTypeError('Unrecognized bouncing ball dataset type.')
+
+def str2balltask(inp):
+    inp = inp.upper()
+    if inp == 'TRANSFER':
+        return 'TRANSFER'
+    elif True:
+        raise NotImplementedError('another type of bouncing ball task not implemented. ')
+    else:
+        raise argparse.ArgumentTypeError('Unrecognized bouncing ball task type.')
+
 def argument_parser():
     """Function to parse all the arguments"""
 
@@ -61,6 +92,10 @@ def argument_parser():
     parser.add_argument('--id', type=str, default='default',
                         metavar='id of the experiment', help='id of the experiment')
     parser.add_argument('--version', type=int, default=1)
+    parser.add_argument('--task', type=str2task, default='MMNIST')
+    parser.add_argument('--ball_options', type=str2balltask, default='transfer', help='options for ball task. transfer or ...')
+    parser.add_argument('--ball_trainset', type=str2ballset, default='4ball', help='train set for ball task')
+    parser.add_argument('--ball_testset', type=str2ballset, default='678ball', help='test set for ball task')
 
     # Training Settings
     parser.add_argument('--batch_size', type=int, default=50, metavar='N',
@@ -107,6 +142,7 @@ def argument_parser():
     parser.add_argument("--slot_size", type=int, default=None)
     parser.add_argument("--num_iterations_slot", type=int, default=5)
     #   RIM settings
+    parser.add_argument('--use_sw', type=str2bool, default=False)
     parser.add_argument('--num_hidden', type=int, default=6, metavar='num_blocks',
                         help='Number_of_units')
     parser.add_argument('--k', type=int, default=4, metavar='topk',
@@ -142,6 +178,8 @@ def argument_parser():
             args.num_slots = args.num_hidden
         if args.slot_size is None:
             args.slot_size = args.hidden_size
+    if args.task == "BBALL":
+        pass # about ball options
     args.id = f"{args.experiment_name}_"+ args.core.upper() + f"_{args.num_hidden}_{args.hidden_size}"+\
         f"_ver_{args.version}"
     args.folder_save = f"./saves/{args.id}"

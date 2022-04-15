@@ -12,8 +12,7 @@ from networks import BallModel
 from argument_parser import argument_parser
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
-from utils.visualize import ScalarLog, VectorLog, HeatmapLog
-from datasets.MovingMNIST import MovingMNIST
+from datasets import setup_dataloader
 from tqdm import tqdm
 from test_mmnist import dec_rim_util, test
 
@@ -65,7 +64,6 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
 
     return train_batch_idx, epoch_loss
 
-
 def main():
     # parse and process args
     args = argument_parser()
@@ -85,20 +83,7 @@ def main():
     wandb.init(project=project, name=name, config=vars(args), entity='nan-team')
 
     # data setup
-    train_set = MovingMNIST(root='./data', train=True, download=True, mini=False)
-    test_set = MovingMNIST(root='./data', train=False, download=True)
-    train_loader = torch.utils.data.DataLoader(
-        dataset=train_set,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=4 if cudable else 0,
-    )
-    test_loader = torch.utils.data.DataLoader(
-        dataset=test_set,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=4 if cudable else 0,
-    )
+    train_loader, test_loader = setup_dataloader(args)
 
     # model setup
     model, optimizer, loss_fn, start_epoch, train_batch_idx = setup_model(args=args)
@@ -231,7 +216,14 @@ def setup_model(args):
         args.__dict__.update(torch.load(f"{args.folder_save}/model/args"))
     
     # initialize
-    model = BallModel(args)
+    if args.task == 'MMNIST':
+        model = BallModel(args)
+    elif args.task == 'BBALL':
+        model = BallModel(args)
+    elif args.task == 'TRAFFIC4CAST':
+        raise NotImplementedError('traffic4cast not implemented')
+    else:
+        raise ValueError('not recognized task')
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     # TODO later add scheduler here
     start_epoch = 1
