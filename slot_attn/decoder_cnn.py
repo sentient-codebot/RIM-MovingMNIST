@@ -98,6 +98,10 @@ def spatial_broadcast(slots, resolution):
 class WrappedDecoder(nn.Module):
     """Decoder that takes slots embeddings and perform decoding individually and combine. 
     
+    Args:
+        `hidden_size`: the hidden size of the encoder
+        `decoder`: the decoder type, either 'interp' or 'transconv'
+
     Input:
         `hidden`: (BS, K, d_slot) """
     def __init__(self, hidden_size, decoder='interp'):

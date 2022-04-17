@@ -41,8 +41,7 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
         hidden = model.init_hidden(data.shape[0]).to(args.device)
         hidden = hidden.detach()
 
-        data = data.to(args.device) # Shape: [N, T, H, W]
-        data = data.unsqueeze(2).float() # Shape: [N, T, H, W] -> [N, T, 1, H, W]
+        data = data.to(args.device) # Shape: [N, T, 1, H, W]
         
         optimizer.zero_grad()
         loss = 0.

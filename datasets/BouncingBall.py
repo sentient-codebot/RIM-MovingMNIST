@@ -58,7 +58,7 @@ class BouncingBall(Dataset):
         features = 1.0 * self.input_data[:self.length, index, :, :, :]
         # True, False label, conert to int
         # Convert to tensors
-        features = torch.tensor(features.reshape(features.shape[0], 1, 64, 64))
+        features = torch.tensor(features.reshape(features.shape[0], 1, 64, 64)) # [50, 1, 64, 64]
         return features.float()
 
     def __len__(self):

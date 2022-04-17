@@ -77,12 +77,12 @@ class MovingMNIST(data.Dataset):
         if self.train:
             data = self.train_data[index, :]/255.
         else:
-            data = self.test_data[index, :]/255.
+            data = self.test_data[index, :]/255. # Shape [seq_len, h, w]
 
         if self.transform is not None:
             data = _transform_time(seq)
 
-        return data
+        return data.unsqueeze(1) 
 
     def __len__(self):
         if self.train:
