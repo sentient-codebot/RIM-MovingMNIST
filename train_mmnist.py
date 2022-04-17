@@ -195,7 +195,7 @@ def main():
                 'optimizer_state_dict': optimizer.state_dict(),
                 'train_batch_idx': train_batch_idx,
                 'loss': train_loss,
-            }, f"{args.folder_save}/checkpoints/{epoch}")
+            }, f"{args.folder_save}/checkpoints/{epoch}.pt")
 
     writer.close()
         
