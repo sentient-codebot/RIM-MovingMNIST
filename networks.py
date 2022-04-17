@@ -60,7 +60,13 @@ class BasicDecoder(nn.Module):
     
     Args:
         `embedding_size`: size of the embedding
-        """
+
+    Inputs:
+        `x`: hidden state of shape [N, embedding_size]
+
+    Outputs:
+        `output`: output of the decoder; shape: [N, 1, 64, 64]
+    """
     def __init__(self, embedding_size):
         super().__init__()
         self.embedding_size = embedding_size
@@ -266,7 +272,7 @@ class BallModel(nn.Module):
             if self.get_intm:
                 blocked_out_ = channels*alpha_mask
         else:
-            dec_out_ = self.decoder(h_new.view(h_new.shape[0],-1)) # Shape: [batch_size, 1, 64, 64]
+            dec_out_ = self.decoder(h_new.view(h_new.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
 
         if ctx is not None:
             intm = Intm(input_attn=ctx.input_attn, 
