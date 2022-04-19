@@ -75,6 +75,42 @@
             }
         },
         {
+            "name": "train/test mmnist slot rim sw",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "--cfg_json",
+                "configs/rim/rim_slot.json",
+                "--core",
+                "RIM",
+                "--should_resume",
+                "false",
+                "--experiment_name",
+                "MMNIST_SLOTRIMSW_debug",
+                "--save_frequency",
+                "25",
+                "--num_slots",
+                "3",
+                "--num_hidden",
+                "6",
+                "--k",
+                "6",
+                "--use_sw",
+                "true",
+                "--memory_size",
+                "100",
+                "--num_memory_slots",
+                "3",
+                "--batch_size",
+                "32"
+            ],
+            "env":{
+                "CUDA_VISIBLE_DEVICES": "1"
+            }
+        },
+        {
             "name": "train/test mmnist complete - GRU",
             "type": "python",
             "request": "launch",
