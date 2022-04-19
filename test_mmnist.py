@@ -111,11 +111,16 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
                 # writer.add_scalar(f'Metrics/F1 at Frame {frame}', f1_frame, epoch)
                 f1 += f1_frame
 
-            if not args.use_memory_for_decoder:
-                intm["decoder_utilization"] = dec_rim_util(model, hidden)
+            if __name__ == "__main__":
+                if not args.use_memory_for_decoder:
+                    intm["decoder_utilization"] = dec_rim_util(model, hidden)
+                else:
+                    intm['decoder_utilization'] = dec_rim_util(model, memory)
+                most_used_units.extend(torch.topk(intm["decoder_utilization"], k=args.num_hidden//2, dim=-1).indices.tolist())
             else:
-                intm['decoder_utilization'] = dec_rim_util(model, memory)
-            most_used_units.extend(torch.topk(intm["decoder_utilization"], k=args.num_hidden//2, dim=-1).indices.tolist())
+                intm['decoder_utilization'] = torch.zeros(1, 1)
+                most_used_units.append(0)
+            
             if args.core == 'RIM':
                 rim_actv.append(intm["input_attn"]) # shape (batchsize, num_units, 1) -> (BS, NU, T)
                 rim_actv_mask.append(intm["input_attn_mask"])
