@@ -249,11 +249,9 @@ class SharedWorkspace(nn.Module):
 
         # Memory Writing Phase
         if mask is not None:
-            assert mask.dim() == 2 or mask.dim() == 3
-            if mask.dim() == 2:
-                mask = mask.unsqueeze(2) # Shape [N, K_hidden, 1]
-            mask = mask.detach() # no grad 
-            h = h*mask
+            mask = mask.squeeze() # Shape [N, num_hidden]
+            assert mask.dim() == 2 
+            mask = mask.view(mask.shape[0], 1, 1, mask.shape[1]) # Shape [N, 1, 1, num_hidden]
         write_key = self.write_key_transform(h) # Shape [N, K_hidden, write_num_heads * write_key_size]
         write_value = self.write_value_transform(h) # Shape [N, K_hidden, write_num_heads * D_mem]
         write_query = self.write_query_transform(M) # Shape [N, K_mem, write_num_heads * write_key_size]
@@ -261,6 +259,7 @@ class SharedWorkspace(nn.Module):
         write_value = write_value.view(write_value.shape[0], self.write_num_heads, write_value.shape[1], self.write_value_size) # Shape [N, heads, K_hidden, write_value_size]
         write_query = write_query.view(write_query.shape[0], self.write_num_heads, write_query.shape[1], self.write_key_size) # Shape [N, heads, K_mem, write_key_size]
         score_write = torch.matmul(write_query, write_key.transpose(-1,-2)) / math.sqrt(self.write_key_size) # Shape [N, heads, K_mem, K_hidden]
+        score_write = score_write * mask # Shape [N, heads, K_mem, K_hidden]
         score_write = nn.Softmax(dim=3)(score_write) # Shape [N, heads, K_mem, K_hidden] 
         mem_update = torch.matmul(score_write, write_value) # Shape [N, heads, K_mem, write_value_size]
         mem_update = mem_update.transpose(1, 2).flatten(start_dim=-2) # Shape [N, K_mem, heads * write_value_size]

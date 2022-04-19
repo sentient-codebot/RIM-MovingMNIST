@@ -36,7 +36,8 @@ class blocked_grad(torch.autograd.Function):
 class RIMCell(nn.Module):
     def __init__(self, 
         device, input_size, hidden_size, num_units, k, rnn_cell, input_key_size = 64, input_value_size = 400,
-        num_input_heads = 1, input_dropout = 0.1, comm_key_size = 32, comm_value_size = 100, num_comm_heads = 4, comm_dropout = 0.1
+        num_input_heads = 1, input_dropout = 0.1, use_sw = False, comm_key_size = 32, comm_value_size = 100, num_comm_heads = 4, comm_dropout = 0.1, 
+        memory_size = None,
     ):
         super().__init__()
         if comm_value_size != hidden_size:
@@ -74,9 +75,21 @@ class RIMCell(nn.Module):
             input_dropout
         )
 
-        self.communication_attention = CommAttention(
-            hidden_size, comm_key_size, num_comm_heads, num_units, comm_dropout
-        )
+        self.use_sw = use_sw
+        self.memory_size = memory_size
+        if not self.use_sw:
+            self.communication_attention = CommAttention(
+                hidden_size, comm_key_size, num_comm_heads, num_units, comm_dropout
+            )
+        else:
+            self.communication_attention = SharedWorkspace(
+                write_key_size=comm_key_size,
+                read_key_size=comm_key_size,
+                memory_size=memory_size,
+                hidden_size=hidden_size,
+                write_dropout=comm_dropout/2,
+                read_dropout=comm_dropout/2,
+            )
 
 
     def transpose_for_scores(self, x, num_attention_heads, attention_head_size):
@@ -95,7 +108,7 @@ class RIMCell(nn.Module):
         if inf_mask.any():
             raise RuntimeError(f"Found NAN in {self.__class__.__name__}: ", inf_mask.nonzero(), "where:", _tensor[inf_mask.nonzero()[:, 0].unique(sorted=True)])
 
-    def forward(self, x, hs, cs = None, get_intm=False):
+    def forward(self, x, hs, cs = None, M=None, get_intm=False):
         """
         Input : x (batch_size, num_inputs, input_size)
                 hs (batch_size, num_units, hidden_size)
@@ -131,8 +144,11 @@ class RIMCell(nn.Module):
         h_new = blocked_grad.apply(hs, mask)
 
         # Compute communication attention
-        context = self.communication_attention(h_new, mask.squeeze(2))
-        h_new = h_new + context
+        if not self.use_sw:
+            context = self.communication_attention(h_new, mask.squeeze(2))
+            h_new = h_new + context
+        else:
+            h_new = self.communication_attention(M, h_new, mask.squeeze(2))
 
         # Prepare the context/intermediate value
         ctx = Ctx(input_attn=attn_score,
@@ -145,8 +161,7 @@ class RIMCell(nn.Module):
         hs = mask * h_new + (1 - mask) * h_old
         if cs is not None:
             cs = mask * cs + (1 - mask) * c_old
-            return hs, cs, None, mask
-        return hs, None, None, ctx
+        return hs, cs, M, ctx
 
 class PackedGRU(nn.Module):
     """pack nn.GRU to conveniently only return variables that I want"""

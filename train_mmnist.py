@@ -40,17 +40,20 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
     for batch_idx, data in enumerate(tqdm(train_loader)):
         hidden = model.init_hidden(data.shape[0]).to(args.device)
         hidden = hidden.detach()
+        memory = None
+        if args.use_sw:
+            memory = model.init_memory(data.shape[0]).to(args.device)
 
         data = data.to(args.device) # Shape: [N, T, 1, H, W]
         
         optimizer.zero_grad()
         loss = 0.
         for frame in range(data.shape[1]-1):
-            output, hidden, reg_loss, intm = model(data[:, frame, :, :, :], hidden)
+            output, hidden, memory, intm = model(data[:, frame, :, :, :], hidden, memory)
             target = data[:, frame+1, :, :, :]
             loss += loss_fn(output, target)
             
-        (loss+1*reg_loss).backward()
+        loss.backward()
         grad_norm = get_grad_norm(model)
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=False) 
         optimizer.step()
@@ -147,7 +150,7 @@ def main():
             if args.core == 'RIM':
                 writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
                 writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
-                writer.add_image('Stats/RIM Decoder Utilization', dec_util[0], epoch, dataformats='HW')
+                writer.add_image('Stats/Unit Decoder Utilization', dec_util[0], epoch, dataformats='HW')
             cat_video = torch.cat(
                 (data[0:4, 1:, :, :, :],prediction[0:4]),
                 dim = 4 # join in width
@@ -164,7 +167,7 @@ def main():
             stat_dict = {
                 'RIM Input Attention': wandb.Image(rim_actv[0].cpu()*256),
                 'RIM Activation Mask': wandb.Image(rim_actv_mask[0].cpu()*256),
-                'RIM Decoder Utilization': wandb.Image(dec_util[0].cpu()*256),
+                'Unit Decoder Utilization': wandb.Image(dec_util[0].cpu()*256),
                 'Most Used Units in Decoder': wandb.Histogram(most_used_units), 
             }
             video_dict = {
@@ -219,11 +222,11 @@ def setup_model(args):
     
     # initialize
     if args.task == 'MMNIST':
-        model = BallModel(args)
+        model = BallModel(args).to(args.device)
     elif args.task == 'BBALL':
-        model = BallModel(args)
+        model = BallModel(args).to(args.device)
     elif args.task == 'TRAFFIC4CAST':
-        model = TrafficModel(args)
+        model = TrafficModel(args).to(args.device)
         raise NotImplementedError('traffic4cast not implemented')
     else:
         raise ValueError('not recognized task')

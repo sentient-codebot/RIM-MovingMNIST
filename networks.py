@@ -155,10 +155,16 @@ class BallModel(nn.Module):
         self.num_hidden = args.num_hidden # == num_rims
 
         self.slot_size = args.slot_size
-        self.num_iterations = args.num_iterations_slot
+        self.num_iterations_slot = args.num_iterations_slot
         self.num_slots = args.num_slots
 
         self.core = args.core.upper()
+        self.use_sw = args.use_sw
+        self.memory_size = args.memory_size
+        self.num_memory_slots = args.num_memory_slots
+        if self.use_sw:
+            self.memory_mu = nn.parameter.Parameter(torch.randn(1, 1, self.memory_size)) # mean for initial memory. Shape: [1, 1, memory_size]
+            self.memory_logvar = nn.parameter.Parameter(torch.randn(1, 1, self.memory_size)) # log variance for initial memory. Shape: [1, 1, memory_size]
         self.sparse = False
         self.get_intm = False
         self.use_slot_attention = args.use_slot_attention
@@ -177,7 +183,7 @@ class BallModel(nn.Module):
         self.slot_attention = None
         if self.use_slot_attention:
             self.slot_attention = SlotAttention(
-                num_iterations=self.num_iterations,
+                num_iterations=self.num_iterations_slot,
                 num_slots=self.num_slots,
                 slot_size=self.slot_size,
                 mlp_hidden_size=128,
@@ -205,10 +211,12 @@ class BallModel(nn.Module):
                                         input_value_size=self.args.input_value_size,
                                         num_input_heads = self.args.num_input_heads,
                                         input_dropout = self.args.input_dropout,
+                                        use_sw = self.use_sw,
                                         comm_key_size = self.args.comm_key_size,
                                         comm_value_size = self.args.comm_value_size, 
                                         num_comm_heads = self.args.num_comm_heads, 
-                                        comm_dropout = self.args.comm_dropout
+                                        comm_dropout = self.args.comm_dropout,
+                                        memory_size = self.args.memory_size,
                 ).to(self.args.device)
             else:
                 raise NotImplementedError('Sparse RIM not updated with new args yet')
@@ -245,7 +253,7 @@ class BallModel(nn.Module):
         else:
             raise ValueError('Illegal RNN Core')
 
-    def forward(self, x, h_prev):
+    def forward(self, x, h_prev, M_prev):
         ctx = None
         encoded_input = self.encoder(x) # Shape: (batch_size, 6*6, self.input_size) OR [batch_size, 1, self.input_size]
         if self.use_slot_attention:
@@ -254,7 +262,7 @@ class BallModel(nn.Module):
         reg_loss = 0.
         if self.core=='RIM':
             if not self.sparse:
-                h_new, foo, bar, ctx = self.rnn_model(encoded_input, h_prev) 
+                h_new, cs_new, M, ctx = self.rnn_model(x=encoded_input, hs=h_prev, cs=None, M=M_prev) 
             else:
                 raise NotImplementedError('Sparse RIM not configured for slot input yet')
         elif self.core=='GRU':
@@ -285,13 +293,19 @@ class BallModel(nn.Module):
                 blocked_dec=blocked_out_
                 )
         
-        return dec_out_, h_new, reg_loss, intm
+        return dec_out_, h_new, M, intm
 
     def init_hidden(self, batch_size): 
-        return torch.rand((batch_size, 
+        return torch.randn((batch_size, 
             self.args.num_hidden, 
             self.args.hidden_size), 
             requires_grad=False)
+        
+    def init_memory(self, batch_size):
+        return torch.randn(
+            (batch_size, self.num_memory_slots, self.memory_size),
+            device=self.memory_mu.device
+        )*torch.exp(self.memory_logvar) + self.memory_mean
 
     def nan_hook(self, out):
         nan_mask = torch.isnan(out)

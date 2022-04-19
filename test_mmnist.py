@@ -69,6 +69,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
     most_used_units = []
     for batch_idx, data in enumerate(tqdm(test_loader) if __name__ == "__main__" else test_loader): # tqdm doesn't work here?
         hidden = model.init_hidden(data.shape[0]).to(args.device)
+        memory = model.init_memory(data.shape[0]).to(args.device)
         if args.core == 'RIM':
             rim_actv.reset()
             rim_actv_mask.reset()
@@ -91,15 +92,13 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
         ) # (BS, num_blocks, T, C, H, W)
 
         for frame in range(data.shape[1]-1):
-            if frame == data.shape[1]-2: # last two frame
-                hidden_before_last = hidden.detach()
             with torch.no_grad():
                 if not rollout:
-                    output, hidden, reg_loss, intm = model(data[:, frame, :, :, :], hidden)
+                    output, hidden, memory, intm = model(data[:, frame, :, :, :], hidden, memory)
                 elif frame >= rollout_start :
-                    output, hidden, reg_loss, intm = model(output, hidden)
+                    output, hidden, memory, intm = model(output, hidden, memory)
                 else:
-                    output, hidden, reg_loss, intm = model(data[:, frame, :, :, :], hidden)
+                    output, hidden, memory, intm = model(data[:, frame, :, :, :], hidden, memory)
 
                 intm = intm._asdict()
                 target = data[:, frame+1, :, :, :]
@@ -112,7 +111,10 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
                 # writer.add_scalar(f'Metrics/F1 at Frame {frame}', f1_frame, epoch)
                 f1 += f1_frame
 
-            intm["decoder_utilization"] = dec_rim_util(model, hidden)
+            if not args.use_memory_for_decoder:
+                intm["decoder_utilization"] = dec_rim_util(model, hidden)
+            else:
+                intm['decoder_utilization'] = dec_rim_util(model, memory)
             most_used_units.extend(torch.topk(intm["decoder_utilization"], k=args.num_hidden//2, dim=-1).indices.tolist())
             if args.core == 'RIM':
                 rim_actv.append(intm["input_attn"]) # shape (batchsize, num_units, 1) -> (BS, NU, T)
@@ -255,7 +257,7 @@ def main():
 
     writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
     writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
-    writer.add_image('Stats/RIM Decoder Utilization', dec_util[0], epoch, dataformats='HW')
+    writer.add_image('Stats/Unit Decoder Utilization', dec_util[0], epoch, dataformats='HW')
     cat_video = torch.cat(
         (data[0:4, 1:, :, :, :],prediction[0:4]),
         dim = 4 # join in width
@@ -272,7 +274,7 @@ def main():
     stat_dict = {
         'RIM Input Attention': wandb.Image(rim_actv[0].cpu()*256),
         'RIM Activation Mask': wandb.Image(rim_actv_mask[0].cpu()*256),
-        'RIM Decoder Utilization': wandb.Image(dec_util[0].cpu()*256),
+        'Unit Decoder Utilization': wandb.Image(dec_util[0].cpu()*256),
         'Most Used Units in Decoder': wandb.Histogram(most_used_units), # a list
     }
     video_dict = {

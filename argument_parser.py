@@ -148,6 +148,9 @@ def argument_parser():
     parser.add_argument("--num_iterations_slot", type=int, default=None)
     #   RIM settings
     parser.add_argument('--use_sw', type=str2bool, default=False)
+    parser.add_argument('--memory_size', type=int, default=None)
+    parser.add_argument('--num_memory_slots', type=int, default=None)
+    parser.add_argument('--use_memory_for_decoder', type=str2bool, default=False)
     parser.add_argument('--num_hidden', type=int, default=6, metavar='num_blocks',
                         help='Number_of_units')
     parser.add_argument('--k', type=int, default=4, metavar='topk',
@@ -186,6 +189,11 @@ def argument_parser():
     
     if args.k > args.num_hidden:
         args.k = args.num_hidden
+    if args.use_sw:
+        if args.memory_size is None:
+            args.memory_size = args.num_hidden
+        if args.num_memory_slots is None:
+            raise ValueError('num_memory_slots must be specified')
 
     if args.use_slot_attention:
         assert args.num_iterations_slot is not None
