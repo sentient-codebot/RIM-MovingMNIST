@@ -12,5 +12,5 @@ save_freq=25
 num_hidden=6
 k=6
 
-python3 test_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --save_frequency $save_freq \
+python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --save_frequency $save_freq \
     --k $k --num_hidden $num_hidden --use_slot_attention "false"

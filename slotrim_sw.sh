@@ -16,7 +16,7 @@ use_sw="true"
 memory_size=100
 num_memory_slots=3
 
-python3 test_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --save_frequency $save_freq \
+python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --save_frequency $save_freq \
     --num_slots $num_slots \
     --k $k --num_hidden $num_hidden
     --use_sw $use_sw --memory_size $memory_size --num_memory_slots $num_memory_slots
