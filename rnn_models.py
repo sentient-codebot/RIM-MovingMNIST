@@ -148,7 +148,7 @@ class RIMCell(nn.Module):
             context = self.communication_attention(h_new, mask.squeeze(2))
             h_new = h_new + context
         else:
-            h_new = self.communication_attention(M, h_new, mask.squeeze(2))
+            M, h_new = self.communication_attention(M, h_new, mask.squeeze(2))
 
         # Prepare the context/intermediate value
         ctx = Ctx(input_attn=attn_score,

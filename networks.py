@@ -305,7 +305,7 @@ class BallModel(nn.Module):
         return torch.randn(
             (batch_size, self.num_memory_slots, self.memory_size),
             device=self.memory_mu.device
-        )*torch.exp(self.memory_logvar) + self.memory_mean
+        )*torch.exp(self.memory_logvar) + self.memory_mu
 
     def nan_hook(self, out):
         nan_mask = torch.isnan(out)
