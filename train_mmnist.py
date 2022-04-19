@@ -130,7 +130,8 @@ def main():
             if args.core == 'RIM':
                 rim_actv = metrics['rim_actv']
                 rim_actv_mask = metrics['rim_actv_mask']
-            # dec_actv = metrics['dec_actv']
+            dec_util = metrics['dec_util']
+            most_used_units = metrics['most_used_units']
             blocked_dec = metrics['blocked_dec']
             # print out stats
             print(f"epoch {epoch}/{args.epochs} | train loss: {train_loss:.4f} | test loss: {test_loss:.4f} | test mse: {test_mse:.4f} | "+\
@@ -146,7 +147,7 @@ def main():
             if args.core == 'RIM':
                 writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
                 writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
-            # writer.add_image('Stats/RIM Decoder Utilization', dec_actv[0], epoch, dataformats='HW')
+                writer.add_image('Stats/RIM Decoder Utilization', dec_util[0], epoch, dataformats='HW')
             cat_video = torch.cat(
                 (data[0:4, 1:, :, :, :],prediction[0:4]),
                 dim = 4 # join in width
@@ -163,6 +164,8 @@ def main():
             stat_dict = {
                 'RIM Input Attention': wandb.Image(rim_actv[0].cpu()*256),
                 'RIM Activation Mask': wandb.Image(rim_actv_mask[0].cpu()*256),
+                'RIM Decoder Utilization': wandb.Image(dec_util[0].cpu()*256),
+                'Most Used Units in Decoder': wandb.Histogram(most_used_units), 
             }
             video_dict = {
                 'Predicted Videos': wandb.Video(cat_video.cpu()*256, fps=4),

@@ -9,14 +9,16 @@ from collections import namedtuple
 from abc import ABC, abstractmethod
 from typing import Any
 
-from group_operations import GroupLinearLayer, GroupTorchGRU, GroupLSTMCell
-from attentions import InputAttention, CommAttention, SparseInputAttention, PositionAttention
+from group_operations import GroupLinearLayer, GroupTorchGRU, GroupLSTMCell, SharedWorkspace
+from attentions import InputAttention, CommAttention, SparseInputAttention, PositionAttention, SelectionAttention
 
 
 Ctx = namedtuple('RunningContext',
     [
         'input_attn',
-        'input_attn_mask'
+        'input_attn_mask',
+        'rule_attn',
+        'rule_attn_mask',
     ])
 
 class blocked_grad(torch.autograd.Function):
@@ -134,7 +136,9 @@ class RIMCell(nn.Module):
 
         # Prepare the context/intermediate value
         ctx = Ctx(input_attn=attn_score,
-            input_attn_mask=mask.squeeze()
+            input_attn_mask=mask.squeeze(),
+            rule_attn=mask.squeeze(), # not applicable here
+            rule_attn_mask=mask.squeeze(), # not applicable here
             )
 
         # Update hs and cs and return them
@@ -143,6 +147,26 @@ class RIMCell(nn.Module):
             cs = mask * cs + (1 - mask) * c_old
             return hs, cs, None, mask
         return hs, None, None, ctx
+
+class PackedGRU(nn.Module):
+    """pack nn.GRU to conveniently only return variables that I want"""
+    def __init__(self, input_size, hidden_size):
+        super().__init__()
+        self.gru = nn.GRU(input_size, hidden_size, 1, batch_first=True, bidirectional=False)
+
+    def forward(self, x, hs):
+        """
+        Inputs:
+            `x`: (batch_size, input_size)
+            `hs`: (batch_size, hidden_size)
+        Output: 
+            `hs_new`: (batch_size, hidden_size)
+        """
+        hs = self.gru(
+            x.unsqueeze(1),
+            hs.unsqueeze(0).contiguous(),
+        )[1].squeeze(0)
+        return hs
 
 class FastSCOFF(nn.Module):
     """SCOFF with NPS-like way selection mechanism. 
@@ -156,8 +180,8 @@ class FastSCOFF(nn.Module):
     
     """
     def __init__(self, 
-        device, input_size, hidden_size, num_hidden, num_rules, k, rnn_cell, rule_embedding_size=64, input_key_size = 64, input_value_size = 400,
-        num_input_heads = 1, input_dropout = 0.1, comm_key_size = 32, comm_value_size = 100, num_comm_heads = 4, comm_dropout = 0.1
+        device, input_size, hidden_size, num_hidden, num_rules, k, rnn_cell, rule_embedding_size=64, rule_select_key_size=64, input_key_size = 64, input_value_size = 400,
+        num_input_heads = 1, input_dropout = 0.1, use_sw = False, comm_key_size = 32, comm_value_size = 100, num_comm_heads = 4, comm_dropout = 0.1
     ):
         super().__init__()
         if comm_value_size != hidden_size:
@@ -183,15 +207,18 @@ class FastSCOFF(nn.Module):
         self.rule_embeddings = nn.parameter.Parameter(
             data = torch.randn(self.num_rules, self.rule_embedding_size),
         )
+        self.rule_select_key_size = rule_select_key_size
         if self.rnn_cell == 'GRU':
             self.rules = nn.ModuleList(
-                [nn.GRU(input_size=self.input_size, 
-                            hidden_size=self.hidden_size,
-                            num_layers=1,
-                            batch_first=True,
-                            bidirectional=False
+                [PackedGRU(input_size=self.input_size, 
+                            hidden_size=self.hidden_size
                 ) for _ in range(self.num_rules)]
             )
+            # self.rules = GroupTorchGRU(
+            #     input_size=self.input_size,
+            #     hidden_size=self.hidden_size,
+            #     num_units=self.num_hidden,
+            # )
         else:
             raise NotImplementedError("Only GRU rnn_cell is supported")
         
@@ -207,26 +234,21 @@ class FastSCOFF(nn.Module):
             epsilon=1e-8
         ) # output shape: [batch_size, num_hidden, input_value_size]
 
-        self.communication_attention = CommAttention(
-            hidden_size, comm_key_size, num_comm_heads, num_hidden, comm_dropout
+        self.selection_attention = SelectionAttention(
+            input_size = self.input_value_size + self.hidden_size, # depends on what is used to construct query for each RIM
+            rule_emb_size = self.rule_embedding_size,
+            kdim = self.rule_select_key_size,
+            normalize=False # gumbel_softmax takes unnormlized probs
         )
 
+        self.use_sw = use_sw
+        if not self.use_sw:
+            self.communication_attention = CommAttention(
+                hidden_size, comm_key_size, num_comm_heads, num_hidden, comm_dropout
+            )
+        else:
+            raise NotImplementedError('SW not implemented')
 
-    def transpose_for_scores(self, x, num_attention_heads, attention_head_size):
-        new_x_shape = x.size()[:-1] + (num_attention_heads, attention_head_size)
-        x = x.view(*new_x_shape)
-        return x.permute(0, 2, 1, 3)
-
-    def nan_hook(self, out):
-        nan_mask = torch.isnan(out)
-        if nan_mask.any():
-            print("In", self.__class__.__name__)
-            raise RuntimeError(f"Found NAN in output: ", nan_mask.nonzero(), "where:", out[nan_mask.nonzero()[:, 0].unique(sorted=True)])
-
-    def inf_hook(self, _tensor):
-        inf_mask = torch.isinf(_tensor)
-        if inf_mask.any():
-            raise RuntimeError(f"Found NAN in {self.__class__.__name__}: ", inf_mask.nonzero(), "where:", _tensor[inf_mask.nonzero()[:, 0].unique(sorted=True)])
 
     def forward(self, x, hs, cs = None, get_intm=False):
         """
@@ -246,38 +268,111 @@ class FastSCOFF(nn.Module):
         else:
             raise RuntimeError("Invalid input size")
 
-        # Compute input attention
-        inputs, mask, attn_score = self.input_attention_mask(x, hs)
-        h_old = hs * 1.0
-        if cs is not None:
-            c_old = cs * 1.0
+        # Compute input attention, 
+        inputs, attn_score = self.position_attention(x, hs) # `inputs` Shape: [N, num_hidden, self.input_value_size]
+        # Compute rule selection
+        #    use concat[hs, inputs] as query
+        #    use rule_embeddings as key
+        rule_attn_scores = self.selection_attention(
+            torch.cat((hs, inputs), dim = 2), # Shape: [N, num_hidden, self.input_value_size + self.hidden_size]
+            self.rule_embeddings
+        ) # Shape: [N, num_hidden, num_rules]
         
-        # Compute RNN(LSTM or GRU) output
-        
-        if cs is not None:
-            hs, cs = self.rnn(inputs, (hs, cs))
+        # Perform rule selection
+        if self.training:
+            rule_mask = nn.functional.gumbel_softmax(rule_attn_scores, tau=0.5, hard=True) # sample. Shape: [N, num_hidden, num_rules] (one-hot)
         else:
-            hs = self.rnn(inputs, hs)
-
-        # Block gradient through inactive units
-        mask = mask.unsqueeze(2).detach()
-        h_new = blocked_grad.apply(hs, mask)
+            rule_mask = RuleArgMax.apply(rule_attn_scores) # no sample, just argmax. Shape: [N, num_hidden, num_rules] (one-hot)
+        
+        # Compute rules (LSTM or GRU) output
+        if cs is not None:
+            hs, cs = self.rule_apply(inputs, hs, cs, rule_mask=rule_mask)
+        else:
+            hs = self.rule_apply(inputs, hs, rule_mask=rule_mask)
 
         # Compute communication attention
-        context = self.communication_attention(h_new, mask.squeeze(2))
+        mask = torch.ones(hs.shape[0], hs.shape[1]).to(hs.device)
+        context = self.communication_attention(h_new, mask) # `mask` Shape: [N, num_hidden]
         h_new = h_new + context
 
         # Prepare the context/intermediate value
         ctx = Ctx(input_attn=attn_score,
-            input_attn_mask=mask.squeeze()
+            input_attn_mask=mask.squeeze(),
+            rule_attn=rule_attn_scores,
+            rule_attn_mask=rule_mask.squeeze(),
             )
 
-        # Update hs and cs and return them
-        hs = mask * h_new + (1 - mask) * h_old
+        # Return updated hs (, cs)
         if cs is not None:
-            cs = mask * cs + (1 - mask) * c_old
             return hs, cs, None, mask
         return hs, None, None, ctx
+    
+    def rule_apply(self, inputs, hs, cs=None, rule_mask=None, parallel_input=True):
+        """
+        for i in range(num_hidden): apply rule
+
+        `self.rules`: nn.ModuleList
+
+        Inputs: 
+            `inputs` (batch_size, num_hidden, input_value_size)
+            `hs` (batch_size, num_hidden, hidden_size)
+            `cs` (batch_size, num_hideen, ...)
+            `rule_mask` (batch_size, num_hidden, num_rules)
+            `parallel_input`: (bool) setting True will combine batch and num_hidden dimension to speed up computation
+
+        Output: 
+            `hs_new`
+            `cs_new`
+        """
+        if rule_mask is None:
+            raise RuntimeError("rule_mask is None")
+        if not parallel_input:
+            inputs = inputs.transpose(0,1) # Shape: [num_hidden, batch_size, input_value_size]
+            hs = hs.transpose(0,1) # Shape: [num_hidden, batch_size, hidden_size]
+            rule_mask = rule_mask.transpose(0,1) # Shape: [num_hidden, batch_size, num_rules]
+            if cs is not None:
+                cs = cs.transpose(0,1)
+            all_hs_new = []
+            all_cs_new = []
+            for i in range(self.num_hidden):
+                if cs is not None:
+                    hs_cs_new = [self.rules[j](inputs[i], (hs[i], cs[i])) for j in range(self.num_rules)]
+                    hs_new = torch.stack([hs_cs_new[j][0] for j in range(self.num_rules)], dim=1) # Shape: [batch_size, num_rules, hidden_size]
+                    cs_new = torch.stack([hs_cs_new[j][1] for j in range(self.num_rules)], dim=1) # Shape: [batch_size, num_rules, ...]
+                    hs_new = torch.sum(hs_new * rule_mask[i].unsqueeze(-1), dim = 1) # Shape: [batch_size, num_rules, hidden_size] -> [batch_size, hidden_size]
+                    cs_new = torch.sum(cs_new * rule_mask[i].unsqueeze(-1), dim = 1) # Shape: [batch_size, num_rules, ...] -> [batch_size, ...]
+                    all_hs_new.append(hs_new)
+                    all_cs_new.append(cs_new)
+                else:
+                    hs_new = torch.stack([hs_cs_new[j] for j in range(self.num_rules)], dim=1) # Shape: [batch_size, num_rules, hidden_size]
+                    hs_new = torch.sum(hs_new * rule_mask[i].unsqueeze(-1), dim = 1) # Shape: [batch_size, num_rules, hidden_size] -> [batch_size, hidden_size]
+                    all_hs_new.append(hs_new)
+            
+            if cs is not None:
+                return torch.stack(all_hs_new, dim=1), torch.stack(all_cs_new, dim=1)
+            else:
+                return torch.stack(all_hs_new, dim=1)
+        else:
+            batch_size, num_hidden = hs.shape[0], hs.shape[1]
+            inputs = inputs.view(inputs.shape[0]*inputs.shape[1], inputs.shape[2]) # Shape: [num_hidden*batch_size, input_value_size]
+            hs = hs.view(hs.shape[0]*hs.shape[1], hs.shape[2]) # Shape: [num_hidden*batch_size, hidden_size]
+            cs = cs.view(cs.shape[0]*cs.shape[1], cs.shape[2]) if cs is not None else None
+            rule_mask = rule_mask.view(rule_mask.shape[0]*rule_mask.shape[1], rule_mask.shape[2]) # Shape: [num_hidden*batch_size, num_rules]
+            if cs is not None:
+                hs_cs_new = [self.rules[j](inputs, (hs, cs)) for j in range(self.num_rules)]
+                hs_new = torch.stack([hs_cs_new[j][0] for j in range(self.num_rules)], dim=1) # [BS*K, num_rules, hidden_size]
+                cs_new = torch.stack([hs_cs_new[j][1] for j in range(self.num_rules)], dim=1) # [BS*K, num_rules, ...]
+                hs_new = torch.sum(hs_new * rule_mask.unsqueeze(-1), dim = 1) # [BS*K, num_rules, hidden_size] -> [BS*K, hidden_size]
+                cs_new = torch.sum(cs_new * rule_mask.unsqueeze(-1), dim = 1) # [BS*K, num_rules, ...] -> [BS*K, ...]
+                hs_new = hs_new.view(batch_size, num_hidden, hs_new.shape[1]) # [BS, num_hidden, hidden_size]
+                cs_new = cs_new.view(batch_size, num_hidden, cs_new.shape[1]) # [BS, num_hidden, ...]
+                return hs_new, cs_new
+            else:
+                hs_new = [self.rules[j](inputs, hs) for j in range(self.num_rules)]
+                hs_new = torch.stack(hs_new, dim=1) # Shape: [batch_size*num_hidden, num_rules, hidden_size]
+                hs_new = torch.sum(hs_new * rule_mask.unsqueeze(-1), dim = 1) # Shape: [batch_size*num_hidden, num_rules, hidden_size] -> [batch_size*num_hidden, hidden_size]
+                hs_new = hs_new.view(batch_size, num_hidden, hs_new.shape[1]) # Shape: [batch_size, num_hidden, hidden_size]
+                return hs_new
 
 
 class RIM(nn.Module):
@@ -397,7 +492,9 @@ class SparseRIMCell(RIMCell):
         
         # Prepare the context/intermediate value
         ctx = Ctx(input_attn=attn_score,
-            input_attn_mask=mask.squeeze()
+            input_attn_mask=mask.squeeze(),
+            rule_attn=mask.squeeze(), # not applicable here
+            rule_attn_mask=mask.squeeze(), # not applicable here
             )
 
         return hs, None, None, ctx, reg_loss
@@ -432,3 +529,23 @@ class Interpolate(nn.Module):
     def forward(self, x):
         x = self.interp(x, scale_factor=self.scale_factor, mode=self.mode, align_corners=False)
         return x
+
+class RuleArgMax(torch.autograd.Function):
+
+	@staticmethod
+	def forward(ctx, input):
+		idx = torch.argmax(input, 1)
+		ctx._input_shape = input.shape
+		ctx._input_dtype = input.dtype
+		ctx._input_device = input.device
+		#ctx.save_for_backward(idx)
+		op = torch.zeros(input.size()).to(input.device)
+		op.scatter_(1, idx[:, None], 1)
+		ctx.save_for_backward(op)
+		return op
+
+	@staticmethod
+	def backward(ctx, grad_output):
+		op, = ctx.saved_tensors
+		grad_input = grad_output * op
+		return grad_input

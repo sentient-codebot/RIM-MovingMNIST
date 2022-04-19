@@ -126,8 +126,8 @@ class PositionAttention(Attention):
     def forward(self, x, h):
         """
         Input:
-            `x`: input tensor of shape (batch_size, num_inputs, input_size)
-            `h`: hidden state of shape (batch_size, num_hidden, hidden_size)
+            `x`: input tensor of shape (batch_size, num_inputs, input_size) -> keys/values
+            `h`: hidden state of shape (batch_size, num_hidden, hidden_size) -> queries
         """
         key = self.key(x) # Shape: [batch_size, num_heads, kdim]
         value = self.value(x)
@@ -144,6 +144,39 @@ class PositionAttention(Attention):
         output = torch.matmul(self.dropout(attention_probs), value) 
 
         return output, attention_probs
+
+class SelectionAttention(nn.Module):
+    """SelectionAttention for selecting rules by matching rules and inputs.
+    
+    Args:
+        `input_size`    : input size, used to construct queries
+        `rule_emb_size` : rule embedding size, used to construct keys
+        `kdim`          : dimension of keys
+        `normalize`     : [Optional, boolean] whether to normalize the attention scores, default=`True`
+        """
+    def __init__(self, input_size, rule_emb_size, kdim, normalize=True):
+        super().__init__()
+        self.input_size = input_size
+        self.rule_emb_size = rule_emb_size
+        self.kdim = kdim
+        self.normalize = normalize
+        self.query_proj = nn.Linear(input_size, kdim, bias=False)
+        self.key_proj = nn.Linear(rule_emb_size, kdim, bias=False)
+
+    def forward(self, inputs, rule_embeddings):
+        """
+        Input:
+            `inputs`: input tensor of shape (batch_size, num_inputs, input_size)
+            `rule_embeddings`: rule embeddings of shape (batch_size, num_rules, rule_emb_size)
+        Output:
+            `attention_scores`: attention scores of shape (batch_size, num_inputs, num_rules), normalized if `normalize==True`
+        """
+        query = self.query_proj(inputs) # Shape: [N, num_inputs, kdim]
+        key = self.key_proj(rule_embeddings) # Shape: [N, num_rules, kdim]
+        attention_scores = torch.matmul(query, key.transpose(-1, -2)) / math.sqrt(self.kdim) # Shape: [N, num_inputs, num_rules]
+        if self.normalize:
+            attention_scores = nn.Softmax(dim=2)(attention_scores) # Shape: [N, num_inputs, num_rules]
+        return attention_scores
 
 class PriorSampler():
     """
@@ -268,14 +301,14 @@ class ArgMax(torch.autograd.Function):
     @staticmethod
     def forward(ctx: Any, x: torch.Tensor) -> torch.Tensor:
         ctx.save_for_backward(x)
-        indices = torch.argmax(x, dim=2) # Shape: [batch_size, num_slots]
-        y = torch.nn.functional.one_hot(indices, x.shape[2]) # Shape: [batch_size, num_slots, num_inputs]
+        indices = torch.argmax(x, dim=-1) # Shape: [batch_size, num_slots]
+        y = torch.nn.functional.one_hot(indices, x.shape[-1]) # Shape: [batch_size, num_slots, num_inputs]
         return y
 
     @staticmethod
     def backward(ctx: Any, grad_output: Any) -> Any:
         x, = ctx.saved_tensors
-        func_out, vjp = torch.autograd.functional.vjp(torch.nn.Softmax(dim=2), x, grad_output)
+        func_out, vjp = torch.autograd.functional.vjp(torch.nn.Softmax(dim=-1), x, grad_output)
         return vjp
 
 class SparseInputAttention(Attention):

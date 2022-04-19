@@ -9,6 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from networks import BallModel
 from argument_parser import argument_parser
 from datasets.MovingMNIST import MovingMNIST
+from datasets import setup_dataloader
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
 from utils.visualize import ScalarLog, plot_frames, VectorLog, SaliencyMap, VecStack
@@ -47,7 +48,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
     if args.core == 'RIM':
         rim_actv = VecStack()
         rim_actv_mask = VecStack()
-    # dec_actv = VecStack()
+        dec_util = VecStack()
 
     mse = lambda x, y: ((x - y)**2).mean(dim=(0,1,2)).sum() # x Shape: [batch_size, T, C, H, W]
 
@@ -65,12 +66,13 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
     epoch_mseloss = torch.tensor(0.).to(args.device)
     f1 = 0.
     ssim = 0.
-    for batch_idx, data in enumerate(test_loader): # tqdm doesn't work here?
+    most_used_units = []
+    for batch_idx, data in enumerate(tqdm(test_loader) if __name__ == "__main__" else test_loader): # tqdm doesn't work here?
         hidden = model.init_hidden(data.shape[0]).to(args.device)
         if args.core == 'RIM':
             rim_actv.reset()
             rim_actv_mask.reset()
-        # dec_actv.reset()
+            dec_util.reset()
         start_time = time()
         data = data.to(args.device)
         if data.dim()==4:
@@ -110,11 +112,14 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
                 # writer.add_scalar(f'Metrics/F1 at Frame {frame}', f1_frame, epoch)
                 f1 += f1_frame
 
-            # intm["decoder_utilization"] = dec_rim_util(model, hidden, args)
+            intm["decoder_utilization"] = dec_rim_util(model, hidden)
+            most_used_units.extend(torch.topk(intm["decoder_utilization"], k=args.num_hidden//2, dim=-1).indices.tolist())
             if args.core == 'RIM':
                 rim_actv.append(intm["input_attn"]) # shape (batchsize, num_units, 1) -> (BS, NU, T)
                 rim_actv_mask.append(intm["input_attn_mask"])
-            # dec_actv.append(intm["decoder_utilization"])
+                dec_util.append(intm["decoder_utilization"])
+                pass
+        
         if not rollout:
             ssim += pt_ssim.ssim(data[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
                         prediction[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
@@ -143,8 +148,9 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
             'f1': f1_avg,
             'rim_actv': rim_actv.show(),
             'rim_actv_mask': rim_actv_mask.show(),
-            # 'dec_actv': dec_actv.show(),
-            'blocked_dec': blocked_prediction
+            'dec_util': dec_util.show(),
+            'blocked_dec': blocked_prediction,
+            'most_used_units': most_used_units
         }
     else:
         metrics = {
@@ -157,43 +163,59 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
     model.get_intm = previous_get_intm
     return epoch_loss, prediction, data, metrics
 
-def dec_rim_util(model, h, args):
-    """check the contribution of the (num_module)-th RIM by seeing how much they contribute to the activaiton of first relu"""
-    h = h.clone().detach().requires_grad_(True)
+@torch.no_grad()
+def dec_rim_util(model, h):
+    """check the contribution of the (num_module)-th RIM 
     
-    h_flat = h.view(h.shape[0],-1)
-    decoded = model.Decoder(h_flat)
-    grad = torch.autograd.grad(decoded.sum(), h)[0]
+    Inputs:
+        `model`: the model
+        `h`: hidden state, [N, num_hidden, hidden_size]
+    
+    Outputs:
+        `dec_util`: the decoder utilization, [N, num_hidden]
+    """
+    decoder_type = model.decoder_type
+    # if decoder_type == 'CAT_BASIC':
+    #   model.decoder(h) -> [N, 1, 64, 64]
+    # elif decoder_type == 'SEP_SBD':
+    #   model.deocder(h) -> fused, channels, alpha_mask
+    
+    if decoder_type == 'CAT_BASIC':
+        func = lambda x: model.decoder(x.flatten(start_dim=1)).sum(dim=(1,2,3)) # [N]
+    elif decoder_type == 'SEP_SBD':
+        func = lambda x: model.decoder(x)[0].sum(dim=(1,2,3)) # [N]
+    else:
+        raise RuntimeError("Unknown decoder type")
+    
+    output_sum_grad = torch.autograd.functional.jacobian(func, h) # Shape: [N, N, num_hidden, hidden_size]
+    output_sum_grad = torch.diagonal(output_sum_grad, dim1=0, dim2=1).movedim(-1, 0) # Shape: ... -> [num_hidden, hidden_size, N] -> [N, num_hidden, hidden_size]
+    dec_util = output_sum_grad.abs().sum(dim=2) # Shape: [N, num_hidden]
 
-    util_dec = torch.sum(torch.abs(grad), dim=2)
-    return util_dec
+    return dec_util
 
 
 def main():
+    # parse and process args
     args = argument_parser()
     print(f"Loading args from "+f"{args.folder_log}/args/args")
     args.__dict__.update(torch.load(f"{args.folder_save}/args/args"))
+    if not args.should_resume:
+        args.should_resume = True
+    cudable = torch.cuda.is_available()
+    args.device = torch.device("cuda" if cudable else "cpu")
 
+    # wandb setup
     project, name = args.experiment_name.split('_',1)
     wandb.init(project=project, name=name+'_test', config=vars(args), entity='nan-team')
     print(args)
 
-    if not args.should_resume:
-        args.should_resume = True
+    # data setup
+    train_loader, test_loader = setup_dataloader(args=args)
 
-    cudable = torch.cuda.is_available()
-    args.device = torch.device("cuda" if cudable else "cpu")
-
+    # model setup
     model, epoch = setup_model(args=args)
 
-    args.directory = './data' # dataset directory
-    test_set = MovingMNIST(root='./data', train=False, download=True)
-    test_loader = torch.utils.data.DataLoader(
-        dataset=test_set,
-        batch_size=args.batch_size,
-        shuffle=True
-    )
-
+    # TODO integrate to setup_model
     if args.loss_fn == "BCE":
         loss_fn = torch.nn.BCELoss() 
     elif args.loss_fn == "MSE":
@@ -201,7 +223,10 @@ def main():
     else:
         loss_fn = torch.nn.MSELoss()    
     
+    # tensorboard setup
     writer = SummaryWriter(log_dir='./runs/'+args.id+'_test')
+
+    # call test function
     test_loss, prediction, data, metrics= test(
         model = model,
         test_loader = test_loader,
@@ -211,12 +236,14 @@ def main():
         rollout = True,
         epoch = epoch
     )
+    # unpack metrics
     test_mse = metrics['mse']
     test_f1 = metrics['f1']
     test_ssim = metrics['ssim']
     rim_actv = metrics['rim_actv']
     rim_actv_mask = metrics['rim_actv_mask']
-    # dec_actv = metrics['dec_actv']
+    dec_util = metrics['dec_util']
+    most_used_units = metrics['most_used_units']
     blocked_dec = metrics['blocked_dec']
     print(f"epoch [{epoch}] test loss: {test_loss:.4f}; test mse: {test_mse:.4f}; "+\
         f"test F1 score: {test_f1:.4f}; test SSIM: {test_ssim:.4f}")
@@ -228,7 +255,7 @@ def main():
 
     writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
     writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
-    # writer.add_image('Stats/RIM Decoder Utilization', dec_actv[0], epoch, dataformats='HW')
+    writer.add_image('Stats/RIM Decoder Utilization', dec_util[0], epoch, dataformats='HW')
     cat_video = torch.cat(
         (data[0:4, 1:, :, :, :],prediction[0:4]),
         dim = 4 # join in width
@@ -245,6 +272,8 @@ def main():
     stat_dict = {
         'RIM Input Attention': wandb.Image(rim_actv[0].cpu()*256),
         'RIM Activation Mask': wandb.Image(rim_actv_mask[0].cpu()*256),
+        'RIM Decoder Utilization': wandb.Image(dec_util[0].cpu()*256),
+        'Most Used Units in Decoder': wandb.Histogram(most_used_units), # a list
     }
     video_dict = {
         'Predicted Videos': wandb.Video(cat_video.cpu()*256, fps=4),

@@ -40,7 +40,7 @@
                 "--should_resume",
                 "false",
                 "--experiment_name",
-                "MMNIST_slotrim_full",
+                "MMNIST_3slot_full",
                 "--save_frequency",
                 "25",
                 "--num_hidden",
