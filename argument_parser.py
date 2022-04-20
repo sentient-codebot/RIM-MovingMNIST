@@ -148,6 +148,10 @@ def argument_parser():
     parser.add_argument("--num_iterations_slot", type=int, default=None)
     #   RIM settings
     parser.add_argument('--use_sw', type=str2bool, default=False)
+    parser.add_argument('--num_sw_write_heads', type=int, default=1)
+    parser.add_argument('--num_sw_read_heads', type=int, default=1)
+    parser.add_argument('--sw_write_value_size', type=int, default=None)
+    parser.add_argument('--sw_read_value_size', type=int, default=None)
     parser.add_argument('--memory_size', type=int, default=None)
     parser.add_argument('--num_memory_slots', type=int, default=None)
     parser.add_argument('--use_memory_for_decoder', type=str2bool, default=False)
@@ -194,6 +198,10 @@ def argument_parser():
             args.memory_size = args.num_hidden
         if args.num_memory_slots is None:
             raise ValueError('num_memory_slots must be specified')
+        if args.num_sw_write_heads > 1 and args.sw_write_value_size is None:
+            raise ValueError('sw_write_value_size must be specified')
+        if args.num_sw_read_heads > 1 and args.sw_read_value_size is None:
+            raise ValueError('sw_read_value_size must be specified')
 
     if args.use_slot_attention:
         assert args.num_iterations_slot is not None
