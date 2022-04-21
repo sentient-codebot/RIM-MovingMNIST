@@ -69,7 +69,9 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
     most_used_units = []
     for batch_idx, data in enumerate(tqdm(test_loader) if __name__ == "__main__" else test_loader): # tqdm doesn't work here?
         hidden = model.init_hidden(data.shape[0]).to(args.device)
-        memory = model.init_memory(data.shape[0]).to(args.device)
+        memory = None
+        if args.use_sw:
+            memory = model.init_memory(data.shape[0]).to(args.device)
         if args.core == 'RIM':
             rim_actv.reset()
             rim_actv_mask.reset()
