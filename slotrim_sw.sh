@@ -27,4 +27,4 @@ python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json 
     --num_slots $num_slots \
     --k $k --num_hidden $num_hidden \
     --use_sw $use_sw --memory_size $memory_size --num_memory_slots $num_memory_slots --num_sw_write_heads $num_sw_write_heads \
-    --num_sw_read_heads $num_sw_read_heads --sw_write_value_size $sw_write_value_size --sw_read_value_size $sw_read_value_size
+    --num_sw_read_heads $num_sw_read_heads --sw_write_value_size $sw_write_value_size --sw_read_value_size $sw_read_value_size 
