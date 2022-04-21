@@ -4,9 +4,9 @@ echo Running on $HOSTNAME
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate pytorch
 
-experiment_name="MMNIST_SCOFF_basic"
+experiment_name="MMNIST_basic"
 cfg_json="configs/scoff/scoff_basic.json"
-should_resume="false"
+should_resume="true"
 save_freq=25
 
 python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --should_resume $should_resume --save_frequency $save_freq 

@@ -75,10 +75,10 @@ def main():
     if not args.should_resume:
         make_dir(f"{args.folder_save}/checkpoints")
         make_dir(f"{args.folder_save}/args")
-        print(f"Saving args to {args.folder_save}/args/args")
+        print(f"Saving args to {args.folder_save}/args/args.pt")
         torch.save({
             "args": vars(args)
-        }, f"{args.folder_save}/args/args")
+        }, f"{args.folder_save}/args/args.pt")
 
     # wandb setup
     project, name = args.experiment_name.split('_',1)
@@ -229,8 +229,8 @@ def setup_model(args):
         args.checkpoint = {"epoch": latest_model_idx}
     
     if args.path_to_load_model != "":
-        print(f"Loading args from "+f"{args.folder_save}/args")
-        args.__dict__.update(torch.load(f"{args.folder_save}/args"))
+        print(f"Loading args from "+f"{args.folder_save}/args/args.pt")
+        args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt"))
     
     # initialize
     if args.task == 'MMNIST':
