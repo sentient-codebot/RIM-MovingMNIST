@@ -20,7 +20,7 @@
     "k"                         : 4,
     "num_input_heads"           : 1,
     "input_key_size"            : 64,
-    "input_value_size"          : 400,
+    "input_value_size"          : 200,
     
     "rnn_cell"                  : "GRU",
     "comm_key_size"             : 32,

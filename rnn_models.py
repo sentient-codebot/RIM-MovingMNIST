@@ -525,6 +525,7 @@ class SCOFFCell(nn.Module):
                 step_att,
                 num_modules_read_input,
                 inp_heads,
+                comm_heads,
                 do_gru,
                 do_rel,
                 n_templates,
@@ -554,6 +555,7 @@ class SCOFFCell(nn.Module):
         self.device = device
         self.num_modules_read_input = num_modules_read_input
         self.inp_heads = inp_heads
+        self.comm_heads = comm_heads
         # NOTE modified option below
         self.share_inp = share_inp
         print('topk and memorytopk is', self.topkval, self.memorytopk)
@@ -563,7 +565,7 @@ class SCOFFCell(nn.Module):
         print('share same input for all object files', self.share_inp)
         print('share inp and comm attn params', share_inp_attn, share_comm_attn)
         print("communication is happening", self.step_att)
-        self.mha = MultiHeadAttention(n_head=4, d_model_read=self.block_size_out, d_model_write=self.block_size_out,
+        self.mha = MultiHeadAttention(n_head=self.comm_heads, d_model_read=self.block_size_out, d_model_write=self.block_size_out,
                                       d_model_out=self.block_size_out, d_k=32, d_v=32,
                                       num_blocks_read=self.num_blocks_out, num_blocks_write=self.num_blocks_out,
                                       dropout=0.1, topk=self.num_blocks_out,n_templates=1,share_comm=share_comm_attn,share_inp=False, grad_sparse=False)

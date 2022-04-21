@@ -146,9 +146,17 @@ def argument_parser():
     parser.add_argument('--num_slots', type=int, default=None)
     parser.add_argument("--slot_size", type=int, default=None)
     parser.add_argument("--num_iterations_slot", type=int, default=None)
-    #   SCOFF settings
-    parser.add_argument("--num_rules", type=int, default=None)
-    #   RIM settings
+    #   RNN common settings
+    parser.add_argument('--rnn_cell', type=str, default='GRU',
+                        metavar='dynamics of RIMCell/SCOFFCell', help='one of LSTM or GRU')              
+    parser.add_argument('--num_hidden', type=int, default=6, metavar='num_blocks',
+                        help='Number_of_units')
+    parser.add_argument('--k', type=int, default=4, metavar='topk',
+                        help='Number_of_topk_blocks') # for RIMs = num active modules, for SCOFF = ?
+    parser.add_argument('--num_input_heads', type=int, default=1,
+                        metavar='E', help='num of heads in input attention')
+    parser.add_argument('--num_comm_heads', type=int, default=4)
+    #       SharedWorkspace settings
     parser.add_argument('--use_sw', type=str2bool, default=False)
     parser.add_argument('--num_sw_write_heads', type=int, default=1)
     parser.add_argument('--num_sw_read_heads', type=int, default=1)
@@ -157,23 +165,16 @@ def argument_parser():
     parser.add_argument('--memory_size', type=int, default=None)
     parser.add_argument('--num_memory_slots', type=int, default=None)
     parser.add_argument('--use_memory_for_decoder', type=str2bool, default=False)
-    parser.add_argument('--num_hidden', type=int, default=6, metavar='num_blocks',
-                        help='Number_of_units')
-    parser.add_argument('--k', type=int, default=4, metavar='topk',
-                        help='Number_of_topk_blocks')
-    parser.add_argument('--rnn_cell', type=str, default='GRU',
-                        metavar='dynamics of RIMCell', help='one of LSTM or GRU')              
-    parser.add_argument('--num_input_heads', type=int, default=1,
-                        metavar='E', help='num of heads in input attention')
+    #   SCOFF settings
+    parser.add_argument("--num_rules", type=int, default=None)
+    #   RIM settings
     parser.add_argument('--input_dropout', type=float,
                         default=0.1, metavar='dropout', help='dropout')
     parser.add_argument('--comm_dropout', type=float, default=0.5)
-
     parser.add_argument('--input_key_size', type=int)
     parser.add_argument('--input_value_size', type=int)
     parser.add_argument('--comm_key_size', type=int)
     parser.add_argument('--comm_value_size', type=int)
-    parser.add_argument('--num_comm_heads', type=int, default=4)
 
     args, left_argv = config_parser.parse_known_args() # if passed args BESIDES defined in cfg_parser, store in left_argv
 

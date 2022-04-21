@@ -9,13 +9,14 @@
     "lr"                        : 0.0007,
     "loss_fn"                   : "MSE",
 
-    "core"                      : "RIM",
+    "core"                      : "SCOFF",
     "input_size"                : 64,
     "hidden_size"               : 100,
     "num_hidden"                : 6,
+    "num_rules"                 : 3,
     
-    "encoder_type"              : "NONFLATTEN",
-    "decoder_type"              : "SEP_SBD",
+    "encoder_type"              : "FLATTEN",
+    "decoder_type"              : "CAT_BASIC",
 
     "k"                         : 4,
     "num_input_heads"           : 1,
@@ -28,11 +29,5 @@
     "num_comm_heads"            : 2,
 
     "input_dropout"             : 0.1,
-    "comm_dropout"              : 0.1,
-
-    "use_slot_attention"        : true,
-    "slot_size"                 : 100,
-    "num_slots"                 : 6,
-    "num_iterations_slot"       : 3
-
+    "comm_dropout"              : 0.1
 }

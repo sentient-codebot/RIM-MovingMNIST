@@ -304,7 +304,6 @@ class BallModel(nn.Module):
         elif self.core=='LSTM':
             raise NotImplementedError('LSTM core not implemented yet!')
         elif self.core=="SCOFF":
-
             # SCOFF requires a different input shape
             #   - input shape: [batch_size, num_object_files*input_size], we can pass different inputs to different OFs
             #   - h_prev shape: [batch_size, num_object_files*hidden_size]
