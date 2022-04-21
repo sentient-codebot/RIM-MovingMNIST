@@ -4,7 +4,7 @@ echo Running on $HOSTNAME
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate pytorch
 
-experiment_name="MMNIST_basic"
+experiment_name="MMNIST_SCOFF_basic"
 cfg_json="configs/scoff/scoff_basic.json"
 should_resume="true"
 save_freq=25

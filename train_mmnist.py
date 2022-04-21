@@ -249,9 +249,9 @@ def setup_model(args):
 
     # resume model state dict
     if args.path_to_load_model != "":
+        checkpoint = torch.load(args.path_to_load_model.strip())
         start_epoch = checkpoint['epoch'] + 1
         print(f"Resuming experiment id: {args.id}, from epoch: {start_epoch-1}")
-        checkpoint = torch.load(args.path_to_load_model.strip())
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         # TODO later add scheduler here
