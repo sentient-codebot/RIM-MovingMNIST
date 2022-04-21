@@ -3,7 +3,7 @@ from multiprocessing.sharedctypes import Value
 from turtle import st
 import torch
 import torch.nn as nn
-from rnn_models import RIMCell, RIM, SparseRIMCell, LayerNorm, Flatten, UnFlatten, Interpolate
+from rnn_models import RIMCell, RIM, SparseRIMCell, LayerNorm, Flatten, UnFlatten, Interpolate, SCOFFCell
 from group_operations import GroupDropout
 from collections import namedtuple
 import numpy as np
@@ -206,7 +206,7 @@ class BallModel(nn.Module):
                                         num_units=self.num_hidden,
                                         hidden_size=self.args.hidden_size,
                                         k=self.args.k,
-                                        rnn_cell='GRU', # defalt GRU
+                                        rnn_cell=self.args.rnn_cell, # defalt GRU
                                         input_key_size=self.args.input_key_size,
                                         input_value_size=self.args.input_value_size,
                                         num_input_heads = self.args.num_input_heads,
@@ -250,10 +250,40 @@ class BallModel(nn.Module):
             ).to(self.args.device)
         elif self.core == 'LSTM':
             raise ValueError('LSTM Baseline Not Implemented Yet. ')
+        elif self.core == "SCOFF":
+            self.rnn_model = SCOFFCell(
+                hidden_size=self.hidden_size,
+                num_blocks_in=self.num_inputs,
+                num_blocks_out=self.num_hidden,
+                topkval=self.args.k,
+                memorytopk=None, # not accessed
+                step_attn=True, # always do communication
+                num_modules_read_input=None, # not accessed
+                inp_heads=self.args.num_input_heads,
+                do_gru=True if self.args.rnn_cell == 'GRU' else False,
+                do_rel=False, # never True
+                n_templates=self.args.num_rules,
+                share_inp=True, # all OFs share same input
+                share_inp_attn=True,
+                share_comm_attn=True,
+            )
         else:
             raise ValueError('Illegal RNN Core')
 
     def forward(self, x, h_prev, M_prev):
+        """
+        Inputs:
+            `x`: [batch_size, C, H, W]
+            `h_prev`: [batch_size, num_units, hidden_size]`
+            `c_prev`: (not implemented) [batch_size, num_units, ...]
+            `M_prev`: (optional) [batch_size, num_units, memory_size] 
+        Outputs:
+            `dec_out`: [batch_size, 1, H, W]
+            `h_out`: [batch_size, num_units, hidden_size]
+            `c_out`: (not implemented) [batch_size, num_units, ...]
+            `M_out`: [batch_size, num_units, memory_size] | None
+            `Intm`: intermediate variables (for logging)
+            """
         ctx = None
         encoded_input = self.encoder(x) # Shape: (batch_size, 6*6, self.input_size) OR [batch_size, 1, self.input_size]
         if self.use_slot_attention:
@@ -273,6 +303,17 @@ class BallModel(nn.Module):
             h_new = h_new.reshape(h_shape)
         elif self.core=='LSTM':
             raise NotImplementedError('LSTM core not implemented yet!')
+        elif self.core=="SCOFF":
+
+            # SCOFF requires a different input shape
+            #   - input shape: [batch_size, num_object_files*input_size], we can pass different inputs to different OFs
+            #   - h_prev shape: [batch_size, num_object_files*hidden_size]
+            encoded_input = encoded_input.view(encoded_input.shape[0], -1, 1).repeat(1, 1, self.num_hidden).flatten(start_dim=1) # Shape: [batch_size, num_object_files*input_size*num_hidden]
+            h_prev = h_prev.view(h_prev.shape[0], -1) # Shape: [batch_size, num_units*hidden_size]
+            h_new, c_new, mask, block_mask, temp_attention = self.rnn_model(inp=encoded_input, hx=h_prev, cx=None)
+            h_new = h_new.view(h_new.shape[0], self.num_hidden, -1) # Shape: [batch_size, num_units, hidden_size]
+        else:
+            raise RuntimeError('Illegal RNN Core')
         
         blocked_out_ = torch.zeros(1).to(x.device)
         if "SEP" in self.decoder_type:
