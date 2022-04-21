@@ -9,8 +9,9 @@ from collections import namedtuple
 from abc import ABC, abstractmethod
 from typing import Any
 
-from group_operations import GroupLinearLayer, GroupTorchGRU, GroupLSTMCell, SharedWorkspace
-from attentions import InputAttention, CommAttention, SparseInputAttention, PositionAttention, SelectionAttention
+from group_operations import GroupLinearLayer, GroupTorchGRU, GroupLSTMCell, SharedWorkspace, SharedBlockGRU, SharedBlockLSTM
+from attentions import InputAttention, CommAttention, SparseInputAttention, PositionAttention, SelectionAttention, MultiHeadAttention
+from relational_memory import RelationalMemory
 
 
 Ctx = namedtuple('RunningContext',
@@ -514,6 +515,295 @@ class SparseRIMCell(RIMCell):
 
         return hs, None, None, ctx, reg_loss
 
+class SCOFFCell(nn.Module):
+    def __init__(self,
+                hidden_size,
+                num_blocks_in,
+                num_blocks_out,
+                topkval,
+                memorytopk,
+                step_att,
+                num_modules_read_input,
+                inp_heads,
+                do_gru,
+                do_rel,
+                n_templates,
+                share_inp,
+                share_inp_attn,
+                share_comm_attn,
+                memory_slots=4, # used if do_rel
+                num_memory_heads=4, # used if do_rel
+                memory_head_size=16, # used if do_rel
+                memory_mlp=4, # used if do_rel
+                attention_out=340, # used if do_rel
+                version=1, # always 1
+                device=None, # used if do_rel
+    ):
+        super(SCOFFCell, self).__init__()
+
+        self.hidden_size = hidden_size                                               # size of (total) hidden state
+        self.num_blocks_in = num_blocks_in                             # ?
+        self.num_blocks_out = num_blocks_out                           # ?
+        self.block_size_in = hidden_size // num_blocks_in                     # ?
+        self.block_size_out = hidden_size // num_blocks_out                   # ?
+        self.topkval = topkval                                         
+        self.memorytopk = memorytopk
+        self.step_att = step_att
+        self.do_gru = do_gru
+        self.do_rel = do_rel
+        self.device = device
+        self.num_modules_read_input = num_modules_read_input
+        self.inp_heads = inp_heads
+        # NOTE modified option below
+        self.share_inp = share_inp
+        print('topk and memorytopk is', self.topkval, self.memorytopk)
+        print('bs in', self.block_size_in)
+        print('bs out', self.block_size_out)
+        print('num_modules_read_input', self.num_modules_read_input)
+        print('share same input for all object files', self.share_inp)
+        print('share inp and comm attn params', share_inp_attn, share_comm_attn)
+        print("communication is happening", self.step_att)
+        self.mha = MultiHeadAttention(n_head=4, d_model_read=self.block_size_out, d_model_write=self.block_size_out,
+                                      d_model_out=self.block_size_out, d_k=32, d_v=32,
+                                      num_blocks_read=self.num_blocks_out, num_blocks_write=self.num_blocks_out,
+                                      dropout=0.1, topk=self.num_blocks_out,n_templates=1,share_comm=share_comm_attn,share_inp=False, grad_sparse=False)
+
+
+        self.version = version
+        assert self.version == 1
+        if self.version:
+            #It supports the flexibility of each module having a sperate encoder.
+            self.att_out = self.block_size_out * 1
+            self.inp_att = MultiHeadAttention(n_head=self.inp_heads, d_model_read=self.block_size_out,
+                                           d_model_write=int(self.hidden_size / self.num_blocks_out),
+                                           d_model_out=self.att_out, d_k=64, d_v=self.att_out, num_blocks_read=1,
+                                           num_blocks_write=num_blocks_in + 1, residual=False,
+                                           topk=self.num_blocks_in + 1,  n_templates=1, share_comm=False, share_inp=share_inp_attn, grad_sparse=False, skip_write=True)
+
+        else:
+            raise ValueError('following lines should NEVER be run! (version=0) it is a cardinal sin.')
+            #this is dummy!
+            self.att_out = attention_out
+            print('Using version 0 att_out is', self.att_out)
+            d_v = self.att_out//self.inp_heads
+            self.inp_att = MultiHeadAttention(n_head=self.inp_heads, d_model_read=self.block_size_out,
+                                          d_model_write=self.block_size_in, d_model_out=self.att_out,
+                                          d_k=64, d_v=d_v, num_blocks_read=num_blocks_out, num_blocks_write=self.num_modules_read_input,residual=False,
+                                          dropout=0.1, topk=self.num_blocks_in+1, n_templates=1, share_comm=False, share_inp=share_inp, grad_sparse=False, skip_write=True)
+
+
+        if do_gru:
+            self.block_lstm = SharedBlockGRU(self.att_out*self.num_blocks_out, self.hidden_size, k=self.num_blocks_out, n_templates= n_templates)
+        else:
+  
+            self.block_lstm = SharedBlockLSTM(self.att_out*self.num_blocks_out, self.hidden_size, k=self.num_blocks_out, n_templates= n_templates)
+           
+
+        if self.do_rel:
+            raise ValueError("I don't care about using Relational Memory. ")
+            memory_key_size = 32
+            gate_style = 'unit'
+            print('gate_style is', gate_style, memory_slots, num_memory_heads, memory_head_size, memory_key_size, memory_mlp)
+            self.relational_memory = RelationalMemory(
+                mem_slots=memory_slots,
+                head_size=memory_head_size,
+                input_size=self.hidden_size,
+                output_size=self.hidden_size,
+                num_heads=num_memory_heads,
+                num_blocks=1,
+                forget_bias=1,
+                input_bias=0,
+                gate_style="unit",
+                attention_mlp_layers=memory_mlp,
+                key_size=memory_key_size,
+                return_all_outputs=False,
+            )
+
+            self.memory_size = memory_head_size * num_memory_heads
+            self.mem_att = MultiHeadAttention(
+                n_head=4,
+                d_model_read=self.block_size_out,
+                d_model_write=self.memory_size,
+                d_model_out=self.block_size_out,
+                d_k=32,
+                d_v=32,
+                num_blocks_read=self.num_blocks_out,
+                num_blocks_write=memory_slots,
+                topk=self.num_blocks_out,
+                grad_sparse=False,
+                n_templates=n_templates,
+                share_comm=share_comm,
+                share_inp=share_inp,
+            )
+
+        self.memory=None
+
+    def blockify_params(self):
+        self.block_lstm.blockify_params()
+    
+    def transpose_for_scores(self, x, num_attention_heads, attention_head_size):
+        new_x_shape = x.size()[:-1] + (num_attention_heads, attention_head_size)
+        x = x.view(*new_x_shape)
+        return x.permute(0, 2, 1, 3)
+
+    def forward(self, inp, hx, cx):
+        """
+        Inputs:
+            if not self.share_inp:
+                `inp`: [batch_size, d_in] -> num_blocks_out x [batch_size, d_in//num_blocks_out], split for each block
+            else:
+                `inp`: [batch_size, num_inputs, d_in]
+            `hx`: [batch_size, d_hidden]
+            `cx`: [batch_size, d_hidden_c]
+
+        Output:
+            `hx_new`: [batch_size, d_hidden]
+            `cs_new`: [batch_size, d_hidden_c]
+            `mask`: mask for inp_use ~ [bs, num_blocks_out*block_size_out] (transformed from `inp` using attention with `hx`)
+            `block_mask`: # [bs, num_blocks_out, 1]
+            `temp_attention`
+        """
+        batch_size = inp.shape[0]
+
+        inp_use = inp #layer_input[idx_step]
+        def _process_input(_input):
+            """
+                `input`: [BS, num_inputs*input_size]
+            """
+            _input = _input.unsqueeze(1)
+
+            return torch.cat(
+                [_input, torch.zeros_like(_input[:, 0, :])], dim=1 # Shape [batch_size, num_inputs+1, ...]
+            )
+
+        if self.version:
+            if not self.share_inp:
+                input_to_attention = [_process_input(_input) for _input in
+                            torch.chunk(inp_use, chunks=self.num_blocks_out, dim=1)
+                            ] # [bs, d_in] -> num_blocks_out x [bs, d_in//num_blocks_out] -> num_blocks_out x [bs, 2, d_in//num_blocks_out]
+            else:
+                # `inp_use` Shape: [bs, num_inputs, input_size]
+                input_to_attention = torch.cat(
+                    [inp_use, torch.zeros_like(inp_use[:, 0, :])], dim=1
+                ) # Shape [bs, num_inputs+1, input_size]
+
+            split_hx = [chunk.unsqueeze(1) for chunk in
+                        torch.chunk(hx, chunks=self.num_blocks_out, dim=1)] # [bs, d_hidden] -> num_blocks_out x [bs, 1, d_hidden//num_blocks_out]
+
+            if not self.share_inp:
+                output = [self.inp_att(q=_hx, k=_inp, v=_inp) for
+                    _hx, _inp in zip(split_hx, input_to_attention)] # num_blocks_out x ([bs, 1, attn_out], attn, extra_loss); attn_out == block_size_out
+            else:
+                output = [self.inp_att(q=_hx, k=input_to_attention, v=input_to_attention) for
+                    _hx in split_hx] # num_blocks_out x ([bs, 1, attn_out], attn, extra_loss). attn_out == block_size_out
+
+            inp_use_list, iatt_list, _ = zip(*output) # num_blocks_out x ([bs, 1, attn_out], attn, extra_loss)
+
+            inp_use = torch.cat(inp_use_list, dim=1) # [bs, num_blocks_out, attn_out]
+            iatt = torch.cat(iatt_list, dim=1) # ...
+
+            inp_use = inp_use.reshape((inp_use.shape[0], self.att_out * self.num_blocks_out)) # [bs, att_out * num_blocks_out]
+
+        else:
+            raise ValueError('following lines should NEVER be run! (version=0) it is a cardinal sin.')
+            #use attention here.
+            inp_use = inp_use.reshape((inp_use.shape[0], self.num_blocks_in, self.block_size_in))
+            inp_use = inp_use.repeat(1,self.num_modules_read_input-1,1)
+            inp_use = torch.cat([torch.zeros_like(inp_use[:,0:1,:]), inp_use], dim=1)
+            batch_size = inp.shape[0]
+            inp_use, iatt, _ = self.inp_att(hx.reshape((hx.shape[0], self.num_blocks_out, self.block_size_out)), inp_use, inp_use)
+            iatt = iatt.reshape((self.inp_heads, sz_b, iatt.shape[1], iatt.shape[2]))
+            iatt = iatt.mean(0)
+
+            inp_use = inp_use.reshape((inp_use.shape[0], self.att_out*self.num_blocks_out))
+
+
+
+        new_mask = torch.ones_like(iatt[:,:,0]) # Shape: [bs, num_blocks_out]
+
+        if (self.num_blocks_out - self.topkval)>0:
+            bottomk_indices = torch.topk(iatt[:,:,0], dim=1,
+                                sorted=True, largest=True,
+                                k = self.num_blocks_out - self.topkval)[1]
+
+            new_mask.index_put_((torch.arange(bottomk_indices.size(0)).unsqueeze(1), bottomk_indices),
+                    torch.zeros_like(bottomk_indices[0], dtype=new_mask.dtype))
+        mask = new_mask
+        memory_inp_mask = mask
+        block_mask = mask.reshape((inp_use.shape[0], self.num_blocks_out,1)) # [bs, num_blocks_out, 1]
+        mask = mask.reshape((inp_use.shape[0],self.num_blocks_out,1)).repeat((1,1,self.block_size_out)).reshape((inp_use.shape[0], self.num_blocks_out*self.block_size_out)) # [bs, num_blocks_out*block_size_out] mask for inp_use ~ [bs, num_blocks_out*block_size_out]
+        mask = mask.detach()
+        memory_inp_mask = memory_inp_mask.detach() # Shape: [bs, num_blocks_out]
+
+
+        if self.do_gru:
+            hx_new, temp_attention = self.block_lstm(inp_use, hx) # [0]
+            cx_new = hx_new
+        else:
+            hx_new, cx_new, temp_attention = self.block_lstm(inp_use, hx, cx)
+        
+        hx_old = hx*1.0
+        cx_old = cx*1.0
+
+        if self.step_att:
+            hx_new = hx_new.reshape((hx_new.shape[0], self.num_blocks_out, self.block_size_out))
+            hx_new_grad_mask = blocked_grad.apply(hx_new,
+                                                  mask.reshape(
+                                                      (mask.shape[0],
+                                                       self.num_blocks_out,
+                                                       self.block_size_out)))
+            hx_new_att,attn_out,extra_loss_att = self.mha(hx_new_grad_mask,hx_new_grad_mask,hx_new_grad_mask)
+            hx_new = hx_new + hx_new_att
+
+            hx_new = hx_new.reshape((hx_new.shape[0], self.hidden_size))
+            extra_loss = extra_loss_att
+
+
+        hx = (mask)*hx_new + (1-mask)*hx_old # update OFs
+        cx = (mask)*cx_new + (1-mask)*cx_old # update OFs
+
+        if self.do_rel:
+             #memory_inp_mask = new_mask
+             batch_size = inp.shape[0]
+             memory_inp = hx.view(
+                 batch_size, self.num_blocks_out, -1
+             ) * memory_inp_mask.unsqueeze(2)
+
+             # information gets written to memory modulated by the input.
+             _, _, self.memory = self.relational_memory(
+                 inputs=memory_inp.view(batch_size, -1).unsqueeze(1),
+                 memory=self.memory.cuda(),
+             )
+
+             # Information gets read from memory, state dependent information reading from blocks.
+             old_memory = self.memory
+             out_hx_mem_new, out_mem_2, _ = self.mem_att(
+                 hx.reshape((hx.shape[0], self.num_blocks_out, self.block_size_out)),
+                 self.memory,
+                 self.memory,
+             )
+             hx = hx + out_hx_mem_new.reshape(
+                 hx.shape[0], self.num_blocks_out * self.block_size_out
+             )
+
+        return hx, cx, mask, block_mask, temp_attention
+
+
+    def reset_relational_memory(self, batch_size: int):
+        self.memory = self.relational_memory.initial_state(batch_size).to(self.device)
+
+    def step_attention(self, hx_new, cx_new, mask):
+        hx_new = hx_new.reshape((hx_new.shape[0], self.num_blocks_out, self.block_size_out))
+        # bg = blocked_grad()
+        hx_new_grad_mask = blocked_grad.apply(hx_new,
+                                              mask.reshape((mask.shape[0],
+                                                            self.num_blocks_out,
+                                                            self.block_size_out)))
+        hx_new_att, attn_out, extra_loss_att = self.mha(hx_new_grad_mask, hx_new_grad_mask, hx_new_grad_mask)
+        hx_new = hx_new + hx_new_att
+        hx_new = hx_new.reshape((hx_new.shape[0], self.hidden_size))
+        extra_loss = extra_loss_att
+        return hx_new, cx_new, extra_loss
 
 class LayerNorm(nn.Module):
     def __init__(self):

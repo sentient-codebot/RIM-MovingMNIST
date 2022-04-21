@@ -146,6 +146,8 @@ def argument_parser():
     parser.add_argument('--num_slots', type=int, default=None)
     parser.add_argument("--slot_size", type=int, default=None)
     parser.add_argument("--num_iterations_slot", type=int, default=None)
+    #   SCOFF settings
+    parser.add_argument("--num_rules", type=int, default=None)
     #   RIM settings
     parser.add_argument('--use_sw', type=str2bool, default=False)
     parser.add_argument('--num_sw_write_heads', type=int, default=1)

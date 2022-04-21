@@ -7,6 +7,10 @@ from torch.distributions.beta import Beta
 from torch.distributions.binomial import Binomial
 from torch.distributions.uniform import Uniform
 
+from group_operations import SharedGroupLinearLayer
+import torch.nn.functional as F
+import numpy as np
+
 from typing import Any
 
 class Attention(nn.Module):
@@ -443,6 +447,230 @@ class CommAttention(Attention):
         context = self.output_fc(context) # to be add to current h
 
         return context
+
+class Sparse_grad_attention(torch.autograd.Function):
+    # def __init__(self, top_k):
+    #     super(Sparse_grad_attention,self).__init__()
+    #
+    #     self.sa = Sparse_attention(top_k=top_k)
+
+    @staticmethod
+    def forward(ctx, inp, sa):
+        sparsified = sa(inp)
+        ctx.save_for_backward(inp, sparsified)
+
+        return inp
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        inp, sparsified = ctx.saved_tensors
+        # print('sparsified', sparsified)
+        return (grad_output) * (sparsified > 0.0).float()
+class Sparse_attention(nn.Module):
+    def __init__(self, top_k = 5):
+        super(Sparse_attention,self).__init__()
+        top_k += 1
+        self.top_k = top_k
+
+    def forward(self, attn_s):
+
+        # normalize the attention weights using piece-wise Linear function
+        # only top k should
+        attn_plot = []
+        # torch.max() returns both value and location
+        #attn_s_max = torch.max(attn_s, dim = 1)[0]
+        #attn_w = torch.clamp(attn_s_max, min = 0, max = attn_s_max)
+        eps = 10e-8
+        time_step = attn_s.size()[1]
+        if time_step <= self.top_k:
+            # just make everything greater than 0, and return it
+            #delta = torch.min(attn_s, dim = 1)[0]
+            return attn_s
+        else:
+            # get top k and return it
+            # bottom_k = attn_s.size()[1] - self.top_k
+            # value of the top k elements 
+            #delta = torch.kthvalue(attn_s, bottm_k, dim= 1 )[0]
+            delta = torch.topk(attn_s, self.top_k, dim= 1)[0][:,-1] + eps
+            #delta = attn_s_max - torch.topk(attn_s, self.top_k, dim= 1)[0][:,-1] + eps
+            # normalize
+            delta = delta.reshape((delta.shape[0],1))
+
+
+        attn_w = attn_s - delta.repeat(1, time_step)
+        attn_w = torch.clamp(attn_w, min = 0)
+        attn_w_sum = torch.sum(attn_w, dim = 1, keepdim=True)
+        attn_w_sum = attn_w_sum + eps 
+        attn_w_normalize = attn_w / attn_w_sum.repeat(1, time_step)
+
+        #print('attn', attn_w_normalize)
+
+        return attn_w_normalize
+
+class ScaledDotProductAttention(nn.Module):
+    ''' Scaled Dot-Product Attention '''
+
+    def __init__(self, temperature, topk, grad_sparse, attn_dropout=0.1):
+        super().__init__()
+        self.temperature = temperature
+        #self.dropout = nn.Dropout(attn_dropout)
+        self.softmax = nn.Softmax(dim=2)
+        self.grad_sparse = grad_sparse
+        #print('top 2 sparsity')
+        self.topk = topk
+        self.sa = Sparse_attention(top_k=topk) #k=2
+        #self.sga = Sparse_grad_attention(top_k=2)
+
+    def forward(self, q, k, v, mask=None):
+
+        attn = torch.bmm(q, k.transpose(1, 2))
+        attn = attn / self.temperature
+
+        #print('in forward attn shape', attn.shape)
+
+        if mask is not None:
+            attn = attn.masked_fill(mask, -np.inf)
+
+        #attn = self.dropout(attn)
+        attn = self.softmax(attn)
+        #if random.uniform(0,1) < 0.0001 or attn[0].max() > 0.8:
+        #    print('attn0', attn[0])
+
+        #sparse_attn = attn*0.0
+        #sparse_attn[:,0,0] += 1.0
+        #sparse_attn[:,1,1] += 1.0
+        #sparse_attn[:,2,2] += 1.0
+        #attn = sparse_attn*1.0
+
+        #extra_loss = 0.0
+        #for k in range(0,3):
+        #    extra_loss += 0.0001 * ((attn[:,k,k] - 1.0)**2).sum()
+        extra_loss = 0.0
+
+        use_sparse = True#False
+
+        if use_sparse:
+            mb, ins, outs = attn.shape[0], attn.shape[1], attn.shape[2]
+            sparse_attn = attn.reshape((mb*ins, outs))
+            #print('sparse attn shape 1', sparse_attn.shape)
+            #sga = Sparse_grad_attention(2)
+            if self.grad_sparse:
+                sga = Sparse_grad_attention(self.topk)
+                sparse_attn = sga(sparse_attn)
+            else:
+                sparse_attn = self.sa(sparse_attn)
+            sparse_attn = sparse_attn.reshape((mb,ins,outs))
+            attn = sparse_attn*1.0
+
+        output = torch.bmm(attn, v)
+        return output, attn, extra_loss
+
+class MultiHeadAttention(nn.Module):
+    ''' Multi-Head Attention module '''
+
+    def __init__(self, n_head, d_model_read, d_model_write, d_model_out, d_k, d_v, num_blocks_read, num_blocks_write, topk, grad_sparse,n_templates ,share_inp,share_comm, residual=True, dropout=0.1, skip_write=False):
+        super().__init__()
+
+        self.n_head = n_head
+        self.d_k = d_k
+        self.d_v = d_v
+
+        print('d model read', d_model_read)
+        if share_inp:
+            assert(n_templates!=0, "provide number of paramters for sharing")
+            self.GLN_qs = SharedGroupLinearLayer(d_model_read, n_head * d_k, n_templates)
+            self.GLN_ks = GroupLinearLayer(d_model_write, n_head * d_k, num_blocks_write)
+            self.GLN_vs = GroupLinearLayer(d_model_write, n_head * d_v, num_blocks_write)
+        elif share_comm:
+            # share Q,K,V for commuication
+            assert(n_templates!=0, "provide number of paramters for sharing")
+            self.GLN_qs = SharedGroupLinearLayer(d_model_read, n_head * d_k, n_templates)
+            self.GLN_ks = SharedGroupLinearLayer(d_model_write, n_head * d_k, n_templates)
+            self.GLN_vs = SharedGroupLinearLayer(d_model_write, n_head * d_v, n_templates)
+        else:
+            self.GLN_qs = GroupLinearLayer(d_model_read, n_head * d_k, num_blocks_read)
+            self.GLN_ks = GroupLinearLayer(d_model_write, n_head * d_k, num_blocks_write)
+            self.GLN_vs = GroupLinearLayer(d_model_write, n_head * d_v, num_blocks_write)
+
+        self.residual = residual
+
+        #self.w_qs = nn.Linear(d_model_read, n_head * d_k)
+        #self.w_ks = nn.Linear(d_model_write, n_head * d_k)
+        #self.w_vs = nn.Linear(d_model_write, n_head * d_v)
+
+        #nn.init.normal_(self.w_qs.weight, mean=0, std=np.sqrt(2.0 / (d_model + d_k)))
+        #nn.init.normal_(self.w_ks.weight, mean=0, std=np.sqrt(2.0 / (d_model + d_k)))
+        #nn.init.normal_(self.w_vs.weight, mean=0, std=np.sqrt(2.0 / (d_model + d_v)))
+
+        self.attention = ScaledDotProductAttention(temperature=np.power(d_k, 0.5), topk=topk, grad_sparse=grad_sparse)
+        #self.layer_norm = nn.LayerNorm(d_model)
+
+        self.gate_fc = nn.Linear(n_head * d_v, d_model_out)
+
+        if not skip_write:
+            self.fc = nn.Linear(n_head * d_v, d_model_out)
+        else:
+            self.fc = lambda a: a
+
+        #nn.init.xavier_normal_(self.fc.weight)
+
+        self.dropout = nn.Dropout(dropout)
+
+        self.ln = nn.LayerNorm(d_model_out)
+
+    def forward(self, q, k, v, mask=None):
+
+        #print('attn input shape', q.shape)
+        d_k, d_v, n_head = self.d_k, self.d_v, self.n_head
+
+        sz_b, len_q, _ = q.size()
+        sz_b, len_k, _ = k.size()
+        sz_b, len_v, _ = v.size()
+
+        residual = q
+
+        q = self.GLN_qs(q).view(sz_b, len_q, n_head, d_k)
+        #q = self.w_qs(q).view(sz_b, len_q, n_head, d_k)
+        k = self.GLN_ks(k).view(sz_b, len_k, n_head, d_k)
+        v = self.GLN_vs(v).view(sz_b, len_v, n_head, d_v)
+        #v = v.view(sz_b, len_v, n_head, d_v)
+
+        q = q.permute(2, 0, 1, 3).contiguous().view(-1, len_q, d_k) # (n*b) x lq x dk
+        k = k.permute(2, 0, 1, 3).contiguous().view(-1, len_k, d_k) # (n*b) x lk x dk
+        v = v.permute(2, 0, 1, 3).contiguous().view(-1, len_v, d_v) # (n*b) x lv x dv
+
+        #mask = mask.repeat(n_head, 1, 1) # (n*b) x .. x ..
+        output, attn, extra_loss = self.attention(q, k, v, mask=None)
+
+        output = output.view(n_head, sz_b, len_q, d_v)
+        output = output.permute(1, 2, 0, 3).contiguous().view(sz_b, len_q, -1) # b x lq x (n*dv)
+
+        #print('output shape before fc', output.shape)
+
+        #TODO: probably shouldn't just apply residual layer in the forward pass.
+
+        output_init = output*1.0
+        output = self.dropout(self.fc(output_init))
+        gate = F.sigmoid(self.gate_fc(output_init))
+
+        #output = self.layer_norm(gate * output + (1 - gate) * residual)
+        #output = gate * output + (1 - gate) * residual
+
+        if self.residual:
+            output = gate * F.tanh(output)
+        else:
+            #output = self.ln(output)
+            pass
+
+        #output
+
+        #print('attn', attn[0])
+        #print('output input diff', output - residual)
+
+        return output, attn, extra_loss
+
+
+
 
 def main():
     x = torch.rand(2, 3, 4, requires_grad=False)

@@ -284,5 +284,192 @@ class SharedWorkspace(nn.Module):
 
         return M_new, h_new
 
+class SharedGroupLinearLayer(nn.Module):
+    """All the parameters are shared using soft attention this layer is used for sharing Q,K,V parameters of MHA"""
 
+    def __init__(self, din, dout, n_templates):
+        super(SharedGroupLinearLayer, self).__init__()
+
+        self.w = nn.ParameterList([nn.Parameter(0.01 * torch.randn(din,dout)) for _ in range(0,n_templates)])
+        self.gll_write = GroupLinearLayer(dout,16, n_templates)
+        self.gll_read = GroupLinearLayer(din,16,1)
+
+    def forward(self,x):
+        #input size (bs,num_blocks,din), required matching num_blocks vs n_templates
+        bs_size = x.shape[0]
+        k = x.shape[1]
+        x= x.reshape(k*bs_size,-1)
+        x_read = self.gll_read((x*1.0).reshape((x.shape[0], 1, x.shape[1])))
+        x_next = []
+        for weight in self.w:
+            x_next_l = torch.matmul(x,weight)
+            x_next.append(x_next_l)
+        x_next = torch.stack(x_next,1) #(k*bs,n_templates,dout)
         
+        x_write = self.gll_write(x_next)
+        sm = nn.Softmax(2)
+        att = sm(torch.bmm(x_read, x_write.permute(0, 2, 1)))
+        
+        x_next = torch.bmm(att, x_next)
+
+        x_next = x_next.mean(dim=1).reshape(bs_size,k,-1)
+        
+        return x_next
+
+
+
+
+class SharedBlockGRU(nn.Module):
+    """Dynamic sharing of parameters between blocks(RIM's)
+    
+    Args:
+        `ninp`: input dimension (total dimension of all blocks concatenated), should be dividable by `k`
+        `nhid`: hidden dimension (total dimension of all blocks concatenated), should be dividable by `k`
+        `k`: number of blocks=object files
+        `n_templates`: number of templates"""
+
+    def __init__(self, ninp, nhid, k, n_templates):
+        super(SharedBlockGRU, self).__init__()
+
+        assert ninp % k == 0
+        assert nhid % k == 0
+
+        self.k = k
+        self.m = nhid // self.k # dimension of each block's hidden state
+
+        self.n_templates = n_templates
+        self.templates = nn.ModuleList([nn.GRUCell(ninp,self.m) for _ in range(0,self.n_templates)])
+        self.nhid = nhid
+
+        self.ninp = ninp
+
+        self.gll_write = GroupLinearLayer(self.m,16, self.n_templates)
+        self.gll_read = GroupLinearLayer(self.m,16,1)
+        print("Using Gumble sparsity")
+
+    def blockify_params(self):
+
+        return
+
+    def forward(self, input, h):
+        """
+        Inputs:
+            `input`: [N, ninp]
+            `h`: [N, nhid]
+            
+        Outputs:
+            `hnext`: [N, nhid],
+            `attn`: [N, num_blocks, ninp] (num_bloccks==k==num_object_files)
+        """
+
+        #self.blockify_params()
+        bs = h.shape[0]                                                                      # h: previous hidden state  
+        h = h.reshape((h.shape[0], self.k, self.m)).reshape((h.shape[0]*self.k, self.m))     # h_shape: ((h.shape[0]*self.k, self.m))
+
+        input = input.reshape(input.shape[0], 1, input.shape[1])
+        input = input.repeat(1,self.k,1)
+        input = input.reshape(input.shape[0]*self.k, input.shape[2])                         # input_shape: (input.shape[0]*self.k, input.shape[2])
+
+        h_read = self.gll_read((h*1.0).reshape((h.shape[0], 1, h.shape[1])))                 # h_read is initialised in group linear layer, self.w is defined inside 
+
+
+        hnext_stack = []
+
+
+        for template in self.templates:                                                     #templates are GRUs
+            hnext_l = template(input, h)                                                    
+            hnext_l = hnext_l.reshape((hnext_l.shape[0], 1, hnext_l.shape[1]))
+            hnext_stack.append(hnext_l)
+
+        hnext = torch.cat(hnext_stack, 1)                                                    #hnext_shape: ((hnext_l.shape[0], number_GRUs, hnext_l.shape[1]))
+
+        write_key = self.gll_write(hnext)                                                    # keys attn mechanisms
+
+        att = torch.nn.functional.gumbel_softmax(torch.bmm(h_read, write_key.permute(0, 2, 1)),  tau=0.5, hard=True)    # attn_shape: ((h.shape[0], 1 , number_GRUs))
+
+        #att = att*0.0 + 0.25
+
+        #print('hnext shape before att', hnext.shape)
+        hnext = torch.bmm(att, hnext)   #((hnext_l.shape[0], 1, hnext_l.shape[1]))
+        hnext = hnext.mean(dim=1)
+        hnext = hnext.reshape((bs, self.k, self.m)).reshape((bs, self.k*self.m))
+        #print('shapes', hnext.shape, cnext.shape)
+
+        return hnext, att.data.reshape(bs,self.k,self.n_templates)
+
+class SharedBlockLSTM(nn.Module):
+    """Dynamic sharing of parameters between blocks(RIM's)"""
+
+    def __init__(self, ninp, nhid, k , n_templates):
+        super(SharedBlockLSTM, self).__init__()
+
+        assert ninp % k == 0
+        assert nhid % k == 0
+
+        self.k = k
+        self.m = nhid // self.k
+        self.n_templates = n_templates
+        self.templates = nn.ModuleList([nn.LSTMCell(ninp,self.m) for _ in range(0,self.n_templates)])
+        self.nhid = nhid
+
+        self.ninp = ninp
+
+        self.gll_write = GroupLinearLayer(self.m,16, self.n_templates)
+        self.gll_read = GroupLinearLayer(self.m,16,1)
+
+    def blockify_params(self):
+
+        return
+
+    def forward(self, input, h, c):
+
+        #self.blockify_params()
+        bs = h.shape[0]
+        h = h.reshape((h.shape[0], self.k, self.m)).reshape((h.shape[0]*self.k, self.m))
+        c = c.reshape((c.shape[0], self.k, self.m)).reshape((c.shape[0]*self.k, self.m))
+
+
+        input = input.reshape(input.shape[0], 1, input.shape[1])
+        input = input.repeat(1,self.k,1)
+        input = input.reshape(input.shape[0]*self.k, input.shape[2])
+
+        h_read = self.gll_read((h*1.0).reshape((h.shape[0], 1, h.shape[1])))
+
+
+        hnext_stack = []
+        cnext_stack = []
+
+
+        for template in self.templates:#[self.lstm1, self.lstm2, self.lstm3, self.lstm4]:
+            hnext_l, cnext_l = template(input, (h, c))
+
+            hnext_l = hnext_l.reshape((hnext_l.shape[0], 1, hnext_l.shape[1]))
+            cnext_l = cnext_l.reshape((cnext_l.shape[0], 1, cnext_l.shape[1]))
+
+            hnext_stack.append(hnext_l)
+            cnext_stack.append(cnext_l)
+
+        hnext = torch.cat(hnext_stack, 1)
+        cnext = torch.cat(cnext_stack, 1)
+
+
+        write_key = self.gll_write(hnext)
+
+        sm = nn.Softmax(2)
+        att = sm(torch.bmm(h_read, write_key.permute(0, 2, 1)))
+
+        #att = att*0.0 + 0.25
+
+        #print('hnext shape before att', hnext.shape)
+        hnext = torch.bmm(att, hnext)
+        cnext = torch.bmm(att, cnext)
+
+        hnext = hnext.mean(dim=1)
+        cnext = cnext.mean(dim=1)
+
+        hnext = hnext.reshape((bs, self.k, self.m)).reshape((bs, self.k*self.m))
+        cnext = cnext.reshape((bs, self.k, self.m)).reshape((bs, self.k*self.m))
+
+        #print('shapes', hnext.shape, cnext.shape)
+
+        return hnext, cnext, att.data.reshape(bs,self.k,self.n_templates)
