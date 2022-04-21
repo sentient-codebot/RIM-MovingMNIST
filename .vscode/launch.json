@@ -53,7 +53,7 @@
             }
         },
         {
-            "name": "train/test mmnist basic",
+            "name": "train/test mmnist RIM basic",
             "type": "python",
             "request": "launch",
             "program": "${file}",
@@ -67,6 +67,26 @@
                 "false",
                 "--experiment_name",
                 "MMNIST_basic",
+                "--save_frequency",
+                "25",
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "1"
+            }
+        },
+        {
+            "name": "train/test mmnist SCOFF basic",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "--cfg_json",
+                "configs/scoff/scoff_basic.json",
+                "--should_resume",
+                "false",
+                "--experiment_name",
+                "MMNIST_SCOFF_basic",
                 "--save_frequency",
                 "25",
             ],

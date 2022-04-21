@@ -8,7 +8,6 @@ from torch.distributions.binomial import Binomial
 from torch.distributions.uniform import Uniform
 
 from group_operations import SharedGroupLinearLayer
-import torch.nn.functional as F
 import numpy as np
 
 from typing import Any
@@ -566,7 +565,14 @@ class ScaledDotProductAttention(nn.Module):
         return output, attn, extra_loss
 
 class MultiHeadAttention(nn.Module):
-    ''' Multi-Head Attention module '''
+    ''' Multi-Head Attention module 
+    Args:
+        `d_model_write`: size of vector with which to make keys/values
+        `num_blocks_write`: number of vectors to use for keys/values
+        `d_model_read`: size of vector with which to make queries
+        `num_blocks_read`: number of vectors to use for queries
+        `d_model_out`: size of output vector
+    '''
 
     def __init__(self, n_head, d_model_read, d_model_write, d_model_out, d_k, d_v, num_blocks_read, num_blocks_write, topk, grad_sparse,n_templates ,share_inp,share_comm, residual=True, dropout=0.1, skip_write=False):
         super().__init__()
@@ -651,13 +657,13 @@ class MultiHeadAttention(nn.Module):
 
         output_init = output*1.0
         output = self.dropout(self.fc(output_init))
-        gate = F.sigmoid(self.gate_fc(output_init))
+        gate = torch.sigmoid(self.gate_fc(output_init))
 
         #output = self.layer_norm(gate * output + (1 - gate) * residual)
         #output = gate * output + (1 - gate) * residual
 
         if self.residual:
-            output = gate * F.tanh(output)
+            output = gate * torch.tanh(output)
         else:
             #output = self.ln(output)
             pass

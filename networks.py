@@ -251,26 +251,29 @@ class BallModel(nn.Module):
         elif self.core == 'LSTM':
             raise ValueError('LSTM Baseline Not Implemented Yet. ')
         elif self.core == "SCOFF":
+            self.scoff_share_inp = True
             self.rnn_model = SCOFFCell(
-                hidden_size=self.hidden_size,
-                num_blocks_in=self.num_inputs,
+                hidden_size=self.hidden_size*self.num_hidden,
+                input_size=self.input_size,
+                num_inputs=self.num_inputs,
                 num_blocks_out=self.num_hidden,
                 topkval=self.args.k,
                 memorytopk=None, # not accessed
-                step_attn=True, # always do communication
+                step_att=True, # always do communication
                 num_modules_read_input=None, # not accessed
                 inp_heads=self.args.num_input_heads,
+                comm_heads=self.args.num_comm_heads,
                 do_gru=True if self.args.rnn_cell == 'GRU' else False,
                 do_rel=False, # never True
                 n_templates=self.args.num_rules,
-                share_inp=True, # all OFs share same input
+                share_inp=self.scoff_share_inp, # all OFs share same input
                 share_inp_attn=True,
                 share_comm_attn=True,
             )
         else:
             raise ValueError('Illegal RNN Core')
 
-    def forward(self, x, h_prev, M_prev):
+    def forward(self, x, h_prev, M_prev=None):
         """
         Inputs:
             `x`: [batch_size, C, H, W]
@@ -285,6 +288,7 @@ class BallModel(nn.Module):
             `Intm`: intermediate variables (for logging)
             """
         ctx = None
+        M = None
         encoded_input = self.encoder(x) # Shape: (batch_size, 6*6, self.input_size) OR [batch_size, 1, self.input_size]
         if self.use_slot_attention:
             encoded_input = self.slot_attention(encoded_input) # Shape: [batch_size, num_slots, slot_size]
@@ -307,7 +311,8 @@ class BallModel(nn.Module):
             # SCOFF requires a different input shape
             #   - input shape: [batch_size, num_object_files*input_size], we can pass different inputs to different OFs
             #   - h_prev shape: [batch_size, num_object_files*hidden_size]
-            encoded_input = encoded_input.view(encoded_input.shape[0], -1, 1).repeat(1, 1, self.num_hidden).flatten(start_dim=1) # Shape: [batch_size, num_object_files*input_size*num_hidden]
+            if not self.scoff_share_inp:
+                encoded_input = encoded_input.view(encoded_input.shape[0], -1, 1).repeat(1, 1, self.num_hidden).flatten(start_dim=1) # Shape: [batch_size, num_object_files*input_size*num_hidden]
             h_prev = h_prev.view(h_prev.shape[0], -1) # Shape: [batch_size, num_units*hidden_size]
             h_new, c_new, mask, block_mask, temp_attention = self.rnn_model(inp=encoded_input, hx=h_prev, cx=None)
             h_new = h_new.view(h_new.shape[0], self.num_hidden, -1) # Shape: [batch_size, num_units, hidden_size]

@@ -518,7 +518,8 @@ class SparseRIMCell(RIMCell):
 class SCOFFCell(nn.Module):
     def __init__(self,
                 hidden_size,
-                num_blocks_in,
+                input_size,
+                num_inputs,
                 num_blocks_out,
                 topkval,
                 memorytopk,
@@ -542,11 +543,11 @@ class SCOFFCell(nn.Module):
     ):
         super(SCOFFCell, self).__init__()
 
-        self.hidden_size = hidden_size                                               # size of (total) hidden state
-        self.num_blocks_in = num_blocks_in                             # ?
-        self.num_blocks_out = num_blocks_out                           # ?
-        self.block_size_in = hidden_size // num_blocks_in                     # ?
-        self.block_size_out = hidden_size // num_blocks_out                   # ?
+        self.hidden_size = hidden_size                                  # size of (total) hidden state
+        self.num_inputs = num_inputs                                    # = num of input feature vectors
+        self.num_blocks_out = num_blocks_out                            # ?
+        self.input_size = input_size                                    # = size of feature vector
+        self.block_size_out = hidden_size // num_blocks_out             # = individual hidden size
         self.topkval = topkval                                         
         self.memorytopk = memorytopk
         self.step_att = step_att
@@ -559,12 +560,13 @@ class SCOFFCell(nn.Module):
         # NOTE modified option below
         self.share_inp = share_inp
         print('topk and memorytopk is', self.topkval, self.memorytopk)
-        print('bs in', self.block_size_in)
+        print('input size', self.input_size)
         print('bs out', self.block_size_out)
         print('num_modules_read_input', self.num_modules_read_input)
         print('share same input for all object files', self.share_inp)
         print('share inp and comm attn params', share_inp_attn, share_comm_attn)
         print("communication is happening", self.step_att)
+        print('defining comm attention')
         self.mha = MultiHeadAttention(n_head=self.comm_heads, d_model_read=self.block_size_out, d_model_write=self.block_size_out,
                                       d_model_out=self.block_size_out, d_k=32, d_v=32,
                                       num_blocks_read=self.num_blocks_out, num_blocks_write=self.num_blocks_out,
@@ -576,11 +578,14 @@ class SCOFFCell(nn.Module):
         if self.version:
             #It supports the flexibility of each module having a sperate encoder.
             self.att_out = self.block_size_out * 1
-            self.inp_att = MultiHeadAttention(n_head=self.inp_heads, d_model_read=self.block_size_out,
-                                           d_model_write=int(self.hidden_size / self.num_blocks_out),
-                                           d_model_out=self.att_out, d_k=64, d_v=self.att_out, num_blocks_read=1,
-                                           num_blocks_write=num_blocks_in + 1, residual=False,
-                                           topk=self.num_blocks_in + 1,  n_templates=1, share_comm=False, share_inp=share_inp_attn, grad_sparse=False, skip_write=True)
+            print('defining inp attention')
+            self.inp_att = MultiHeadAttention(n_head=self.inp_heads, d_model_read=self.hidden_size//self.num_blocks_out,
+                                           d_model_write=self.input_size,
+                                           d_model_out=self.att_out, d_k=64, d_v=self.att_out, 
+                                           num_blocks_read=1, # each time only one hidden vector is input, so 1. 
+                                           num_blocks_write=self.num_inputs + 1, # num of input feature vectors + one null input
+                                           residual=False,
+                                           topk=self.num_inputs + 1, n_templates=1, share_comm=False, share_inp=share_inp_attn, grad_sparse=False, skip_write=True)
 
         else:
             raise ValueError('following lines should NEVER be run! (version=0) it is a cardinal sin.')
@@ -591,7 +596,7 @@ class SCOFFCell(nn.Module):
             self.inp_att = MultiHeadAttention(n_head=self.inp_heads, d_model_read=self.block_size_out,
                                           d_model_write=self.block_size_in, d_model_out=self.att_out,
                                           d_k=64, d_v=d_v, num_blocks_read=num_blocks_out, num_blocks_write=self.num_modules_read_input,residual=False,
-                                          dropout=0.1, topk=self.num_blocks_in+1, n_templates=1, share_comm=False, share_inp=share_inp, grad_sparse=False, skip_write=True)
+                                          dropout=0.1, topk=self.num_inputs+1, n_templates=1, share_comm=False, share_inp=share_inp, grad_sparse=False, skip_write=True)
 
 
         if do_gru:
@@ -675,7 +680,7 @@ class SCOFFCell(nn.Module):
             _input = _input.unsqueeze(1)
 
             return torch.cat(
-                [_input, torch.zeros_like(_input[:, 0, :])], dim=1 # Shape [batch_size, num_inputs+1, ...]
+                [_input, torch.zeros_like(_input[:, 0:1, :])], dim=1 # Shape [batch_size, num_inputs+1, ...]
             )
 
         if self.version:
@@ -686,7 +691,7 @@ class SCOFFCell(nn.Module):
             else:
                 # `inp_use` Shape: [bs, num_inputs, input_size]
                 input_to_attention = torch.cat(
-                    [inp_use, torch.zeros_like(inp_use[:, 0, :])], dim=1
+                    [inp_use, torch.zeros_like(inp_use[:, 0:1, :])], dim=1
                 ) # Shape [bs, num_inputs+1, input_size]
 
             split_hx = [chunk.unsqueeze(1) for chunk in
@@ -709,7 +714,7 @@ class SCOFFCell(nn.Module):
         else:
             raise ValueError('following lines should NEVER be run! (version=0) it is a cardinal sin.')
             #use attention here.
-            inp_use = inp_use.reshape((inp_use.shape[0], self.num_blocks_in, self.block_size_in))
+            inp_use = inp_use.reshape((inp_use.shape[0], self.num_inputs, self.block_size_in))
             inp_use = inp_use.repeat(1,self.num_modules_read_input-1,1)
             inp_use = torch.cat([torch.zeros_like(inp_use[:,0:1,:]), inp_use], dim=1)
             batch_size = inp.shape[0]
@@ -745,7 +750,7 @@ class SCOFFCell(nn.Module):
             hx_new, cx_new, temp_attention = self.block_lstm(inp_use, hx, cx)
         
         hx_old = hx*1.0
-        cx_old = cx*1.0
+        cx_old = cx*1.0 if not self.do_gru else None
 
         if self.step_att:
             hx_new = hx_new.reshape((hx_new.shape[0], self.num_blocks_out, self.block_size_out))
@@ -762,7 +767,7 @@ class SCOFFCell(nn.Module):
 
 
         hx = (mask)*hx_new + (1-mask)*hx_old # update OFs
-        cx = (mask)*cx_new + (1-mask)*cx_old # update OFs
+        cx = (mask)*cx_new + (1-mask)*cx_old if not self.do_gru else None # update OFs 
 
         if self.do_rel:
              #memory_inp_mask = new_mask

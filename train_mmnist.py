@@ -133,8 +133,8 @@ def main():
             if args.core == 'RIM':
                 rim_actv = metrics['rim_actv']
                 rim_actv_mask = metrics['rim_actv_mask']
-            dec_util = metrics['dec_util']
-            most_used_units = metrics['most_used_units']
+                dec_util = metrics['dec_util']
+                most_used_units = metrics['most_used_units']
             blocked_dec = metrics['blocked_dec']
             # print out stats
             print(f"epoch {epoch}/{args.epochs} | train loss: {train_loss:.4f} | test loss: {test_loss:.4f} | test mse: {test_mse:.4f} | "+\
@@ -151,8 +151,18 @@ def main():
                 writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
                 writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
                 writer.add_image('Stats/Unit Decoder Utilization', dec_util[0], epoch, dataformats='HW')
+            
+            if args.task == 'MMNIST':
+                num_sample_to_record = 4
+            elif args.task == 'BBALL':
+                num_sample_to_record = 1
+            elif args.task == 'TRAFFIC4CAST':
+                num_sample_to_record = 1
+            else:
+                num_sample_to_record = 1
+                print('Warning: unknown task type. ')
             cat_video = torch.cat(
-                (data[0:4, 1:, :, :, :],prediction[0:4]),
+                (data[0:num_sample_to_record, 1:, :, :, :], prediction[0:num_sample_to_record]),
                 dim = 4 # join in width
             ) # N T C H W
             writer.add_video('Predicted Videos', cat_video, epoch)
@@ -164,12 +174,14 @@ def main():
                 'F1 Score': test_f1,
                 'SSIM': test_ssim
             }
-            stat_dict = {
-                'RIM Input Attention': wandb.Image(rim_actv[0].cpu()*256),
-                'RIM Activation Mask': wandb.Image(rim_actv_mask[0].cpu()*256),
-                'Unit Decoder Utilization': wandb.Image(dec_util[0].cpu()*256),
-                'Most Used Units in Decoder': wandb.Histogram(most_used_units), 
-            }
+            stat_dict = {}
+            if args.core == 'RIM':
+                stat_dict.update({
+                    'RIM Input Attention': wandb.Image(rim_actv[0].cpu()*256),
+                    'RIM Activation Mask': wandb.Image(rim_actv_mask[0].cpu()*256),
+                    'Unit Decoder Utilization': wandb.Image(dec_util[0].cpu()*256),
+                    'Most Used Units in Decoder': wandb.Histogram(most_used_units), 
+                })
             video_dict = {
                 'Predicted Videos': wandb.Video(cat_video.cpu()*256, fps=4),
                 'Individual Predictions': wandb.Video(blocked_dec[0].cpu()*256, fps=4),
