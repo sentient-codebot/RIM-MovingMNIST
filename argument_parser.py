@@ -130,6 +130,7 @@ def argument_parser():
                                 'resumd. If this flag is set, the last saved model '
                                 '(corresponding to the given id is fetched)',)
     parser.add_argument('--loss_fn', type=str2loss_fn, default='BCE')
+    parser.add_argument('--sbd_mem_efficient', type=str2bool, default=False)
 
     # Model settings
     parser.add_argument('--core', type=str, default='RIM')

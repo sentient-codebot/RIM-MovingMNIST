@@ -104,18 +104,27 @@ class WrappedDecoder(nn.Module):
 
     Input:
         `hidden`: (BS, K, d_slot) """
-    def __init__(self, hidden_size, decoder='interp'):
+    def __init__(self, hidden_size, decoder='interp', mem_efficient=False):
         super().__init__()
         if 'interp' in decoder:
             self.decoder = make_decoder_interp(hidden_size=hidden_size)
         else:
             self.decoder = make_decoder_transconv(hidden_size=hidden_size)
         self.pos_embed = SoftPositionEmbed(hidden_size, (8,8))
+        self.hidden_size = hidden_size
+        self.mem_efficient = mem_efficient
 
     def forward(self, hidden):
         broadcast_hidden = spatial_broadcast(hidden, (8,8)) # (BS*K, d_slot, 8, 8)
-        broadcast_hidden = self.pos_embed(broadcast_hidden)
-        dec_out = self.decoder(broadcast_hidden) # (BS*K, 2, 64, 64)
+        broadcast_hidden = self.pos_embed(broadcast_hidden) # (BS*K, d_slot, 8, 8)
+        if self.mem_efficient:
+            dec_out_list = [
+                self.decoder(broadcast_hidden_unit) \
+                    for broadcast_hidden_unit in torch.chunk(broadcast_hidden, broadcast_hidden.shape[0]//self.hidden_size, dim=0)
+            ]
+            dec_out = torch.cat(dec_out_list, dim=0) # Shape: [BS*self.hidden, 2, 64, 64]
+        else:
+            dec_out = self.decoder(broadcast_hidden) # (BS*K, 2, 64, 64)
         channels, alpha_mask = unstack_and_split(dec_out, batch_size=hidden.shape[0], num_channels=1) # (BS, K, *, H, W)
         channels = nn.Sigmoid()(channels)
         alpha_mask = torch.nn.Softmax(dim=1)(alpha_mask) # (BS, <K>, 1, H, W)

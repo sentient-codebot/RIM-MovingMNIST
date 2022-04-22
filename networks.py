@@ -190,11 +190,12 @@ class BallModel(nn.Module):
                 epsilon=1e-8,
                 input_size=self.input_size,
             ).to(self.args.device) # Shape: [batch_size,num_inputs, input_size] -> [batch_size, num_slots, slot_size]
+            self.num_inputs = self.num_slots # number of output vectors of SlotAttention
 
         if args.decoder_type == "CAT_BASIC":
             self.decoder = BasicDecoder(embedding_size=self.num_hidden*self.hidden_size).to(self.args.device) # Shape: [batch_size, num_units*hidden_size] -> [batch_size, 1, 64, 64]
         elif args.decoder_type == "SEP_SBD":
-            self.decoder = WrappedDecoder(self.hidden_size, decoder='transconv').to(self.args.device) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
+            self.decoder = WrappedDecoder(self.hidden_size, decoder='transconv', mem_efficient=self.args.sbd_mem_efficient).to(self.args.device) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
         else:
             raise NotImplementedError("Not implemented decoder type: {}".format(args.decoder_type))
 
