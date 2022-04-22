@@ -334,7 +334,7 @@ class BallModel(nn.Module):
                 blocked_dec=blocked_out_
                 )
         else:
-            intm = intm = Intm(input_attn=torch.zeros(1), 
+            intm = Intm(input_attn=torch.zeros(1), 
                 input_attn_mask=torch.zeros(1),
                 blocked_dec=blocked_out_
                 )

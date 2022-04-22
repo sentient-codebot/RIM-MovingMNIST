@@ -77,9 +77,9 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
             rim_actv_mask.reset()
             dec_util.reset()
         start_time = time()
-        data = data.to(args.device)
+        data = data.to(args.device) # Shape: [batch_size, T, C, H, W] or [batch_size, T, H, W]
         if data.dim()==4:
-            data = data.unsqueeze(2).float()
+            data = data.unsqueeze(2).float() # Shape: [batch_size, T, 1, H, W]
         hidden = hidden.detach()
         loss = 0.
         mseloss = 0.
