@@ -520,7 +520,7 @@ class SCOFFCell(nn.Module):
                 hidden_size,
                 input_size,
                 num_inputs,
-                num_blocks_out,
+                num_hidden,
                 topkval,
                 memorytopk,
                 step_att,
@@ -539,15 +539,16 @@ class SCOFFCell(nn.Module):
                 memory_mlp=4, # used if do_rel
                 attention_out=340, # used if do_rel
                 version=1, # always 1
+                straight_through_input=False,
                 device=None, # used if do_rel
     ):
         super(SCOFFCell, self).__init__()
 
         self.hidden_size = hidden_size                                  # size of (total) hidden state
         self.num_inputs = num_inputs                                    # = num of input feature vectors
-        self.num_blocks_out = num_blocks_out                            # ?
+        self.num_hidden = num_hidden                                    # ?
         self.input_size = input_size                                    # = size of feature vector
-        self.block_size_out = hidden_size // num_blocks_out             # = individual hidden size
+        self.single_hidden_size = hidden_size // num_hidden             # = individual hidden size
         self.topkval = topkval                                         
         self.memorytopk = memorytopk
         self.step_att = step_att
@@ -555,55 +556,62 @@ class SCOFFCell(nn.Module):
         self.do_rel = do_rel
         self.device = device
         self.num_modules_read_input = num_modules_read_input
+        self.direct_input = straight_through_input # if True, no input attention is used and input/ofs are associated one to one. 
+        if self.direct_input:
+            print("parameters block_size_out are not used because no input attention is used")
         self.inp_heads = inp_heads
         self.comm_heads = comm_heads
         # NOTE modified option below
         self.share_inp = share_inp
         print('topk and memorytopk is', self.topkval, self.memorytopk)
         print('input size', self.input_size)
-        print('bs out', self.block_size_out)
+        print('bs out', self.single_hidden_size)
         print('num_modules_read_input', self.num_modules_read_input)
         print('share same input for all object files', self.share_inp)
         print('share inp and comm attn params', share_inp_attn, share_comm_attn)
         print("communication is happening", self.step_att)
         print('defining comm attention')
-        self.mha = MultiHeadAttention(n_head=self.comm_heads, d_model_read=self.block_size_out, d_model_write=self.block_size_out,
-                                      d_model_out=self.block_size_out, d_k=32, d_v=32,
-                                      num_blocks_read=self.num_blocks_out, num_blocks_write=self.num_blocks_out,
-                                      dropout=0.1, topk=self.num_blocks_out,n_templates=1,share_comm=share_comm_attn,share_inp=False, grad_sparse=False)
+        self.mha = MultiHeadAttention(n_head=self.comm_heads, d_model_read=self.single_hidden_size, d_model_write=self.single_hidden_size,
+                                      d_model_out=self.single_hidden_size, d_k=32, d_v=32,
+                                      num_blocks_read=self.num_hidden, num_blocks_write=self.num_hidden,
+                                      dropout=0.1, topk=self.num_hidden,n_templates=1,share_comm=share_comm_attn,share_inp=False, grad_sparse=False)
 
 
         self.version = version
         assert self.version == 1
         if self.version:
             #It supports the flexibility of each module having a sperate encoder.
-            self.att_out = self.block_size_out * 1
-            print('defining inp attention')
-            self.inp_att = MultiHeadAttention(n_head=self.inp_heads, d_model_read=self.hidden_size//self.num_blocks_out,
-                                           d_model_write=self.input_size,
-                                           d_model_out=self.att_out, d_k=64, d_v=self.att_out, 
-                                           num_blocks_read=1, # each time only one hidden vector is input, so 1. 
-                                           num_blocks_write=self.num_inputs + 1, # num of input feature vectors + one null input
-                                           residual=False,
-                                           topk=self.num_inputs + 1, n_templates=1, share_comm=False, share_inp=share_inp_attn, grad_sparse=False, skip_write=True)
+            self.inp_att_out = self.single_hidden_size * 1 # not necessairy tho, is the input size for each gru (!= input_size of scoff)
+            if not self.direct_input:
+                print('defining inp attention')
+                self.inp_att = MultiHeadAttention(n_head=self.inp_heads, d_model_read=self.hidden_size//self.num_hidden,
+                                            d_model_write=self.input_size,
+                                            d_model_out=self.inp_att_out, d_k=64, d_v=self.inp_att_out, 
+                                            num_blocks_read=1, # each time only one hidden vector is input, so 1. 
+                                            num_blocks_write=self.num_inputs + 1, # num of input feature vectors + one null input
+                                            residual=False,
+                                            topk=self.num_inputs + 1, n_templates=1, share_comm=False, share_inp=share_inp_attn, grad_sparse=False, skip_write=True)
+            else:
+                print('no inp attention defined. slots directly fed to schemata with respective OF')
+                self.inp_att = None
 
         else:
             raise ValueError('following lines should NEVER be run! (version=0) it is a cardinal sin.')
             #this is dummy!
-            self.att_out = attention_out
-            print('Using version 0 att_out is', self.att_out)
-            d_v = self.att_out//self.inp_heads
-            self.inp_att = MultiHeadAttention(n_head=self.inp_heads, d_model_read=self.block_size_out,
-                                          d_model_write=self.block_size_in, d_model_out=self.att_out,
-                                          d_k=64, d_v=d_v, num_blocks_read=num_blocks_out, num_blocks_write=self.num_modules_read_input,residual=False,
+            self.inp_att_out = attention_out
+            print('Using version 0 att_out is', self.inp_att_out)
+            d_v = self.inp_att_out//self.inp_heads
+            self.inp_att = MultiHeadAttention(n_head=self.inp_heads, d_model_read=self.single_hidden_size,
+                                          d_model_write=self.block_size_in, d_model_out=self.inp_att_out,
+                                          d_k=64, d_v=d_v, num_blocks_read=num_hidden, num_blocks_write=self.num_modules_read_input,residual=False,
                                           dropout=0.1, topk=self.num_inputs+1, n_templates=1, share_comm=False, share_inp=share_inp, grad_sparse=False, skip_write=True)
 
 
         if do_gru:
-            self.block_lstm = SharedBlockGRU(self.att_out*self.num_blocks_out, self.hidden_size, k=self.num_blocks_out, n_templates= n_templates)
+            self.block_lstm = SharedBlockGRU(self.inp_att_out*self.num_hidden, self.hidden_size, k=self.num_hidden, n_templates= n_templates)
         else:
   
-            self.block_lstm = SharedBlockLSTM(self.att_out*self.num_blocks_out, self.hidden_size, k=self.num_blocks_out, n_templates= n_templates)
+            self.block_lstm = SharedBlockLSTM(self.inp_att_out*self.num_hidden, self.hidden_size, k=self.num_hidden, n_templates= n_templates)
            
 
         if self.do_rel:
@@ -629,14 +637,14 @@ class SCOFFCell(nn.Module):
             self.memory_size = memory_head_size * num_memory_heads
             self.mem_att = MultiHeadAttention(
                 n_head=4,
-                d_model_read=self.block_size_out,
+                d_model_read=self.single_hidden_size,
                 d_model_write=self.memory_size,
-                d_model_out=self.block_size_out,
+                d_model_out=self.single_hidden_size,
                 d_k=32,
                 d_v=32,
-                num_blocks_read=self.num_blocks_out,
+                num_blocks_read=self.num_hidden,
                 num_blocks_write=memory_slots,
-                topk=self.num_blocks_out,
+                topk=self.num_hidden,
                 grad_sparse=False,
                 n_templates=n_templates,
                 share_comm=share_comm,
@@ -656,18 +664,21 @@ class SCOFFCell(nn.Module):
     def forward(self, inp, hx, cx):
         """
         Inputs:
-            if not self.share_inp:
-                `inp`: [batch_size, d_in] -> num_blocks_out x [batch_size, d_in//num_blocks_out], split for each block
+            if self.direct_input:
+                if not self.share_inp:
+                    `inp`: [batch_size, d_in] -> num_hidden x [batch_size, d_in//num_hidden], split for each block
+                else:
+                    `inp`: [batch_size, num_inputs, d_in]
             else:
-                `inp`: [batch_size, num_inputs, d_in]
+                `inp`: [batch_size, num_inputs, input_size] should be output of slot attention, aka slots
             `hx`: [batch_size, d_hidden]
             `cx`: [batch_size, d_hidden_c]
 
         Output:
             `hx_new`: [batch_size, d_hidden]
             `cs_new`: [batch_size, d_hidden_c]
-            `mask`: mask for inp_use ~ [bs, num_blocks_out*block_size_out] (transformed from `inp` using attention with `hx`)
-            `block_mask`: # [bs, num_blocks_out, 1]
+            `mask`: mask for inp_use ~ [bs, num_hidden*block_size_out] (transformed from `inp` using attention with `hx`)
+            `block_mask`: # [bs, num_hidden, 1]
             `temp_attention`
         """
         batch_size = inp.shape[0]
@@ -686,8 +697,8 @@ class SCOFFCell(nn.Module):
         if self.version:
             if not self.share_inp:
                 input_to_attention = [_process_input(_input) for _input in
-                            torch.chunk(inp_use, chunks=self.num_blocks_out, dim=1)
-                            ] # [bs, d_in] -> num_blocks_out x [bs, d_in//num_blocks_out] -> num_blocks_out x [bs, 2, d_in//num_blocks_out]
+                            torch.chunk(inp_use, chunks=self.num_hidden, dim=1)
+                            ] # [bs, d_in] -> num_hidden x [bs, d_in//num_hidden] -> num_hidden x [bs, 2, d_in//num_hidden]
             else:
                 # `inp_use` Shape: [bs, num_inputs, input_size]
                 input_to_attention = torch.cat(
@@ -695,21 +706,23 @@ class SCOFFCell(nn.Module):
                 ) # Shape [bs, num_inputs+1, input_size]
 
             split_hx = [chunk.unsqueeze(1) for chunk in
-                        torch.chunk(hx, chunks=self.num_blocks_out, dim=1)] # [bs, d_hidden] -> num_blocks_out x [bs, 1, d_hidden//num_blocks_out]
+                        torch.chunk(hx, chunks=self.num_hidden, dim=1)] # [bs, d_hidden] -> num_hidden x [bs, 1, d_hidden//num_hidden]
 
-            if not self.share_inp:
-                output = [self.inp_att(q=_hx, k=_inp, v=_inp) for
-                    _hx, _inp in zip(split_hx, input_to_attention)] # num_blocks_out x ([bs, 1, attn_out], attn, extra_loss); attn_out == block_size_out
+            if not self.direct_input:
+                if not self.share_inp:
+                    output = [self.inp_att(q=_hx, k=_inp, v=_inp) for
+                        _hx, _inp in zip(split_hx, input_to_attention)] # num_hidden x ([bs, 1, attn_out], attn, extra_loss); attn_out == block_size_out
+                else:
+                    output = [self.inp_att(q=_hx, k=input_to_attention, v=input_to_attention) for
+                        _hx in split_hx] # num_hidden x ([bs, 1, attn_out], attn, extra_loss). attn_out == block_size_out
+                inp_use_list, iatt_list, _ = zip(*output) # num_hidden x ([bs, 1, attn_out], attn, extra_loss)
+                inp_use = torch.cat(inp_use_list, dim=1) # [bs, num_hidden, attn_out]
+                iatt = torch.cat(iatt_list, dim=1) # [bs, num_hidden, 2]
             else:
-                output = [self.inp_att(q=_hx, k=input_to_attention, v=input_to_attention) for
-                    _hx in split_hx] # num_blocks_out x ([bs, 1, attn_out], attn, extra_loss). attn_out == block_size_out
+                inp_use = inp # Shape: [bs, num_inputs, input_size] NO null input included, but might contain empty slots
+                iatt = torch.ones((inp.shape[0], inp.shape[1], 2), device=inp.device) # dummy iatt score. Shape: [bs, num_hidden, 2] 
 
-            inp_use_list, iatt_list, _ = zip(*output) # num_blocks_out x ([bs, 1, attn_out], attn, extra_loss)
-
-            inp_use = torch.cat(inp_use_list, dim=1) # [bs, num_blocks_out, attn_out]
-            iatt = torch.cat(iatt_list, dim=1) # ...
-
-            inp_use = inp_use.reshape((inp_use.shape[0], self.att_out * self.num_blocks_out)) # [bs, att_out * num_blocks_out]
+            inp_use = inp_use.reshape((inp_use.shape[0], self.inp_att_out * self.num_hidden)) # [bs, att_out * num_hidden]
 
         else:
             raise ValueError('following lines should NEVER be run! (version=0) it is a cardinal sin.')
@@ -718,29 +731,29 @@ class SCOFFCell(nn.Module):
             inp_use = inp_use.repeat(1,self.num_modules_read_input-1,1)
             inp_use = torch.cat([torch.zeros_like(inp_use[:,0:1,:]), inp_use], dim=1)
             batch_size = inp.shape[0]
-            inp_use, iatt, _ = self.inp_att(hx.reshape((hx.shape[0], self.num_blocks_out, self.block_size_out)), inp_use, inp_use)
+            inp_use, iatt, _ = self.inp_att(hx.reshape((hx.shape[0], self.num_hidden, self.single_hidden_size)), inp_use, inp_use)
             iatt = iatt.reshape((self.inp_heads, sz_b, iatt.shape[1], iatt.shape[2]))
             iatt = iatt.mean(0)
 
-            inp_use = inp_use.reshape((inp_use.shape[0], self.att_out*self.num_blocks_out))
+            inp_use = inp_use.reshape((inp_use.shape[0], self.inp_att_out*self.num_hidden))
 
 
 
-        new_mask = torch.ones_like(iatt[:,:,0]) # Shape: [bs, num_blocks_out]
+        new_mask = torch.ones_like(iatt[:,:,0]) # Shape: [bs, num_hidden]
 
-        if (self.num_blocks_out - self.topkval)>0:
+        if (self.num_hidden - self.topkval)>0:
             bottomk_indices = torch.topk(iatt[:,:,0], dim=1,
                                 sorted=True, largest=True,
-                                k = self.num_blocks_out - self.topkval)[1]
+                                k = self.num_hidden - self.topkval)[1]
 
             new_mask.index_put_((torch.arange(bottomk_indices.size(0)).unsqueeze(1), bottomk_indices),
                     torch.zeros_like(bottomk_indices[0], dtype=new_mask.dtype))
         mask = new_mask
         memory_inp_mask = mask
-        block_mask = mask.reshape((inp_use.shape[0], self.num_blocks_out,1)) # [bs, num_blocks_out, 1]
-        mask = mask.reshape((inp_use.shape[0],self.num_blocks_out,1)).repeat((1,1,self.block_size_out)).reshape((inp_use.shape[0], self.num_blocks_out*self.block_size_out)) # [bs, num_blocks_out*block_size_out] mask for inp_use ~ [bs, num_blocks_out*block_size_out]
+        block_mask = mask.reshape((inp_use.shape[0], self.num_hidden,1)) # [bs, num_hidden, 1]
+        mask = mask.reshape((inp_use.shape[0],self.num_hidden,1)).repeat((1,1,self.single_hidden_size)).reshape((inp_use.shape[0], self.num_hidden*self.single_hidden_size)) # [bs, num_hidden*block_size_out] mask for inp_use ~ [bs, num_hidden*block_size_out]
         mask = mask.detach()
-        memory_inp_mask = memory_inp_mask.detach() # Shape: [bs, num_blocks_out]
+        memory_inp_mask = memory_inp_mask.detach() # Shape: [bs, num_hidden]
 
 
         if self.do_gru:
@@ -753,12 +766,12 @@ class SCOFFCell(nn.Module):
         cx_old = cx*1.0 if not self.do_gru else None
 
         if self.step_att:
-            hx_new = hx_new.reshape((hx_new.shape[0], self.num_blocks_out, self.block_size_out))
+            hx_new = hx_new.reshape((hx_new.shape[0], self.num_hidden, self.single_hidden_size))
             hx_new_grad_mask = blocked_grad.apply(hx_new,
                                                   mask.reshape(
                                                       (mask.shape[0],
-                                                       self.num_blocks_out,
-                                                       self.block_size_out)))
+                                                       self.num_hidden,
+                                                       self.single_hidden_size)))
             hx_new_att,attn_out,extra_loss_att = self.mha(hx_new_grad_mask,hx_new_grad_mask,hx_new_grad_mask)
             hx_new = hx_new + hx_new_att
 
@@ -773,7 +786,7 @@ class SCOFFCell(nn.Module):
              #memory_inp_mask = new_mask
              batch_size = inp.shape[0]
              memory_inp = hx.view(
-                 batch_size, self.num_blocks_out, -1
+                 batch_size, self.num_hidden, -1
              ) * memory_inp_mask.unsqueeze(2)
 
              # information gets written to memory modulated by the input.
@@ -785,12 +798,12 @@ class SCOFFCell(nn.Module):
              # Information gets read from memory, state dependent information reading from blocks.
              old_memory = self.memory
              out_hx_mem_new, out_mem_2, _ = self.mem_att(
-                 hx.reshape((hx.shape[0], self.num_blocks_out, self.block_size_out)),
+                 hx.reshape((hx.shape[0], self.num_hidden, self.single_hidden_size)),
                  self.memory,
                  self.memory,
              )
              hx = hx + out_hx_mem_new.reshape(
-                 hx.shape[0], self.num_blocks_out * self.block_size_out
+                 hx.shape[0], self.num_hidden * self.single_hidden_size
              )
 
         return hx, cx, mask, block_mask, temp_attention
@@ -800,12 +813,12 @@ class SCOFFCell(nn.Module):
         self.memory = self.relational_memory.initial_state(batch_size).to(self.device)
 
     def step_attention(self, hx_new, cx_new, mask):
-        hx_new = hx_new.reshape((hx_new.shape[0], self.num_blocks_out, self.block_size_out))
+        hx_new = hx_new.reshape((hx_new.shape[0], self.num_hidden, self.single_hidden_size))
         # bg = blocked_grad()
         hx_new_grad_mask = blocked_grad.apply(hx_new,
                                               mask.reshape((mask.shape[0],
-                                                            self.num_blocks_out,
-                                                            self.block_size_out)))
+                                                            self.num_hidden,
+                                                            self.single_hidden_size)))
         hx_new_att, attn_out, extra_loss_att = self.mha(hx_new_grad_mask, hx_new_grad_mask, hx_new_grad_mask)
         hx_new = hx_new + hx_new_att
         hx_new = hx_new.reshape((hx_new.shape[0], self.hidden_size))

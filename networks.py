@@ -257,7 +257,7 @@ class BallModel(nn.Module):
                 hidden_size=self.hidden_size*self.num_hidden,
                 input_size=self.input_size if not self.use_slot_attention else self.slot_size,
                 num_inputs=self.num_inputs if not self.use_slot_attention else self.num_slots,
-                num_blocks_out=self.num_hidden,
+                num_hidden=self.num_hidden,
                 topkval=self.args.k,
                 memorytopk=None, # not accessed
                 step_att=True, # always do communication
@@ -270,6 +270,7 @@ class BallModel(nn.Module):
                 share_inp=self.scoff_share_inp, # all OFs share same input
                 share_inp_attn=True,
                 share_comm_attn=True,
+                straight_through_input=self.args.slot_straight_input,
             )
         else:
             raise ValueError('Illegal RNN Core')

@@ -168,6 +168,8 @@ def argument_parser():
     parser.add_argument('--use_memory_for_decoder', type=str2bool, default=False)
     #   SCOFF settings
     parser.add_argument("--num_rules", type=int, default=None)
+    parser.add_argument("--slot_straight_input", type=str2bool, default=False, 
+                        help="straight through input from slot to ofs without input attention")
     #   RIM settings
     parser.add_argument('--input_dropout', type=float,
                         default=0.1, metavar='dropout', help='dropout')
