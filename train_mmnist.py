@@ -117,7 +117,7 @@ def main():
         # test 
         if args.test_frequency > 0 and epoch % args.test_frequency == 0 or epoch <= 15:
             """test model accuracy and log intermediate variables here"""
-            test_loss, prediction, data, metrics = test(
+            test_loss, prediction, data, metrics, _ = test(
                 model = model, 
                 test_loader = test_loader, 
                 args = args, 

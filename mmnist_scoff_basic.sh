@@ -9,4 +9,4 @@ cfg_json="configs/scoff/scoff_basic.json"
 should_resume="true"
 save_freq=25
 
-python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --should_resume $should_resume --save_frequency $save_freq 
+python3 test_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --should_resume $should_resume --save_frequency $save_freq 

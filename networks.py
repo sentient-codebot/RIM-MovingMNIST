@@ -330,7 +330,7 @@ class BallModel(nn.Module):
         else:
             raise RuntimeError('Illegal RNN Core')
         
-        blocked_out_ = torch.zeros(1).to(x.device)
+        blocked_out_ = torch.zeros((1,1,1)).to(x.device)
         if "SEP" in self.decoder_type:
             dec_out_, channels, alpha_mask = self.decoder(h_new)
             if self.get_intm:

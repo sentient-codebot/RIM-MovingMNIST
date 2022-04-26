@@ -41,8 +41,12 @@ def get_grad_norm(model):
     return total_norm
 
 # @torch.no_grad()
-def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
+def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_columns=None):
     '''test(model, test_loader, args, loss_fn, writer, rollout)'''
+    # wandb table
+    if log_columns is not None:
+        test_table = wandb.Table(columns=log_columns)
+
     previous_get_intm = model.get_intm
     model.get_intm = True
     if args.core == 'RIM':
@@ -117,6 +121,23 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
                 # writer.add_scalar(f'Metrics/F1 at Frame {frame}', f1_frame, epoch)
                 f1 += f1_frame
 
+                # wandb logging
+                table_row = {
+                    'sample_id': str(batch_idx)+'_'+'0',
+                    'frame_id': frame+1,
+                    'prediction': wandb.Image(output[0].detach().cpu()*256),
+                    'ground_truth': wandb.Image(target[0].detach().cpu()*256),
+                    'individual_prediction': wandb.Image(intm['blocked_dec'][0]*256),
+                }
+                if args.core == 'SCOFF':
+                    table_row.update({
+                        'rules_selected': intm['blocked_dec'][0].detach().cpu().tolist(),
+                    })
+                if log_columns is not None:
+                    test_table.add_data(
+                        *[table_row[col] for col in log_columns],
+                    )
+
             if __name__ == "__main__":
                 if not args.use_memory_for_decoder:
                     intm["decoder_utilization"] = dec_rim_util(model, hidden)
@@ -150,6 +171,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
         if args.device == torch.device("cpu"):
             break
     
+
     prediction = prediction[:, 1:, :, :, :] # last batch of prediction, starting from frame 1
     blocked_prediction = blocked_prediction[:, :, 1:, :, :, :]
     epoch_loss = epoch_loss / (batch_idx+1)
@@ -185,7 +207,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
         }
 
     model.get_intm = previous_get_intm
-    return epoch_loss, prediction, data, metrics
+    return epoch_loss, prediction, data, metrics, test_table
 
 @torch.no_grad()
 def dec_rim_util(model, h):
@@ -221,8 +243,8 @@ def dec_rim_util(model, h):
 def main():
     # parse and process args
     args = argument_parser()
-    print(f"Loading args from "+f"{args.folder_log}/args/args")
-    args.__dict__.update(torch.load(f"{args.folder_save}/args/args"))
+    print(f"Loading args from "+f"{args.folder_log}/args/args.pt")
+    args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt"))
     if not args.should_resume:
         args.should_resume = True
     cudable = torch.cuda.is_available()
@@ -232,6 +254,10 @@ def main():
     project, name = args.experiment_name.split('_',1)
     wandb.init(project=project, name=name+'_test', config=vars(args), entity='nan-team')
     print(args)
+    wandb_artf = wandb.Artifact(project+'_'+name+'_test'+str(wandb.run.id), type='predictions')
+    columns = ['sample_id', 'frame_id', 'ground_truth', 'prediction', 'individual_prediction']
+    if args.core == 'SCOFF':
+        columns.append('rules_selected')
 
     # data setup
     train_loader, test_loader = setup_dataloader(args=args)
@@ -251,14 +277,15 @@ def main():
     writer = SummaryWriter(log_dir='./runs/'+args.id+'_test')
 
     # call test function
-    test_loss, prediction, data, metrics= test(
+    test_loss, prediction, data, metrics, test_table = test(
         model = model,
         test_loader = test_loader,
         args = args,
         loss_fn = loss_fn,
         writer = writer,
         rollout = True,
-        epoch = epoch
+        epoch = epoch,
+        log_columns = columns,
     )
     # unpack metrics
     test_mse = metrics['mse']
@@ -284,6 +311,8 @@ def main():
         writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
         writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
         writer.add_image('Stats/Unit Decoder Utilization', dec_util[0], epoch, dataformats='HW')
+    elif args.core == 'SCOFF':
+        writer.add_image('Stats/Rules Selected', rules_selected[0], epoch, dataformats='HW')
     
     if args.task == 'MMNIST':
         num_sample_to_record = 4
@@ -323,6 +352,8 @@ def main():
         'Predicted Videos': wandb.Video(cat_video.cpu()*256, fps=3),
         'Individual Predictions': wandb.Video(blocked_dec[0].cpu()*256, fps=4),
     }
+    wandb_artf.add(test_table, "predictions")
+    wandb.run.log_artifact(wandb_artf)
     wandb.log({
         'Loss': {'test loss': test_loss},
         'Metrics': metric_dict,
@@ -335,7 +366,7 @@ def main():
     return None
         
 def setup_model(args) -> torch.nn.Module:
-    model = BallModel(args)
+    model = BallModel(args).to(args.device)
     
     if args.should_resume:
         # Find the last checkpointed model and resume from that
@@ -351,8 +382,8 @@ def setup_model(args) -> torch.nn.Module:
         args.checkpoint = {"epoch": latest_model_idx}
 
     if args.path_to_load_model != "":
-        print(f"Loading args from "+f"{args.folder_save}/args/args")
-        args.__dict__.update(torch.load(f"{args.folder_save}/args/args"))
+        print(f"Loading args from "+f"{args.folder_save}/args/args.pt")
+        args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt"))
 
         print(f"Resuming experiment id: {args.id} from epoch: {args.checkpoint}")
         checkpoint = torch.load(args.path_to_load_model.strip(), map_location=args.device)
