@@ -49,6 +49,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
         rim_actv = VecStack()
         rim_actv_mask = VecStack()
         dec_util = VecStack()
+    if args.core == 'SCOFF':
+        rules_selected = VecStack()
 
     mse = lambda x, y: ((x - y)**2).mean(dim=(0,1,2)).sum() # x Shape: [batch_size, T, C, H, W]
 
@@ -76,6 +78,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
             rim_actv.reset()
             rim_actv_mask.reset()
             dec_util.reset()
+        if args.core == 'SCOFF':
+            rules_selected.reset()
         start_time = time()
         data = data.to(args.device) # Shape: [batch_size, T, C, H, W] or [batch_size, T, H, W]
         if data.dim()==4:
@@ -128,6 +132,9 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
                 rim_actv_mask.append(intm["input_attn_mask"])
                 dec_util.append(intm["decoder_utilization"])
                 pass
+            elif args.core == 'SCOFF':
+                rules_selected.append(intm["rules_selected"])
+                pass
         
         if not rollout:
             ssim += pt_ssim.ssim(data[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
@@ -160,6 +167,14 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0):
             'dec_util': dec_util.show(),
             'blocked_dec': blocked_prediction,
             'most_used_units': most_used_units
+        }
+    elif args.core == 'SCOFF':
+        metrics = {
+            'mse': epoch_mseloss,
+            'ssim': ssim,
+            'f1': f1_avg,
+            'blocked_dec': blocked_prediction,
+            'rules_selected': rules_selected.show(),
         }
     else:
         metrics = {
@@ -249,10 +264,13 @@ def main():
     test_mse = metrics['mse']
     test_f1 = metrics['f1']
     test_ssim = metrics['ssim']
-    rim_actv = metrics['rim_actv']
-    rim_actv_mask = metrics['rim_actv_mask']
-    dec_util = metrics['dec_util']
-    most_used_units = metrics['most_used_units']
+    if args.core == 'RIM':
+        rim_actv = metrics['rim_actv']
+        rim_actv_mask = metrics['rim_actv_mask']
+        dec_util = metrics['dec_util']
+        most_used_units = metrics['most_used_units']
+    elif args.core == 'SCOFF':
+        rules_selected = metrics['rules_selected']
     blocked_dec = metrics['blocked_dec']
     print(f"epoch [{epoch}] test loss: {test_loss:.4f}; test mse: {test_mse:.4f}; "+\
         f"test F1 score: {test_f1:.4f}; test SSIM: {test_ssim:.4f}")
@@ -262,11 +280,22 @@ def main():
     writer.add_scalar(f'Metrics/F1 Score', test_f1, epoch)
     writer.add_scalar(f'Metrics/SSIM', test_ssim, epoch)
 
-    writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
-    writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
-    writer.add_image('Stats/Unit Decoder Utilization', dec_util[0], epoch, dataformats='HW')
+    if args.core == 'RIM':
+        writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
+        writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
+        writer.add_image('Stats/Unit Decoder Utilization', dec_util[0], epoch, dataformats='HW')
+    
+    if args.task == 'MMNIST':
+        num_sample_to_record = 4
+    elif args.task == 'BBALL':
+        num_sample_to_record = 1
+    elif args.task == 'TRAFFIC4CAST':
+        num_sample_to_record = 1
+    else:
+        num_sample_to_record = 1
+        print('Warning: unknown task type. ')
     cat_video = torch.cat(
-        (data[0:4, 1:, :, :, :],prediction[0:4]),
+        (data[0:num_sample_to_record, 1:, :, :, :],prediction[0:num_sample_to_record]),
         dim = 4 # join in width
     ) # N T C H W
     writer.add_video('Predicted Videos', cat_video, epoch)
@@ -278,14 +307,20 @@ def main():
         'F1 Score': test_f1,
         'SSIM': test_ssim
     }
-    stat_dict = {
-        'RIM Input Attention': wandb.Image(rim_actv[0].cpu()*256),
-        'RIM Activation Mask': wandb.Image(rim_actv_mask[0].cpu()*256),
-        'Unit Decoder Utilization': wandb.Image(dec_util[0].cpu()*256),
-        'Most Used Units in Decoder': wandb.Histogram(most_used_units), # a list
-    }
+    stat_dict = {}
+    if args.core == "RIM":
+        stat_dict.update({
+            'RIM Input Attention': wandb.Image(rim_actv[0].cpu()*256),
+            'RIM Activation Mask': wandb.Image(rim_actv_mask[0].cpu()*256),
+            'Unit Decoder Utilization': wandb.Image(dec_util[0].cpu()*256),
+            'Most Used Units in Decoder': wandb.Histogram(most_used_units), # a list
+        })
+    elif args.core == 'SCOFF':
+        stat_dict.update({
+            'Rules Selected': wandb.Image(rules_selected[0].cpu()*256/9), # 0 to 9 classes
+        })
     video_dict = {
-        'Predicted Videos': wandb.Video(cat_video.cpu()*256, fps=4),
+        'Predicted Videos': wandb.Video(cat_video.cpu()*256, fps=3),
         'Individual Predictions': wandb.Video(blocked_dec[0].cpu()*256, fps=4),
     }
     wandb.log({

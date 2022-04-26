@@ -757,7 +757,7 @@ class SCOFFCell(nn.Module):
 
 
         if self.do_gru:
-            hx_new, temp_attention = self.block_lstm(inp_use, hx) # [0]
+            hx_new, temp_attention = self.block_lstm(inp_use, hx) # temp_attention: [bs, num_hidden, n_templates]
             cx_new = hx_new
         else:
             hx_new, cx_new, temp_attention = self.block_lstm(inp_use, hx, cx)

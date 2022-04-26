@@ -17,6 +17,7 @@ Intm = namedtuple('IntermediateVariables',
         'input_attn',
         'input_attn_mask',
         'blocked_dec',
+        'rules_selected'
     ])
 
 class BasicEncoder(nn.Module):
@@ -289,7 +290,11 @@ class BallModel(nn.Module):
             `M_out`: [batch_size, num_units, memory_size] | None
             `Intm`: intermediate variables (for logging)
             """
+        # default values of intermediate variables
         ctx = None
+        rules_selected = torch.zeros(1).to(x.device)
+
+        # computations
         M = None
         encoded_input = self.encoder(x) # Shape: (batch_size, 6*6, self.input_size) OR [batch_size, 1, self.input_size]
         if self.use_slot_attention:
@@ -318,6 +323,10 @@ class BallModel(nn.Module):
             h_prev = h_prev.view(h_prev.shape[0], -1) # Shape: [batch_size, num_units*hidden_size]
             h_new, c_new, mask, block_mask, temp_attention = self.rnn_model(inp=encoded_input, hx=h_prev, cx=None)
             h_new = h_new.view(h_new.shape[0], self.num_hidden, -1) # Shape: [batch_size, num_units, hidden_size]
+
+            # for logging
+            if self.get_intm:
+                rules_selected = torch.argmax(temp_attention, dim=2, keepdim=False) # temp_attention: [bs, num_hidden, n_templates] -> LongTensor [bs, num_hidden]
         else:
             raise RuntimeError('Illegal RNN Core')
         
@@ -332,12 +341,14 @@ class BallModel(nn.Module):
         if ctx is not None:
             intm = Intm(input_attn=ctx.input_attn, 
                 input_attn_mask=ctx.input_attn_mask,
-                blocked_dec=blocked_out_
+                blocked_dec=blocked_out_,
+                rules_selected=rules_selected
                 )
         else:
             intm = Intm(input_attn=torch.zeros(1), 
                 input_attn_mask=torch.zeros(1),
-                blocked_dec=blocked_out_
+                blocked_dec=blocked_out_,
+                rules_selected=rules_selected
                 )
         
         return dec_out_, h_new, M, intm

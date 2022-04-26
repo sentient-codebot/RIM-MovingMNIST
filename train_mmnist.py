@@ -135,6 +135,8 @@ def main():
                 rim_actv_mask = metrics['rim_actv_mask']
                 dec_util = metrics['dec_util']
                 most_used_units = metrics['most_used_units']
+            elif args.core == 'SCOFF':
+                rules_selected = metrics['rules_selected']
             blocked_dec = metrics['blocked_dec']
             # print out stats
             print(f"epoch {epoch}/{args.epochs} | train loss: {train_loss:.4f} | test loss: {test_loss:.4f} | test mse: {test_mse:.4f} | "+\
@@ -182,8 +184,12 @@ def main():
                     'Unit Decoder Utilization': wandb.Image(dec_util[0].cpu()*256),
                     'Most Used Units in Decoder': wandb.Histogram(most_used_units), 
                 })
+            elif args.core == 'SCOFF':
+                stat_dict.update({
+                    'Rules Selected': wandb.Image(rules_selected[0].cpu()*256/9), # 0 to 9 classes
+                })
             video_dict = {
-                'Predicted Videos': wandb.Video(cat_video.cpu()*256, fps=4),
+                'Predicted Videos': wandb.Video(cat_video.cpu()*256, fps=3),
                 'Individual Predictions': wandb.Video(blocked_dec[0].cpu()*256, fps=4),
             }
             wandb.log({
