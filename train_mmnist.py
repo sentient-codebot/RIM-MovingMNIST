@@ -83,6 +83,9 @@ def main():
     # wandb setup
     project, name = args.experiment_name.split('_',1)
     wandb.init(project=project, name=name, config=vars(args), entity='nan-team')
+    columns = ['sample_id', 'frame_id', 'ground_truth', 'prediction', 'individual_prediction']
+    if args.core == 'SCOFF':
+        columns.append('rules_selected')
 
     # data setup
     train_loader, test_loader = setup_dataloader(args=args)
@@ -124,7 +127,8 @@ def main():
                 loss_fn = loss_fn, 
                 writer = writer,
                 rollout = True,
-                epoch = epoch
+                epoch = epoch,
+                log_columns=columns
             )
             loss_dict['test loss'] = test_loss
             test_mse = metrics['mse']

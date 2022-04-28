@@ -36,5 +36,5 @@
     "num_slots"                 : 6,
     "num_iterations_slot"       : 3,
 
-    "slot_straight_input"       : true
+    "slot_straight_input"       : false
 }
