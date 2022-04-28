@@ -84,7 +84,7 @@ def main():
     # wandb setup
     project, name = args.experiment_name.split('_',1)
     wandb.init(project=project, name=name, config=vars(args), entity='nan-team')
-    wandb_artf = wandb.Artifact(project+'_'+name+'_test'+str(wandb.run.id), type='predictions')
+    
     columns = ['sample_id', 'frame_id', 'ground_truth', 'prediction', 'individual_prediction']
     if args.core == 'SCOFF':
         columns.append('rules_selected')
@@ -122,6 +122,7 @@ def main():
         # test 
         if args.test_frequency > 0 and epoch % args.test_frequency == 0 or epoch <= 15:
             """test model accuracy and log intermediate variables here"""
+            wandb_artf = wandb.Artifact(project+'_'+name+f'_epoch_{epoch}_'+str(wandb.run.id), type='predictions')
             test_loss, prediction, data, metrics, test_table = test(
                 model = model, 
                 test_loader = test_loader, 

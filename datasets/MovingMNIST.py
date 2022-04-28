@@ -3,6 +3,7 @@ import math
 import numpy as np
 import os
 from PIL import Image
+from tqdm import tqdm
 import random
 import torch
 import torch.utils.data as data
@@ -126,7 +127,7 @@ class MovingMNIST(data.Dataset):
         Get random trajectories for the digits and generate a video.
         '''
         data = np.zeros((self.n_frames_total, self.image_size_, self.image_size_), dtype=np.float32)
-        labels = np.zeros((num_digits,), dtype=np.int64)
+        labels = np.ones((max(self.num_objects),), dtype=np.int64)*(-1) # default value 
         for n in range(num_digits):
             # Trajectory
             start_y, start_x = self.get_random_trajectory(self.n_frames_total, static_prob=self.static_prob)
@@ -147,7 +148,7 @@ class MovingMNIST(data.Dataset):
 
     def __getitem__(self, idx):
         length = self.n_frames_input + self.n_frames_output
-        labels = None
+        labels = np.ones((max(self.num_objects),), dtype=np.int64)*(-1) # default value 
         if self.is_train or self.num_objects[0] != 2:
             # Sample number of objects
             num_digits = random.choice(self.num_objects)
@@ -181,13 +182,17 @@ class MovingMNIST(data.Dataset):
 
 def main():
     train_set = MovingMNIST(
-        root='./data/',
+        root='/home/nnan/movingmnist/',
         train=True,
         n_frames_input=10,
         n_frames_output=10,
         num_objects=[2],
         static_prob=0.5
     )
+    train_loader = data.DataLoader(train_set, batch_size=1, shuffle=True, num_workers=4)
+    for idx, samples in enumerate(tqdm(train_loader)):
+        print(samples[0].shape, samples[1].shape, samples[2].shape)
+        break
     labels, v_in, v_target = next(iter(train_set)) # v_in.size() = (10, 1, 64, 64)
     show = make_grid([*v_in, *v_target], nrow=10)
     print(labels)
