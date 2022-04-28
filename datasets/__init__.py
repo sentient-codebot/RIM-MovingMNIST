@@ -47,3 +47,20 @@ def setup_dataloader(args):
     )
 
     return train_loader, test_loader
+
+def main():
+    train_set = BouncingBall(root='./../data', train=True, length=20, filename='balls4mass64.h5')
+    train_loader = torch.utils.data.DataLoader(
+        dataset=train_set,
+        batch_size=16,
+        shuffle=True,
+        num_workers=0,
+    )
+    for i, (data, target) in enumerate(train_loader):
+        print(data.shape)
+        print(target.shape)
+        if i == 10:
+            break
+
+if __name__ == '__main__':
+    main()

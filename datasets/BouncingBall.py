@@ -27,7 +27,6 @@ class BouncingBall(Dataset):
     }
     filename_list = ['balls3curtain64.h5', 'balls4mass64.h5',
                     'balls678mass64.h5']
-
     def __init__(self, train=True, length=50, root='/Data', download=False,
                  filename="balls4mass64.h5"):
         """
@@ -53,7 +52,7 @@ class BouncingBall(Dataset):
 
     def __getitem__(self, index, out_list=('features', 'groups')):
         # ['collisions', 'events', 'features', 'groups', 'positions', 'velocities']
-        # Currently (51 ,64, 64, 1)
+        # Currently MAX (51 ,64, 64, 1)
 
         features = 1.0 * self.input_data[:self.length, index, :, :, :]
         # True, False label, conert to int
@@ -66,32 +65,6 @@ class BouncingBall(Dataset):
     
     def _check_exists(self):
         return os.path.exists(os.path.join(self.directory, self.filename)) 
-    
-    def download(self):
-        """Download the dataset."""
-        from six.moves import urllib
-        import gzip
-        import errno
-        if self._check_exists():
-            return 
-        
-        # download files
-        try:
-            os.makedirs(os.path.join(self.directory))
-        except OSError as e:
-            if e.errno == errno.EEXIST:
-                pass
-            else:
-                raise
-        
-        url = self.urls[self.filename]
-        print('Downloading ' + url)
-        data = urllib.request.urlopen(url)
-        filename = url.rpartition('/')[2]
-        file_path = os.path.join(self.directory, filename)
-        os.unlink(file_path)
-
-        print('Download finished. ')
 
 
 class LoadDataset(Dataset):
