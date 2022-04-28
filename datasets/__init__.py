@@ -9,8 +9,22 @@ def setup_dataloader(args):
     Args:
         `args`: parsed args. """
     if args.task == 'MMNIST':
-        train_set = MovingMNIST(root=args.dataset_dir, train=True, download=True, mini=False)
-        test_set = MovingMNIST(root='./data', train=False, download=True)
+        train_set = MovingMNIST(
+            root=args.dataset_dir, 
+            train=True, 
+            n_frames_input=10,
+            n_frames_output=10,
+            num_objects=[1,2],
+            download=True
+        )
+        test_set = MovingMNIST(
+            root=args.dataset_dir, 
+            train=False, 
+            n_frames_input=10,
+            n_frames_output=10,
+            num_objects=[2],
+            download=True
+        )
     elif args.task == 'BBALL':
         train_set = BouncingBall(root=args.dataset_dir, train=True, length=20, filename=args.ball_trainset)
         test_set = BouncingBall(root=args.dataset_dir, train=False, length=50, filename=args.ball_testset)

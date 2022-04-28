@@ -8,7 +8,6 @@ from torch.utils.tensorboard import SummaryWriter
 
 from networks import BallModel
 from argument_parser import argument_parser
-from datasets.MovingMNIST import MovingMNIST
 from datasets import setup_dataloader
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
@@ -59,7 +58,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     mse = lambda x, y: ((x - y)**2).mean(dim=(0,1,2)).sum() # x Shape: [batch_size, T, C, H, W]
 
     if args.task == 'MMNIST':
-        rollout_start = 10
+        rollout_start = test_loader.n_frames_input
     elif args.task == 'BBALL':
         rollout_start = 20
     elif args.task == 'TRAFFIC4CAST':
@@ -74,6 +73,9 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     ssim = 0.
     most_used_units = []
     for batch_idx, data in enumerate(tqdm(test_loader) if __name__ == "__main__" else test_loader): # tqdm doesn't work here?
+        # data: (labels, frames_in, frames_out)
+        digit_labels, in_frames, out_frames = [tensor.to(args.device) for tensor in data] 
+        data = torch.cat((in_frames, out_frames), dim=1) # [N, *T, 1, H, W]
         hidden = model.init_hidden(data.shape[0]).to(args.device)
         memory = None
         if args.use_sw:

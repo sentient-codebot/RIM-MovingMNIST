@@ -13,7 +13,7 @@ from utils.util import set_seed, make_dir
 from utils.visualize import ScalarLog, VectorLog, HeatmapLog
 from utils.metric import f1_score
 import utils.pssim.pytorch_ssim as pt_ssim
-from datasets.MovingMNIST import MovingMNIST
+from datasets import setup_dataloader
 from tqdm import tqdm
 from test_mmnist import dec_rim_util, test
 
@@ -30,6 +30,8 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn)
 
     train_epoch_loss = torch.tensor(0.).to(args.device)
     for batch_idx, data in enumerate(tqdm(train_loader)):
+        labels, in_frames, out_frames = [tensor.to(args.device) for tensor in data]
+        data = torch.cat((in_frames, out_frames), dim=1) # Shape; [N, T, C, H, W]
         start_time = time()
         data = data.to(args.device)
         data = data.unsqueeze(2).float()
@@ -61,6 +63,8 @@ def test(model, test_loader, args, loss_fn):
     f1 = 0.
     ssim = 0.
     for batch_idx, data in enumerate(test_loader): # tqdm doesn't work here?
+        labels, in_frames, out_frames = [tensor.to(args.device) for tensor in data]
+        data = torch.cat((in_frames, out_frames), dim=1) # Shape; [N, T, C, H, W]
         data = data.to(args.device)
         if data.dim()==4:
             data = data.unsqueeze(2).float()
@@ -112,19 +116,7 @@ def main():
 
     model, optimizer, start_epoch, train_batch_idx = setup_model(args=args)
 
-    train_set = MovingMNIST(root='./data', train=True, download=True, mini=False)
-    test_set = MovingMNIST(root='./data', train=False, download=True)
-
-    train_loader = torch.utils.data.DataLoader(
-        dataset=train_set,
-        batch_size=args.batch_size,
-        shuffle=True
-    )
-    test_loader = torch.utils.data.DataLoader(
-        dataset=test_set,
-        batch_size=args.batch_size,
-        shuffle=True
-    )
+    train_loader, test_loader = setup_dataloader(args=args)
     transfer_loader = test_loader
 
     if args.loss_fn == "BCE":
