@@ -6,7 +6,7 @@ from argument_parser import argument_parser
 
 import torch
 
-from datasets.MovingMNIST import MovingMNIST
+from datasets.moving_mnist_old import MovingMNIST
 from utils.visualize import SaliencyMap
 
 set_seed(2022) #Nan is stupid ciao
