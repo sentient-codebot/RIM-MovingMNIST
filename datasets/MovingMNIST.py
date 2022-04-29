@@ -45,6 +45,8 @@ class MovingMNIST(data.Dataset):
             `n_frames_input`: (>0) number of frames to input.
             `n_frames_output`: (>0) number of frames to output.
 
+        Dataset size is 10k if generate data, otherwise ...
+
         Sample shape:
             tuple of:
             `labels`: [num_objects,]

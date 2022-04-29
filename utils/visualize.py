@@ -3,6 +3,7 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import torch
 from torch import Tensor
+from torchvision.utils import make_grid
 from .util import make_dir
 import argparse
 from typing import List, Sequence, Union, Any, Optional
@@ -390,6 +391,25 @@ class VecStack():
     
     def show(self) -> Union[Tensor, None]:
         return self.img
+
+
+def make_grid_video(target, prediction=None, return_dim=4):
+    assert target.dim() == 5 # N T C H W
+    frames = []
+    for frame_idx in range(target.shape[1]):
+        if prediction is not None:
+            grided_frame = make_grid(
+                torch.cat([target[:, frame_idx, :, :, :], prediction[:, frame_idx, :, :, :]], dim=0),
+                nrow=target.shape[0],
+            ) # [B C H W] -> [C, *H, **W]
+        else:
+            grided_frame = make_grid(target[:, frame_idx, :, :, :], nrow=target.shape[0]) # [B, C, H, W] -> [C, *H, **W]
+        frames.append(grided_frame)
+    if return_dim==4:
+        return torch.stack(frames, dim=0) # [T, C, H, W]
+    else:
+        return torch.stack(frames, dim=0).unsqueeze(0) # [N, T, C, H, W]
+
 
 def main():
     # data = torch.rand((64,51,1,64,64))

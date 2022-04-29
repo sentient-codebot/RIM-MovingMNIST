@@ -6,12 +6,14 @@ import numpy as np
 import torch 
 from torch import autograd
 from torch.utils.tensorboard import SummaryWriter
+from torchvision.utils import make_grid
 import wandb
 
 from networks import BallModel, TrafficModel
 from argument_parser import argument_parser
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
+from utils.visualize import make_grid_video
 from datasets import setup_dataloader
 from tqdm import tqdm
 from test_mmnist import dec_rim_util, test
@@ -85,12 +87,13 @@ def main():
         }, f"{args.folder_save}/args/args.pt")
 
     # wandb setup
-    project, name = args.experiment_name.split('_',1)
+    project, name = args.id.split('_',1)
     wandb.init(project=project, name=name, config=vars(args), entity='nan-team')
     
     columns = ['sample_id', 'frame_id', 'ground_truth', 'prediction', 'individual_prediction']
     if args.core == 'SCOFF':
-        columns.append('rules_selected')
+        for idx in range(args.num_hidden):
+            columns.append('rule_OF_'+str(idx))
 
     # data setup
     train_loader, test_loader = setup_dataloader(args=args)
@@ -125,7 +128,7 @@ def main():
         # test 
         if args.test_frequency > 0 and epoch % args.test_frequency == 0 or epoch <= 15:
             """test model accuracy and log intermediate variables here"""
-            wandb_artf = wandb.Artifact(project+'_'+name+f'_epoch_{epoch}_'+str(wandb.run.id), type='predictions')
+            wandb_artf = wandb.Artifact(project+'_'+name, type='predictions', metadata=vars(args).update({'epoch': epoch}))
             test_loss, prediction, data, metrics, test_table = test(
                 model = model, 
                 test_loader = test_loader, 
@@ -173,12 +176,15 @@ def main():
             else:
                 num_sample_to_record = 1
                 print('Warning: unknown task type. ')
-            cat_video = torch.cat(
-                (data[0:num_sample_to_record, 1:, :, :, :], prediction[0:num_sample_to_record]),
-                dim = 4 # join in width
-            ) # N T C H W
+            # concate video of ground truth and prediction
+            cat_video = make_grid_video(data[0:num_sample_to_record, 1:, :, :, :],
+                                        prediction[0:num_sample_to_record], return_dim=5) 
+            grided_ind_pred = make_grid_video(
+                target = blocked_dec[0],
+                return_dim = 5,
+            )
             writer.add_video('Predicted Videos', cat_video, epoch)
-            writer.add_video('Individual Predictions', blocked_dec[0], epoch) # N=num_blocks T 1 H W
+            writer.add_video('Individual Predictions', grided_ind_pred, epoch) # N = num_blocks T 1 H W
 
             # wandb
             metric_dict = {
@@ -199,8 +205,8 @@ def main():
                     'Rules Selected': wandb.Image(rules_selected[0].cpu()*256/9), # 0 to 9 classes
                 })
             video_dict = {
-                'Predicted Videos': wandb.Video(cat_video.cpu()*256, fps=3),
-                'Individual Predictions': wandb.Video(blocked_dec[0].cpu()*256, fps=4),
+                'Predicted Videos': wandb.Video(cat_video.cpu()*256, fps=4),
+                'Individual Predictions': wandb.Video(grided_ind_pred.cpu()*256, fps=4),
             }
             wandb_artf.add(test_table, "predictions")
             wandb.run.log_artifact(wandb_artf)
@@ -293,5 +299,4 @@ def param_count(model: torch.nn.Module) -> int:
 
 if __name__ == '__main__':
     main()
-
 

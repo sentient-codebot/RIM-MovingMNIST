@@ -5,13 +5,13 @@ import numpy as np
 import torch 
 from torch import autograd
 from torch.utils.tensorboard import SummaryWriter
-
+from torchvision.utils import make_grid
 from networks import BallModel
 from argument_parser import argument_parser
 from datasets import setup_dataloader
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
-from utils.visualize import ScalarLog, plot_frames, VectorLog, SaliencyMap, VecStack
+from utils.visualize import VecStack, make_grid_video
 from utils.metric import f1_score
 from tqdm import tqdm
 import wandb
@@ -42,6 +42,7 @@ def get_grad_norm(model):
 # @torch.no_grad()
 def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_columns=None):
     '''test(model, test_loader, args, loss_fn, writer, rollout)'''
+    start_time = time()
     # wandb table
     if log_columns is not None:
         test_table = wandb.Table(columns=log_columns)
@@ -89,7 +90,6 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             dec_util.reset()
         if args.core == 'SCOFF':
             rules_selected.reset()
-        start_time = time()
         data = data.to(args.device) # Shape: [batch_size, T, C, H, W] or [batch_size, T, H, W]
         if data.dim()==4:
             data = data.unsqueeze(2).float() # Shape: [batch_size, T, 1, H, W]
@@ -118,7 +118,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                 intm = intm._asdict()
                 target = data[:, frame+1, :, :, :]
                 prediction[:, frame+1, :, :, :] = output
-                blocked_prediction[:, 0, frame+1, :, :, :] = output
+                blocked_prediction[:, 0, frame+1, :, :, :] = output # dim == 6
                 blocked_prediction[:, 1:, frame+1, :, :, :] = intm['blocked_dec']
                 loss += loss_fn(output, target)
 
@@ -132,12 +132,14 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                     'frame_id': frame+1,
                     'prediction': wandb.Image(output[0].detach().cpu()*256),
                     'ground_truth': wandb.Image(target[0].detach().cpu()*256),
-                    'individual_prediction': wandb.Image(intm['blocked_dec'][0]*256),
+                    'individual_prediction': wandb.Image(make_grid(intm['blocked_dec'][0]*256)), # N K C H W -> K C H W -> C *H **W
                 }
                 if args.core == 'SCOFF':
-                    table_row.update({
-                        'rules_selected': intm['blocked_dec'][0].detach().cpu().tolist(),
-                    })
+                    rule_list = intm['rules_selected'][0].detach().cpu().tolist()
+                    for of_idx in range(args.num_hidden):
+                        table_row.update({
+                            f'rule_OF_{of_idx}': rule_list[of_idx],
+                        })
                 if log_columns is not None:
                     test_table.add_data(
                         *[table_row[col] for col in log_columns],
@@ -212,6 +214,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         }
 
     model.get_intm = previous_get_intm
+    print('test runtime:', time() - start_time)
     return epoch_loss, prediction, data, metrics, test_table
 
 @torch.no_grad()
@@ -262,7 +265,8 @@ def main():
     wandb_artf = wandb.Artifact(project+'_'+name+'_test'+str(wandb.run.id), type='predictions')
     columns = ['sample_id', 'frame_id', 'ground_truth', 'prediction', 'individual_prediction']
     if args.core == 'SCOFF':
-        columns.append('rules_selected')
+        for idx in range(args.num_hidden):
+            columns.append('rule_OF_'+str(idx))
 
     # data setup
     train_loader, test_loader = setup_dataloader(args=args)
@@ -303,7 +307,7 @@ def main():
         most_used_units = metrics['most_used_units']
     elif args.core == 'SCOFF':
         rules_selected = metrics['rules_selected']
-    blocked_dec = metrics['blocked_dec']
+    blocked_dec = metrics['blocked_dec'] # dim == 6
     print(f"epoch [{epoch}] test loss: {test_loss:.4f}; test mse: {test_mse:.4f}; "+\
         f"test F1 score: {test_f1:.4f}; test SSIM: {test_ssim:.4f}")
     writer.add_scalar(f'Loss/Test Loss ({args.loss_fn.upper()})', test_loss, epoch)
@@ -328,12 +332,15 @@ def main():
     else:
         num_sample_to_record = 1
         print('Warning: unknown task type. ')
-    cat_video = torch.cat(
-        (data[0:num_sample_to_record, 1:, :, :, :],prediction[0:num_sample_to_record]),
-        dim = 4 # join in width
-    ) # N T C H W
+    # concate video of ground truth and prediction
+    cat_video = make_grid_video(data[0:num_sample_to_record, 1:, :, :, :],
+                                prediction[0:num_sample_to_record], return_dim=5) 
+    grided_ind_pred = make_grid_video(
+        target = blocked_dec[0],
+        return_dim = 5,
+    )
     writer.add_video('Predicted Videos', cat_video, epoch)
-    writer.add_video('Blocked Predictions', blocked_dec[0]) # N=num_blocks T 1 H W
+    writer.add_video('Blocked Predictions', grided_ind_pred) # N num_blocks T 1 H W
 
     # wandb
     metric_dict = {
