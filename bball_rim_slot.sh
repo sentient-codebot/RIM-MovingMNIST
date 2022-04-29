@@ -16,7 +16,7 @@ task="bball"
 ball_options='transfer'
 ball_trainset="678ball"
 ball_testset="4ball"
-batch_size=16
+batch_size=64
 epochs=200
 
 

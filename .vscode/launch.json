@@ -1,6 +1,38 @@
 {
     "configurations": [
         {
+            "name": "train/test bball rimslot",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "--experiment_name",
+                "BBALL_slotrim_3_6_678ball",
+                "--cfg_json",
+                "configs/rim/rim_slot.json",
+                "--core",
+                "RIM",
+                "--should_resume",
+                "true",
+                "--k",
+                "6",
+                "--num_hidden",
+                "6",
+                "--num_slots",
+                "9",
+                "--task",
+                "bball",
+                "--ball_options",
+                "transfer",
+                "--ball_trainset",
+                "678ball",
+                "--ball_testset",
+                "4ball"
+            ]
+        },
+        {
             "name": "visualize logged tensor",
             "type": "python",
             "request": "launch",
@@ -48,7 +80,7 @@
                 "--k",
                 "6",
             ],
-            "env":{
+            "env": {
                 "CUDA_VISIBLE_DEVICES": "1"
             }
         },
@@ -126,7 +158,7 @@
                 "--batch_size",
                 "32"
             ],
-            "env":{
+            "env": {
                 "CUDA_VISIBLE_DEVICES": "1"
             }
         },

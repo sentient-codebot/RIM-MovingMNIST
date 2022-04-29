@@ -608,10 +608,10 @@ class SCOFFCell(nn.Module):
 
 
         if do_gru:
-            self.block_lstm = SharedBlockGRU(self.inp_att_out*self.num_hidden, self.hidden_size, k=self.num_hidden, n_templates= n_templates)
+            self.block_lstm = SharedBlockGRU(self.inp_att_out*self.num_hidden, self.hidden_size, num_hidden=self.num_hidden, n_templates= n_templates)
         else:
   
-            self.block_lstm = SharedBlockLSTM(self.inp_att_out*self.num_hidden, self.hidden_size, k=self.num_hidden, n_templates= n_templates)
+            self.block_lstm = SharedBlockLSTM(self.inp_att_out*self.num_hidden, self.hidden_size, num_hidden=self.num_hidden, n_templates= n_templates)
            
 
         if self.do_rel:
@@ -722,7 +722,7 @@ class SCOFFCell(nn.Module):
                 inp_use = inp # Shape: [bs, num_inputs, input_size] NO null input included, but might contain empty slots
                 iatt = torch.ones((inp.shape[0], inp.shape[1], 2), device=inp.device) # dummy iatt score. Shape: [bs, num_hidden, 2] 
 
-            inp_use = inp_use.reshape((inp_use.shape[0], self.inp_att_out * self.num_hidden)) # [bs, att_out * num_hidden]
+            inp_use = inp_use.reshape((inp_use.shape[0], self.inp_att_out * self.num_hidden)) # [bs, self.inp_att_out * num_hidden], self.inp_att_out ~= input_size for following GRU
 
         else:
             raise ValueError('following lines should NEVER be run! (version=0) it is a cardinal sin.')

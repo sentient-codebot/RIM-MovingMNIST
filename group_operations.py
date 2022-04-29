@@ -285,13 +285,16 @@ class SharedWorkspace(nn.Module):
         return M_new, h_new
 
 class SharedGroupLinearLayer(nn.Module):
-    """All the parameters are shared using soft attention this layer is used for sharing Q,K,V parameters of MHA"""
+    """All the parameters are shared using soft attention this layer is used for sharing Q,K,V parameters of MHA
+    
+    Outputs are soft weighted sum of all layer blocks. 
+    """
 
     def __init__(self, din, dout, n_templates):
         super(SharedGroupLinearLayer, self).__init__()
 
         self.w = nn.ParameterList([nn.Parameter(0.01 * torch.randn(din,dout)) for _ in range(0,n_templates)])
-        self.gll_write = GroupLinearLayer(dout,16, n_templates)
+        self.gll_write = GroupLinearLayer(dout,16, n_templates) # 16 == key size
         self.gll_read = GroupLinearLayer(din,16,1)
 
     def forward(self,x):
@@ -299,16 +302,16 @@ class SharedGroupLinearLayer(nn.Module):
         bs_size = x.shape[0]
         k = x.shape[1]
         x= x.reshape(k*bs_size,-1)
-        x_read = self.gll_read((x*1.0).reshape((x.shape[0], 1, x.shape[1])))
+        x_read = self.gll_read((x*1.0).reshape((x.shape[0], 1, x.shape[1]))) # for q, shape [k*bs, 1, 16]
         x_next = []
         for weight in self.w:
-            x_next_l = torch.matmul(x,weight)
+            x_next_l = torch.matmul(x,weight) # Shape: [batch_size*num_blocks, dout]
             x_next.append(x_next_l)
         x_next = torch.stack(x_next,1) #(k*bs,n_templates,dout)
         
-        x_write = self.gll_write(x_next)
+        x_write = self.gll_write(x_next) # for k,v, shape: [k*bs, n_templates, 16]
         sm = nn.Softmax(2)
-        att = sm(torch.bmm(x_read, x_write.permute(0, 2, 1)))
+        att = sm(torch.bmm(x_read, x_write.permute(0, 2, 1))) # Shape: [k*bs, 1, *n_templates]
         
         x_next = torch.bmm(att, x_next)
 
@@ -328,24 +331,24 @@ class SharedBlockGRU(nn.Module):
         `k`: number of blocks=object files
         `n_templates`: number of templates"""
 
-    def __init__(self, ninp, nhid, k, n_templates):
+    def __init__(self, ninp, nhid, num_hidden, n_templates):
         super(SharedBlockGRU, self).__init__()
 
-        assert ninp % k == 0
-        assert nhid % k == 0
+        assert ninp % num_hidden == 0 
+        assert nhid % num_hidden == 0
 
-        self.k = k
-        self.m = nhid // self.k # dimension of each block's hidden state
+        self.num_hidden = num_hidden
+        self.single_hidden_size = nhid // self.num_hidden # dimension of each block's hidden state
 
         self.n_templates = n_templates
-        self.templates = nn.ModuleList([nn.GRUCell(ninp,self.m) for _ in range(0,self.n_templates)])
+        self.templates = nn.ModuleList([nn.GRUCell(ninp//self.num_hidden,self.single_hidden_size) for _ in range(0,self.n_templates)]) # GRUCell: input_size: ninp, hidden_size: m
         self.nhid = nhid
 
         self.ninp = ninp
 
-        self.gll_write = GroupLinearLayer(self.m,16, self.n_templates)
-        self.gll_read = GroupLinearLayer(self.m,16,1)
-        print("Using Gumble sparsity")
+        self.gll_write = GroupLinearLayer(self.single_hidden_size,16, self.n_templates) # for k, 16 == key size
+        self.gll_read = GroupLinearLayer(self.single_hidden_size,16,1) # for q, 16 == key size
+        print("Using Gumble sparsity in ", __class__.__name__)
 
     def blockify_params(self):
 
@@ -354,68 +357,76 @@ class SharedBlockGRU(nn.Module):
     def forward(self, input, h):
         """
         Inputs:
-            `input`: [N, ninp]
-            `h`: [N, nhid]
+            `input`: [N, num_hidden*single_input_size]
+            `h`: [N, num_hidden*single_hidden_size]
             
         Outputs:
-            `hnext`: [N, nhid],
-            `attn`: [N, num_blocks, ninp] (num_bloccks==k==num_object_files)
+            `hnext`: [N, num_hidden*single_hidden_size],
+            `attn`: [N, num_OFs, n_templates] (num_bloccks==k==num_object_files)
         """
 
         #self.blockify_params()
         bs = h.shape[0]                                                                      # h: previous hidden state  
-        h = h.reshape((h.shape[0], self.k, self.m)).reshape((h.shape[0]*self.k, self.m))     # h_shape: ((h.shape[0]*self.k, self.m))
+        h = h.reshape((h.shape[0], self.num_hidden, self.single_hidden_size)).reshape((h.shape[0]*self.num_hidden, self.single_hidden_size))     # h_shape: (h.shape[0]*self.num_hidden, self.m)
 
-        input = input.reshape(input.shape[0], 1, input.shape[1])
-        input = input.repeat(1,self.k,1)
-        input = input.reshape(input.shape[0]*self.k, input.shape[2])                         # input_shape: (input.shape[0]*self.k, input.shape[2])
+        # following two lines are problematica. shouldn't copy input for num_hidden times, we just need to split it
+        # input = input.reshape(input.shape[0], 1, input.shape[1])                            # Shape: [N, 1, num_hidden*din]
+        # input = input.repeat(1,self.num_hidden,1)                                           # Shape: [N, num_hidden, num_hidden*din]
+        input = input.reshape(input.shape[0], self.num_hidden, -1)                          # Shape: [N, num_hidden, din]
+        input = input.reshape(input.shape[0]*self.num_hidden, -1)                           # Shape: [N*num_hidden, din]
 
-        h_read = self.gll_read((h*1.0).reshape((h.shape[0], 1, h.shape[1])))                 # h_read is initialised in group linear layer, self.w is defined inside 
+        h_read = self.gll_read((h*1.0).reshape((h.shape[0], 1, h.shape[1])))                # from current hidden to q, shape: [N*num_hidden, 1, 16]
 
 
         hnext_stack = []
 
 
-        for template in self.templates:                                                     #templates are GRUs
-            hnext_l = template(input, h)                                                    
-            hnext_l = hnext_l.reshape((hnext_l.shape[0], 1, hnext_l.shape[1]))
+        for template in self.templates:                                                     # input [N*num_hidden, num_hidden*din], h [N*num_hidden, m]
+            hnext_l = template(input, h)                                                    # Shape: [N*num_hidden, m]
+            hnext_l = hnext_l.reshape((hnext_l.shape[0], 1, hnext_l.shape[1]))              # Shape: [N*num_hidden, 1, m]
             hnext_stack.append(hnext_l)
 
-        hnext = torch.cat(hnext_stack, 1)                                                    #hnext_shape: ((hnext_l.shape[0], number_GRUs, hnext_l.shape[1]))
+        hnext = torch.cat(hnext_stack, 1)                                                   # Shape: [N*num_hidden, n_templates, m]
 
-        write_key = self.gll_write(hnext)                                                    # keys attn mechanisms
+        write_key = self.gll_write(hnext)                                                   # from candidate hidden to k, shape: [N*num_hidden, n_templates, 16]
 
-        att = torch.nn.functional.gumbel_softmax(torch.bmm(h_read, write_key.permute(0, 2, 1)),  tau=0.5, hard=True)    # attn_shape: ((h.shape[0], 1 , number_GRUs))
+        att = torch.nn.functional.gumbel_softmax(torch.bmm(h_read, write_key.permute(0, 2, 1)),  tau=0.5, hard=True)    # Shape: [N*num_hidden, 1, n_templates]
 
         #att = att*0.0 + 0.25
 
         #print('hnext shape before att', hnext.shape)
         hnext = torch.bmm(att, hnext)   #((hnext_l.shape[0], 1, hnext_l.shape[1]))
         hnext = hnext.mean(dim=1)
-        hnext = hnext.reshape((bs, self.k, self.m)).reshape((bs, self.k*self.m))
+        hnext = hnext.reshape((bs, self.num_hidden, self.single_hidden_size)).reshape((bs, self.num_hidden*self.single_hidden_size))
         #print('shapes', hnext.shape, cnext.shape)
 
-        return hnext, att.data.reshape(bs,self.k,self.n_templates)
+        return hnext, att.data.reshape(bs,self.num_hidden,self.n_templates)
 
 class SharedBlockLSTM(nn.Module):
-    """Dynamic sharing of parameters between blocks(RIM's)"""
+    """Dynamic sharing of parameters between blocks(RIM's)
+    
+    Inputs:
+        `input`: [N, num_hidden*single_input_size]
+        `h`: [N, num_hidden*single_hidden_size]
+        `c`: [N, num_hidden*single_hidden_size]
+    """
 
-    def __init__(self, ninp, nhid, k , n_templates):
+    def __init__(self, ninp, nhid, num_hidden , n_templates):
         super(SharedBlockLSTM, self).__init__()
 
-        assert ninp % k == 0
-        assert nhid % k == 0
+        assert ninp % num_hidden == 0
+        assert nhid % num_hidden == 0
 
-        self.k = k
-        self.m = nhid // self.k
+        self.num_hidden = num_hidden
+        self.single_hidden_size = nhid // self.num_hidden
         self.n_templates = n_templates
-        self.templates = nn.ModuleList([nn.LSTMCell(ninp,self.m) for _ in range(0,self.n_templates)])
+        self.templates = nn.ModuleList([nn.LSTMCell(ninp//self.num_hidden,self.single_hidden_size) for _ in range(0,self.n_templates)])
         self.nhid = nhid
 
         self.ninp = ninp
 
-        self.gll_write = GroupLinearLayer(self.m,16, self.n_templates)
-        self.gll_read = GroupLinearLayer(self.m,16,1)
+        self.gll_write = GroupLinearLayer(self.single_hidden_size,16, self.n_templates)
+        self.gll_read = GroupLinearLayer(self.single_hidden_size,16,1)
 
     def blockify_params(self):
 
@@ -425,13 +436,12 @@ class SharedBlockLSTM(nn.Module):
 
         #self.blockify_params()
         bs = h.shape[0]
-        h = h.reshape((h.shape[0], self.k, self.m)).reshape((h.shape[0]*self.k, self.m))
-        c = c.reshape((c.shape[0], self.k, self.m)).reshape((c.shape[0]*self.k, self.m))
+        h = h.reshape((h.shape[0], self.num_hidden, self.single_hidden_size)).reshape((h.shape[0]*self.num_hidden, self.single_hidden_size))
+        c = c.reshape((c.shape[0], self.num_hidden, self.single_hidden_size)).reshape((c.shape[0]*self.num_hidden, self.single_hidden_size))
 
 
-        input = input.reshape(input.shape[0], 1, input.shape[1])
-        input = input.repeat(1,self.k,1)
-        input = input.reshape(input.shape[0]*self.k, input.shape[2])
+        input = input.reshape(input.shape[0], self.num_hidden, -1) # Shape: [N, num_hidden, din]
+        input = input.reshape(input.shape[0]*self.num_hidden, input.shape[2]) # Shape: [N*num_hidden, din]
 
         h_read = self.gll_read((h*1.0).reshape((h.shape[0], 1, h.shape[1])))
 
@@ -467,9 +477,9 @@ class SharedBlockLSTM(nn.Module):
         hnext = hnext.mean(dim=1)
         cnext = cnext.mean(dim=1)
 
-        hnext = hnext.reshape((bs, self.k, self.m)).reshape((bs, self.k*self.m))
-        cnext = cnext.reshape((bs, self.k, self.m)).reshape((bs, self.k*self.m))
+        hnext = hnext.reshape((bs, self.num_hidden, self.single_hidden_size)).reshape((bs, self.num_hidden*self.single_hidden_size))
+        cnext = cnext.reshape((bs, self.num_hidden, self.single_hidden_size)).reshape((bs, self.num_hidden*self.single_hidden_size))
 
         #print('shapes', hnext.shape, cnext.shape)
 
-        return hnext, cnext, att.data.reshape(bs,self.k,self.n_templates)
+        return hnext, cnext, att.data.reshape(bs,self.num_hidden,self.n_templates)

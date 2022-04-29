@@ -73,9 +73,12 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     ssim = 0.
     most_used_units = []
     for batch_idx, data in enumerate(tqdm(test_loader) if __name__ == "__main__" else test_loader): # tqdm doesn't work here?
-        # data: (labels, frames_in, frames_out)
-        digit_labels, in_frames, out_frames = [tensor.to(args.device) for tensor in data] 
-        data = torch.cat((in_frames, out_frames), dim=1) # [N, *T, 1, H, W]
+        if args.task == 'MMNIST':
+            # data: (labels, frames_in, frames_out)
+            digit_labels, in_frames, out_frames = [tensor.to(args.device) for tensor in data] 
+            data = torch.cat((in_frames, out_frames), dim=1) # [N, *T, 1, H, W]
+        else:
+            data = data.to(args.device)
         hidden = model.init_hidden(data.shape[0]).to(args.device)
         memory = None
         if args.use_sw:
@@ -140,7 +143,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                         *[table_row[col] for col in log_columns],
                     )
 
-            if __name__ == "__main__":
+            if __name__ == "__main__" and False:
                 if not args.use_memory_for_decoder:
                     intm["decoder_utilization"] = dec_rim_util(model, hidden)
                 else:
