@@ -31,6 +31,7 @@
     "input_dropout"             : 0.1,
     "comm_dropout"              : 0.1,
 
+    "spotlight_bias"            : false,
     "use_slot_attention"        : true,
     "slot_size"                 : 100,
     "num_slots"                 : 6,

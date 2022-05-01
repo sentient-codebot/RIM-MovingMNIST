@@ -1,6 +1,7 @@
 """Script to parse all the command-line arguments"""
 import argparse
 import json
+from xmlrpc.client import Boolean
 
 
 def str2bool(v):
@@ -105,6 +106,7 @@ def argument_parser():
     parser.add_argument('--dataset_dir', type=str, default='')
     parser.add_argument('--batch_size', type=int, default=50, metavar='N',
                         help='ADD')
+    parser.add_argument('--spotlight_bias',type=str2bool, default=False)
     parser.add_argument('--epochs', type=int, default=100, metavar='E',
                         help='ADD')
     parser.add_argument('--lr', type=float, default=0.0001,
