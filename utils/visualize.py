@@ -401,9 +401,10 @@ def make_grid_video(target, prediction=None, return_dim=4):
             grided_frame = make_grid(
                 torch.cat([target[:, frame_idx, :, :, :], prediction[:, frame_idx, :, :, :]], dim=0),
                 nrow=target.shape[0],
+                pad_value=1,
             ) # [B C H W] -> [C, *H, **W]
         else:
-            grided_frame = make_grid(target[:, frame_idx, :, :, :], nrow=target.shape[0]) # [B, C, H, W] -> [C, *H, **W]
+            grided_frame = make_grid(target[:, frame_idx, :, :, :], nrow=target.shape[0], pad_value=1) # [B, C, H, W] -> [C, *H, **W]
         frames.append(grided_frame)
     if return_dim==4:
         return torch.stack(frames, dim=0) # [T, C, H, W]
