@@ -59,7 +59,7 @@
             ]
         },
         {
-            "name": "train/test mmnist slot",
+            "name": "train/test mmnist slotrim",
             "type": "python",
             "request": "launch",
             "program": "${file}",
@@ -70,9 +70,9 @@
                 "--core",
                 "RIM",
                 "--should_resume",
-                "false",
+                "true",
                 "--experiment_name",
-                "MMNIST_3slot_full",
+                "MMNIST_3SLOT6RIM",
                 "--save_frequency",
                 "25",
                 "--num_hidden",
@@ -81,7 +81,7 @@
                 "6",
             ],
             "env": {
-                "CUDA_VISIBLE_DEVICES": "1"
+                "CUDA_VISIBLE_DEVICES": "0"
             }
         },
         {

@@ -130,9 +130,9 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                 table_row = {
                     'sample_id': str(batch_idx)+'_'+'0',
                     'frame_id': frame+1,
-                    'prediction': wandb.Image(output[0].detach().cpu()*256),
-                    'ground_truth': wandb.Image(target[0].detach().cpu()*256),
-                    'individual_prediction': wandb.Image(make_grid(intm['blocked_dec'][0]*256)), # N K C H W -> K C H W -> C *H **W
+                    'prediction': wandb.Image(output[0].detach().cpu()*255),
+                    'ground_truth': wandb.Image(target[0].detach().cpu()*255),
+                    'individual_prediction': wandb.Image(make_grid(intm['blocked_dec'][0]*255, pad_value=255)), # N K C H W -> K C H W -> C *H **W
                 }
                 if args.core == 'SCOFF':
                     rule_list = intm['rules_selected'][0].detach().cpu().tolist()
@@ -351,18 +351,18 @@ def main():
     stat_dict = {}
     if args.core == "RIM":
         stat_dict.update({
-            'RIM Input Attention': wandb.Image(rim_actv[0].cpu()*256),
-            'RIM Activation Mask': wandb.Image(rim_actv_mask[0].cpu()*256),
-            'Unit Decoder Utilization': wandb.Image(dec_util[0].cpu()*256),
+            'RIM Input Attention': wandb.Image(rim_actv[0].cpu()*255),
+            'RIM Activation Mask': wandb.Image(rim_actv_mask[0].cpu()*255),
+            'Unit Decoder Utilization': wandb.Image(dec_util[0].cpu()*255),
             'Most Used Units in Decoder': wandb.Histogram(most_used_units), # a list
         })
     elif args.core == 'SCOFF':
         stat_dict.update({
-            'Rules Selected': wandb.Image(rules_selected[0].cpu()*256/9), # 0 to 9 classes
+            'Rules Selected': wandb.Image(rules_selected[0].cpu()*255/9), # 0 to 9 classes
         })
     video_dict = {
-        'Predicted Videos': wandb.Video(cat_video.cpu()*256, fps=3),
-        'Individual Predictions': wandb.Video(blocked_dec[0].cpu()*256, fps=4),
+        'Predicted Videos': wandb.Video((cat_video.cpu()*255).to(torch.uint8), fps=3),
+        'Individual Predictions': wandb.Video((grided_ind_pred.cpu()*255).to(torch.uint8), fps=4),
     }
     wandb_artf.add(test_table, "predictions")
     wandb.run.log_artifact(wandb_artf)
