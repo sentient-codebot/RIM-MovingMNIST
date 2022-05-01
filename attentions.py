@@ -509,11 +509,14 @@ class Sparse_attention(nn.Module):
 class ScaledDotProductAttention(nn.Module):
     ''' Scaled Dot-Product Attention '''
 
-    def __init__(self, temperature, topk, grad_sparse, attn_dropout=0.1):
+    def __init__(self, temperature, topk, grad_sparse, attn_dropout=0.1, query_competition=False):
         super().__init__()
         self.temperature = temperature
         #self.dropout = nn.Dropout(attn_dropout)
-        self.softmax = nn.Softmax(dim=2)
+        self.query_compeition = query_competition
+        self.softmax = nn.Softmax(dim=2) 
+        self.topk = topk
+        self.grad_sparse = grad_sparse
         self.grad_sparse = grad_sparse
         #print('top 2 sparsity')
         self.topk = topk
@@ -531,7 +534,15 @@ class ScaledDotProductAttention(nn.Module):
             attn = attn.masked_fill(mask, -np.inf)
 
         #attn = self.dropout(attn)
-        attn = self.softmax(attn)
+        if not self.query_compeition:
+            attn = self.softmax(attn) # Shape: [N, num_q, num_k]
+        else:
+            # compete between queries
+            attn = nn.Softmax(dim=1)(attn)
+            attn = self.softmax(attn) # Shape: [N, num_q, num_k]
+            attn = attn + 1e-8 # to avoid unstability
+            # compete between keys
+            attn = attn / torch.sum(attn, dim=2, keepdim=True) # Shape: [N, num_q, num_k]
         #if random.uniform(0,1) < 0.0001 or attn[0].max() > 0.8:
         #    print('attn0', attn[0])
 

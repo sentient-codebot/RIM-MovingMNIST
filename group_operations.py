@@ -348,7 +348,7 @@ class SharedBlockGRU(nn.Module):
 
         self.gll_write = GroupLinearLayer(self.single_hidden_size,16, self.n_templates) # for k, 16 == key size
         self.gll_read = GroupLinearLayer(self.single_hidden_size,16,1) # for q, 16 == key size
-        print("Using Gumble sparsity in ", __class__.__name__)
+        print("Using Gumble sparsity in", __class__.__name__)
 
     def blockify_params(self):
 
