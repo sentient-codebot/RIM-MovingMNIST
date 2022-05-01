@@ -10,6 +10,7 @@ import numpy as np
 from slot_attn.decoder_cnn import WrappedDecoder
 from slot_attn.slot_attn import SlotAttention
 from slot_attn.pos_embed import SoftPositionEmbed
+from utils import util
 
 
 Intm = namedtuple('IntermediateVariables',
@@ -154,11 +155,12 @@ class BallModel(nn.Module):
         self.input_size = args.input_size
         self.hidden_size = args.hidden_size
         self.num_hidden = args.num_hidden # == num_rims
-
+        self.spotight_bias=args.spotlight_bias
         self.slot_size = args.slot_size
         self.num_iterations_slot = args.num_iterations_slot
         self.num_slots = args.num_slots
-
+        self.bs=args.batch_size
+        self.resolution = [256,256]
         self.core = args.core.upper()
         self.use_sw = args.use_sw
         self.memory_size = args.memory_size
@@ -190,6 +192,7 @@ class BallModel(nn.Module):
                 mlp_hidden_size=128,
                 epsilon=1e-8,
                 input_size=self.input_size,
+                spotlight_bias=self.spotight_bias,
             ).to(self.args.device) # Shape: [batch_size,num_inputs, input_size] -> [batch_size, num_slots, slot_size]
             self.num_inputs = self.num_slots # number of output vectors of SlotAttention
 
@@ -298,7 +301,27 @@ class BallModel(nn.Module):
         M = None
         encoded_input = self.encoder(x) # Shape: (batch_size, 6*6, self.input_size) OR [batch_size, 1, self.input_size]
         if self.use_slot_attention:
-            encoded_input = self.slot_attention(encoded_input) # Shape: [batch_size, num_slots, slot_size]
+
+            if self.spotlight_bias:
+                #__u = lambda x: util.unpack_seqdim(x, self.bs)
+                encoded_input, attn, attn_logits = self.slot_attention(encoded_input) # Shape: [batch_size, num_slots, slot_size]
+                grid_val = util.build_grid2D(self.resolution).repeat(self.bs*self.num_iterations_slot,1,1,1).reshape([self.bs*self.num_iterations,-1,2])
+                slot_means = torch.matmul(attn,grid_val)
+                slot_means_ = slot_means.unsqueeze(2)
+                grid_val_ = grid_val.unsqueeze(1) 
+                slot_variances_ = ((slot_means_ - grid_val_)**2).sum(-1)
+                slot_variances_ = slot_variances_ * attn
+                slot_variances = slot_variances_.sum(-1)
+
+                #slot_variances_ = __u(slot_variances)
+                #slot_means_ = __u(slot_means)
+
+            
+            else: 
+                encoded_input = self.slot_attention(encoded_input) # Shape: [batch_size, num_slots, slot_size]
+
+                
+                
 
         reg_loss = 0.
         if self.core=='RIM':
@@ -351,7 +374,12 @@ class BallModel(nn.Module):
                 rules_selected=rules_selected
                 )
         
-        return dec_out_, h_new, M, intm
+        if self.spotlight_bias:
+            return dec_out_, h_new, M, intm, slot_means, slot_variances
+        else:
+            return dec_out_, h_new, M, intm
+
+    
 
     def init_hidden(self, batch_size): 
         return torch.randn((batch_size, 

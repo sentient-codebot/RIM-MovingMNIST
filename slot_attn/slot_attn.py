@@ -15,7 +15,7 @@ class SlotAttention(nn.Module):
     """Slot Attention module"""
     def __init__(self, 
         num_iterations, num_slots, slot_size, mlp_hidden_size, epsilon, input_size,
-    ):
+    spotlight_bias=False):
         """Build Slot Attention module.
         
         Args:
@@ -41,7 +41,7 @@ class SlotAttention(nn.Module):
         self.mlp_hidden_size = mlp_hidden_size
         self.epsilon = epsilon
         self.input_size = input_size
-
+        self.spotlight_bias_loss=spotlight_bias
         self.norm_inputs = LayerNorm()
         self.norm_slots = LayerNorm()
         self.norm_mlp = LayerNorm()
@@ -59,6 +59,9 @@ class SlotAttention(nn.Module):
         self.project_k = torch.nn.Linear(input_size, self.slot_size, bias=False)
         self.project_v = torch.nn.Linear(input_size, self.slot_size, bias=False)
 
+
+        if self.spotlight_bias_loss:
+            self.attn_param_bias = nn.Parameter(torch.randn(1, self.num_slots, 128))
         # Slot update functions
         self.gru = nn.GRU(input_size=self.slot_size, 
                             hidden_size=self.slot_size,
@@ -96,6 +99,8 @@ class SlotAttention(nn.Module):
             # Compute attention scores.
             q = self.project_q(slots) # Shape: (batch_size, num_slots, slot_size).     
             attn_logits = torch.matmul(k, q.transpose(1, 2)) / math.sqrt(self.slot_size) # Shape: (batch_size, num_inputs, num_slots).
+            if self.spotlight_bias_loss:
+                attn_logits = attn_logits + self.attn_param_bias
             attn = torch.softmax(attn_logits, dim=-1) # Shape: (batch_size, num_inputs, num_slots).
 
             # Weighted mean.
@@ -111,12 +116,15 @@ class SlotAttention(nn.Module):
             slots = slots.view(batch_size, self.num_slots, self.slot_size)
             slots = slots + self.mlp(self.norm_mlp(slots))
 
-        return slots
+            if self.spotlight_bias_loss:
+                return slots, attn, attn_logits
+            else:
+                return slots
 
 def main():
     cudable = torch.cuda.is_available() 
     device = torch.device("cuda" if cudable else "cpu")
-    slot_attn = SlotAttention(3, 4, 10, 20, 1e-8, 20).to(device)
+    slot_attn = SlotAttention(3, 4, 10, 20, 1e-8, 20, False).to(device)
 
     inputs = torch.randn(2, 5, 20)
     output = slot_attn(inputs)

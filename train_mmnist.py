@@ -8,7 +8,7 @@ from torch import autograd
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import make_grid
 import wandb
-
+from utils import util
 from networks import BallModel, TrafficModel
 from argument_parser import argument_parser
 from logbook.logbook import LogBook
@@ -55,9 +55,14 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
         optimizer.zero_grad()
         loss = 0.
         for frame in range(data.shape[1]-1):
-            output, hidden, memory, intm = model(data[:, frame, :, :, :], hidden, memory)
-            target = data[:, frame+1, :, :, :]
-            loss += loss_fn(output, target)
+            if args.spotlight_bias:
+                output, hidden, memory, intm, slot_means, slot_variances = model(data[:, frame, :, :, :], hidden, memory)
+                target = data[:, frame+1, :, :, :]
+                loss = loss + loss_fn(output, target) + 0.3*util.slot_loss(slot_means,slot_variances)
+            else:
+                output, hidden, memory, intm = model(data[:, frame, :, :, :], hidden, memory)
+                target = data[:, frame+1, :, :, :]
+                loss += loss_fn(output, target)
             
         loss.backward()
         grad_norm = get_grad_norm(model)
