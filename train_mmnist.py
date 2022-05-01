@@ -14,6 +14,7 @@ from argument_parser import argument_parser
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
 from utils.visualize import make_grid_video
+from utils.logging import log_stats
 from datasets import setup_dataloader
 from tqdm import tqdm
 from test_mmnist import dec_rim_util, test
@@ -85,6 +86,7 @@ def main():
     args.device = torch.device("cuda" if cudable else "cpu")
     if not args.should_resume:
         make_dir(f"{args.folder_save}/checkpoints")
+        make_dir(f"{args.folder_save}/best_model")
         make_dir(f"{args.folder_save}/args")
         print(f"Saving args to {args.folder_save}/args/args.pt")
         torch.save({
@@ -110,6 +112,7 @@ def main():
     writer = SummaryWriter(log_dir='./runs/'+args.id)
 
     # training loop
+    best_mse = 1000.
     for epoch in range(start_epoch, args.epochs+1):
         # train 
         writer.add_scalar('Learning Rate', optimizer.param_groups[0]['lr'], epoch)
@@ -133,7 +136,6 @@ def main():
         # test 
         if args.test_frequency > 0 and epoch % args.test_frequency == 0 or epoch <= 15:
             """test model accuracy and log intermediate variables here"""
-            wandb_artf = wandb.Artifact(project+'_'+name, type='predictions', metadata=vars(args).update({'epoch': epoch}))
             test_loss, prediction, data, metrics, test_table = test(
                 model = model, 
                 test_loader = test_loader, 
@@ -144,83 +146,33 @@ def main():
                 epoch = epoch,
                 log_columns=columns
             )
-            loss_dict['test loss'] = test_loss
-            test_mse = metrics['mse']
-            test_f1 = metrics['f1']
-            test_ssim = metrics['ssim']
-            if args.core == 'RIM':
-                rim_actv = metrics['rim_actv']
-                rim_actv_mask = metrics['rim_actv_mask']
-                dec_util = metrics['dec_util']
-                most_used_units = metrics['most_used_units']
-            elif args.core == 'SCOFF':
-                rules_selected = metrics['rules_selected']
-            blocked_dec = metrics['blocked_dec']
-            # print out stats
-            print(f"epoch {epoch}/{args.epochs} | train loss: {train_loss:.4f} | test loss: {test_loss:.4f} | test mse: {test_mse:.4f} | "+\
-            f"test F1 score: {test_f1:.4f} | test SSIM: {test_ssim:.4f}")
-
-            # tensorboard
-
-            writer.add_scalar(f'Metrics/MSE', test_mse, epoch)
-            writer.add_scalar(f'Metrics/F1 Score', test_f1, epoch)
-            writer.add_scalar(f'Metrics/SSIM', test_ssim, epoch)
-            
-
-            if args.core == 'RIM':
-                writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
-                writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
-                writer.add_image('Stats/Unit Decoder Utilization', dec_util[0], epoch, dataformats='HW')
-            
-            if args.task == 'MMNIST':
-                num_sample_to_record = 4
-            elif args.task == 'BBALL':
-                num_sample_to_record = 1
-            elif args.task == 'TRAFFIC4CAST':
-                num_sample_to_record = 1
-            else:
-                num_sample_to_record = 1
-                print('Warning: unknown task type. ')
-            # concate video of ground truth and prediction
-            cat_video = make_grid_video(data[0:num_sample_to_record, 1:, :, :, :],
-                                        prediction[0:num_sample_to_record], return_dim=5) 
-            grided_ind_pred = make_grid_video(
-                target = blocked_dec[0],
-                return_dim = 5,
+            log_stats(
+                args=args,
+                is_train=True,
+                epoch=epoch,
+                train_loss=train_loss,
+                test_loss=test_loss,
+                ground_truth=data,
+                prediction=prediction,
+                metrics=metrics,
+                test_table=test_table,
+                writer=writer
             )
-            writer.add_video('Predicted Videos', cat_video, epoch)
-            writer.add_video('Individual Predictions', grided_ind_pred, epoch) # N = num_blocks T 1 H W
+            loss_dict['test loss'] = test_loss
+            if metrics['mse'] < best_mse:
+                best_mse = metrics['mse']
+                print(f'best test MSE: {best_mse:.4f}')
+                if epoch > 10:
+                    print(f"Saving model to {args.folder_save}/best_model/best.pt")
+                    torch.save({
+                        'epoch': epoch,
+                        'model_state_dict': model.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'train_batch_idx': train_batch_idx,
+                        'loss': test_loss,
+                        'mse': metrics['mse'],
+                    }, f"{args.folder_save}/best_model/best.pt")
 
-            # wandb
-            metric_dict = {
-                'MSE': test_mse,
-                'F1 Score': test_f1,
-                'SSIM': test_ssim
-            }
-            stat_dict = {}
-            if args.core == 'RIM':
-                stat_dict.update({
-                    'RIM Input Attention': wandb.Image(rim_actv[0].cpu()*255),
-                    'RIM Activation Mask': wandb.Image(rim_actv_mask[0].cpu()*255),
-                    'Unit Decoder Utilization': wandb.Image(dec_util[0].cpu()*255),
-                    'Most Used Units in Decoder': wandb.Histogram(most_used_units), 
-                })
-            elif args.core == 'SCOFF':
-                stat_dict.update({
-                    'Rules Selected': wandb.Image(rules_selected[0].cpu()*255/9), # 0 to 9 classes
-                })
-            video_dict = {
-                'Predicted Videos': wandb.Video((cat_video.cpu()*255).to(torch.uint8), fps=4),
-                'Individual Predictions': wandb.Video((grided_ind_pred.cpu()*255).to(torch.uint8), fps=4),
-            }
-            wandb_artf.add(test_table, "predictions")
-            wandb.run.log_artifact(wandb_artf)
-            wandb.log({
-                'Loss': loss_dict,
-                'Metrics': metric_dict,
-                'Stats': stat_dict,
-                'Videos': video_dict,
-            }, step=epoch)
         else:
             print(f"epoch {epoch}/{args.epochs} | "+\
                 f"train loss: {train_loss:.4f}"
@@ -243,6 +195,10 @@ def main():
                 'train_batch_idx': train_batch_idx,
                 'loss': train_loss,
             }, f"{args.folder_save}/checkpoints/{epoch}.pt")
+            checkpoint_dir = f"{args.folder_save}/checkpoints"
+            for f in os.listdir(checkpoint_dir):
+                if f.endswith('.pt') and int(f.split('.')[0]) < epoch:
+                    os.remove(f)
 
     writer.close()
         

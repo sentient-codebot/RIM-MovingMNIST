@@ -12,6 +12,7 @@ from datasets import setup_dataloader
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
 from utils.visualize import VecStack, make_grid_video
+from utils.logging import log_stats
 from utils.metric import f1_score
 from tqdm import tqdm
 import wandb
@@ -308,82 +309,16 @@ def main():
         epoch = epoch,
         log_columns = columns,
     )
-    # unpack metrics
-    test_mse = metrics['mse']
-    test_f1 = metrics['f1']
-    test_ssim = metrics['ssim']
-    if args.core == 'RIM':
-        rim_actv = metrics['rim_actv']
-        rim_actv_mask = metrics['rim_actv_mask']
-        dec_util = metrics['dec_util']
-        most_used_units = metrics['most_used_units']
-    elif args.core == 'SCOFF':
-        rules_selected = metrics['rules_selected']
-    blocked_dec = metrics['blocked_dec'] # dim == 6
-    print(f"epoch [{epoch}] test loss: {test_loss:.4f}; test mse: {test_mse:.4f}; "+\
-        f"test F1 score: {test_f1:.4f}; test SSIM: {test_ssim:.4f}")
-    writer.add_scalar(f'Loss/Test Loss ({args.loss_fn.upper()})', test_loss, epoch)
-
-    writer.add_scalar(f'Metrics/MSE', test_mse, epoch)
-    writer.add_scalar(f'Metrics/F1 Score', test_f1, epoch)
-    writer.add_scalar(f'Metrics/SSIM', test_ssim, epoch)
-
-    if args.core == 'RIM':
-        writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
-        writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
-        writer.add_image('Stats/Unit Decoder Utilization', dec_util[0], epoch, dataformats='HW')
-    elif args.core == 'SCOFF':
-        writer.add_image('Stats/Rules Selected', rules_selected[0], epoch, dataformats='HW')
-    
-    if args.task == 'MMNIST':
-        num_sample_to_record = 4
-    elif args.task == 'BBALL':
-        num_sample_to_record = 1
-    elif args.task == 'TRAFFIC4CAST':
-        num_sample_to_record = 1
-    else:
-        num_sample_to_record = 1
-        print('Warning: unknown task type. ')
-    # concate video of ground truth and prediction
-    cat_video = make_grid_video(data[0:num_sample_to_record, 1:, :, :, :],
-                                prediction[0:num_sample_to_record], return_dim=5) 
-    grided_ind_pred = make_grid_video(
-        target = blocked_dec[0],
-        return_dim = 5,
+    log_stats(
+        args=args,
+        is_train=False,
+        epoch=epoch,
+        test_loss=test_loss,
+        ground_truth=data,
+        prediction=prediction,
+        metrics=metrics,
+        test_table=test_table,
     )
-    writer.add_video('Predicted Videos', cat_video, epoch)
-    writer.add_video('Blocked Predictions', grided_ind_pred) # N num_blocks T 1 H W
-
-    # wandb
-    metric_dict = {
-        'MSE': test_mse,
-        'F1 Score': test_f1,
-        'SSIM': test_ssim
-    }
-    stat_dict = {}
-    if args.core == "RIM":
-        stat_dict.update({
-            'RIM Input Attention': wandb.Image(rim_actv[0].cpu()*255),
-            'RIM Activation Mask': wandb.Image(rim_actv_mask[0].cpu()*255),
-            'Unit Decoder Utilization': wandb.Image(dec_util[0].cpu()*255),
-            'Most Used Units in Decoder': wandb.Histogram(most_used_units), # a list
-        })
-    elif args.core == 'SCOFF':
-        stat_dict.update({
-            'Rules Selected': wandb.Image(rules_selected[0].cpu()*255/9), # 0 to 9 classes
-        })
-    video_dict = {
-        'Predicted Videos': wandb.Video((cat_video.cpu()*255).to(torch.uint8), fps=3),
-        'Individual Predictions': wandb.Video((grided_ind_pred.cpu()*255).to(torch.uint8), fps=4),
-    }
-    wandb_artf.add(test_table, "predictions")
-    wandb.run.log_artifact(wandb_artf)
-    wandb.log({
-        'Loss': {'test loss': test_loss},
-        'Metrics': metric_dict,
-        'Stats': stat_dict,
-        'Videos': video_dict,
-    }, step=epoch)
 
     writer.close()
 
