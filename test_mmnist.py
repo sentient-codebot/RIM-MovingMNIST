@@ -271,10 +271,10 @@ def main():
     args.device = torch.device("cuda" if cudable else "cpu")
 
     # wandb setup
-    project, name = args.experiment_name.split('_',1)
+    project, name = args.id.split('_',1)
     wandb.init(project=project, name=name+'_test', config=vars(args), entity='nan-team')
     print(args)
-    wandb_artf = wandb.Artifact(project+'_'+name+'_test'+str(wandb.run.id), type='predictions')
+    wandb_artf = wandb.Artifact(project+'_'+name+'_test', type='predictions', metadata=vars(args).update({'epoch': epoch}))
     columns = ['sample_id', 'frame_id', 'ground_truth', 'prediction', 'individual_prediction']
     if args.core == 'SCOFF':
         for idx in range(args.num_hidden):

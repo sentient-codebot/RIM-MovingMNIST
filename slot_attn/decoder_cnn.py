@@ -115,17 +115,19 @@ class WrappedDecoder(nn.Module):
         self.mem_efficient = mem_efficient
 
     def forward(self, hidden):
-        broadcast_hidden = spatial_broadcast(hidden, (8,8)) # (BS*K, d_slot, 8, 8)
-        broadcast_hidden = self.pos_embed(broadcast_hidden) # (BS*K, d_slot, 8, 8)
+        batch_size = hidden.shape[0]
+        num_slots = hidden.shape[1]
+        hidden = spatial_broadcast(hidden, (8,8)) # (BS*K, d_slot, 8, 8)
+        hidden = self.pos_embed(hidden) # (BS*K, d_slot, 8, 8)
         if self.mem_efficient:
             dec_out_list = [
                 self.decoder(broadcast_hidden_unit) \
-                    for broadcast_hidden_unit in torch.chunk(broadcast_hidden, broadcast_hidden.shape[0]//self.hidden_size, dim=0)
+                    for broadcast_hidden_unit in torch.chunk(hidden, num_slots, dim=0)
             ]
             dec_out = torch.cat(dec_out_list, dim=0) # Shape: [BS*self.hidden, 2, 64, 64]
         else:
-            dec_out = self.decoder(broadcast_hidden) # (BS*K, 2, 64, 64)
-        channels, alpha_mask = unstack_and_split(dec_out, batch_size=hidden.shape[0], num_channels=1) # (BS, K, *, H, W)
+            dec_out = self.decoder(hidden) # (BS*K, 2, 64, 64)
+        channels, alpha_mask = unstack_and_split(dec_out, batch_size=batch_size, num_channels=1) # (BS, K, *, H, W)
         channels = nn.Sigmoid()(channels)
         alpha_mask = torch.nn.Softmax(dim=1)(alpha_mask) # (BS, <K>, 1, H, W)
         masked_channels = channels*alpha_mask
