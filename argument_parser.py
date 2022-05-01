@@ -223,7 +223,10 @@ def argument_parser():
         assert args.ball_trainset is not None
         assert args.ball_testset is not None
 
-    args.id = f"{args.experiment_name}_"+ args.core.upper() + f"_{args.num_hidden}_{args.hidden_size}"+\
+    args.id = f"{args.experiment_name}_"
+    if args.use_slot_attention:
+        args.id = args.id + 'SA_' + f"{args.num_slots}_{args.slot_size}_{args.num_iterations_slot}_"
+    args.id = args.id + args.core.upper() + f"_{args.num_hidden}_{args.hidden_size}"+\
         f"_ver_{args.version}"
     args.folder_save = f"./saves/{args.id}"
     args.folder_log = f"./logs/{args.id}"
