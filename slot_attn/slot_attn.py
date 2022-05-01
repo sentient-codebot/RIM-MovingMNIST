@@ -25,6 +25,7 @@ class SlotAttention(nn.Module):
             mlp_hidden_size (int): size of hidden layer in MLP,
             epsilon (float): epsilon for softmax,
             input_size (int): size of input,
+            spotlight_bias (boolean): to decide whether you want to use spotlight or not 
 
         Inputs:
             `inputs`: (batch_size, num_inputs, input_size)
@@ -117,7 +118,7 @@ class SlotAttention(nn.Module):
             slots = slots + self.mlp(self.norm_mlp(slots))
 
             if self.spotlight_bias_loss:
-                return slots, attn, attn_logits
+                return slots, attn, self.attn_param_bias
             else:
                 return slots
 

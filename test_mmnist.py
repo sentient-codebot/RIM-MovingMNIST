@@ -15,6 +15,7 @@ from utils.visualize import VecStack, make_grid_video
 from utils.metric import f1_score
 from tqdm import tqdm
 import wandb
+from utils import util
 
 import utils.pssim.pytorch_ssim as pt_ssim
 
@@ -108,19 +109,30 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
 
         for frame in range(data.shape[1]-1):
             with torch.no_grad():
-                if not rollout:
-                    output, hidden, memory, intm = model(data[:, frame, :, :, :], hidden, memory)
-                elif frame >= rollout_start :
-                    output, hidden, memory, intm = model(output, hidden, memory)
+                if args.spotlight_bias:
+                    if not rollout:
+                        output, hidden, memory, intm, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
+                    elif frame >= rollout_start :
+                        output, hidden, memory, intm, slot_means, slot_variances, attn_param_bias = model(output, hidden, memory)
+                    else:
+                        output, hidden, memory, intm, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
                 else:
-                    output, hidden, memory, intm = model(data[:, frame, :, :, :], hidden, memory)
+                    if not rollout:
+                        output, hidden, memory, intm = model(data[:, frame, :, :, :], hidden, memory)
+                    elif frame >= rollout_start :
+                        output, hidden, memory, intm = model(output, hidden, memory)
+                    else:
+                        output, hidden, memory, intm = model(data[:, frame, :, :, :], hidden, memory)
 
                 intm = intm._asdict()
                 target = data[:, frame+1, :, :, :]
                 prediction[:, frame+1, :, :, :] = output
                 blocked_prediction[:, 0, frame+1, :, :, :] = output # dim == 6
                 blocked_prediction[:, 1:, frame+1, :, :, :] = intm['blocked_dec']
-                loss += loss_fn(output, target)
+                if args.spotlight_bias:
+                    loss = loss + loss_fn(output, target) + util.slot_loss(slot_means,slot_variances) + 0.1*torch.sum(attn_param_bias**2)
+                else:
+                    loss += loss_fn(output, target) 
 
                 f1_frame = f1_score(target, output)
                 # writer.add_scalar(f'Metrics/F1 at Frame {frame}', f1_frame, epoch)
