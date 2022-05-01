@@ -5,6 +5,7 @@ import torch
 def log_stats(args, is_train, **kwargs):
     # 
     epoch = kwargs.get('epoch', 0)
+    lr = kwargs.get('lr', None)
     ground_truth = kwargs.get('groundt_truth', None)
     prediction = kwargs.get('pred', None)
     test_table = kwargs.get('test_table', None)
@@ -13,22 +14,11 @@ def log_stats(args, is_train, **kwargs):
     # loss
     test_loss = kwargs.get('test_loss')
     train_loss = kwargs.get('train_loss')
-    loss_dict = {
-        'test_loss': test_loss,
-    }
-    if train_loss is not None:
-        loss_dict['train_loss'] = train_loss
     # metrics
     metrics = kwargs['metrics']
     mse = metrics.get('mse')
     f1 = metrics.get('f1')
     ssim = metrics.get('ssim')
-    metric_dict = {
-        'MSE': mse,
-        'F1 Score': f1,
-        'SSIM': ssim
-    }
-    stat_dict = {}
     if args.core == 'RIM':
         rim_actv = metrics['rim_actv']
         rim_actv_mask = metrics['rim_actv_mask']
@@ -52,10 +42,25 @@ def log_stats(args, is_train, **kwargs):
     # scalars
     #   tensorboard
     if writer is not None:
+        writer.add_scalars('Learning Rate', lr, epoch)
         writer.add_scalar(f'Loss/Test Loss ({args.loss_fn.upper()})', test_loss, epoch)
         writer.add_scalar(f'Metrics/MSE', mse, epoch)
         writer.add_scalar(f'Metrics/F1 Score', mse, epoch)
         writer.add_scalar(f'Metrics/SSIM', mse, epoch)
+    #   wandb
+    loss_dict = {
+        'test_loss': test_loss,
+    }
+    if train_loss is not None:
+        loss_dict['train_loss'] = train_loss
+    metric_dict = {
+        'MSE': mse,
+        'F1 Score': f1,
+        'SSIM': ssim
+    }
+    stat_dict = {
+        'Learning Rate': lr,
+    }
 
     # images
     #   tensorboard

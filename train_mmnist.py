@@ -106,7 +106,7 @@ def main():
     train_loader, test_loader = setup_dataloader(args=args)
 
     # model setup
-    model, optimizer, loss_fn, start_epoch, train_batch_idx = setup_model(args=args)
+    model, optimizer, scheduler, loss_fn, start_epoch, train_batch_idx = setup_model(args=args)
     
     # tensorboard setup
     writer = SummaryWriter(log_dir='./runs/'+args.id)
@@ -132,6 +132,7 @@ def main():
         metric_dict = {
         }
         # scheduler.step(...)
+        scheduler.step(train_loss)
 
         # test 
         if args.test_frequency > 0 and epoch % args.test_frequency == 0 or epoch <= 15:
@@ -156,8 +157,10 @@ def main():
                 prediction=prediction,
                 metrics=metrics,
                 test_table=test_table,
-                writer=writer
+                writer=writer,
+                lr=optimizer.param_groups[0]['lr']
             )
+            # save if better than bese
             loss_dict['test loss'] = test_loss
             if metrics['mse'] < best_mse:
                 best_mse = metrics['mse']
@@ -168,6 +171,7 @@ def main():
                         'epoch': epoch,
                         'model_state_dict': model.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict(),
+                        'scheduler_state_dict': scheduler.state_dict(),
                         'train_batch_idx': train_batch_idx,
                         'loss': test_loss,
                         'mse': metrics['mse'],
@@ -179,6 +183,7 @@ def main():
             )
             wandb.log({
                 'Loss': loss_dict,
+                'lr': optimizer.param_groups[0]['lr'],
             }, step=epoch)
         writer.add_scalars(f'Loss/{args.loss_fn.upper()}', 
             loss_dict, 
@@ -192,6 +197,7 @@ def main():
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
                 'train_batch_idx': train_batch_idx,
                 'loss': train_loss,
             }, f"{args.folder_save}/checkpoints/{epoch}.pt")
@@ -228,7 +234,7 @@ def setup_model(args):
     else:
         raise ValueError('not recognized task')
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    # TODO later add scheduler here
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
     start_epoch = 1
     train_batch_idx = 0
 
@@ -239,7 +245,8 @@ def setup_model(args):
         print(f"Resuming experiment id: {args.id}, from epoch: {start_epoch-1}")
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        # TODO later add scheduler here
+        if 'scheduler' in checkpoint:
+            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         train_batch_idx = checkpoint['train_batch_idx'] + 1 if 'train_batch_idx' in checkpoint else 0
         print(f"Checkpoint resumed.")
         
@@ -253,7 +260,7 @@ def setup_model(args):
     else:
         loss_fn = torch.nn.MSELoss()
 
-    return model, optimizer, loss_fn, start_epoch, train_batch_idx
+    return model, optimizer, scheduler, loss_fn, start_epoch, train_batch_idx
 
 def param_count(model: torch.nn.Module) -> int:
     return sum(p.numel() for p in model.parameters())
