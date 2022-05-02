@@ -7,8 +7,10 @@ from tqdm import tqdm
 import random
 import torch
 import torch.utils.data as data
+from torchvision.datasets.utils import download_and_extract_archive, download_url, check_integrity
 from torchvision.utils import make_grid
 import matplotlib.pyplot as plt
+from urllib.error import URLError
 
 def load_mnist(root):
     # Load MNIST dataset for generating training data.
@@ -33,6 +35,16 @@ def load_fixed_set(root, is_train):
 
 
 class MovingMNIST(data.Dataset):
+    mirrors = [
+        'http://yann.lecun.com/exdb/mnist/',
+        'http://yann.lecun.com/exdb/mnist/',
+        'http://www.cs.toronto.edu/~nitish/unsupervised_video/',
+    ]
+    resources = [
+        ("train-images-idx3-ubyte.gz", "f68b3c2dcbeaaa9fbdd348bbdeb94873"),
+        ("train-labels-idx1-ubyte.gz", "d53e105ee54ea40749a09fcbcd1e9432"),
+        ("mnist_test_seq.npy", "be083ec986bfe91a449d63653c411eb2"),
+    ]
     def __init__(self, root, train=True, n_frames_input=10, n_frames_output=10, num_objects=[2],
                 static_prob=-1,
                 download=False,
@@ -54,6 +66,14 @@ class MovingMNIST(data.Dataset):
             `output_frames`: [n_frames_output, 1, image_size, image_size]
         '''
         super(MovingMNIST, self).__init__()
+        self.root = root
+        self.is_train = train
+
+        if download:
+            self.download()
+        
+        if not self._check_exists():
+            raise RuntimeError("Dataset not found. You can use download=True to download it")
 
         self.dataset = None
         if train:
@@ -65,7 +85,6 @@ class MovingMNIST(data.Dataset):
                 self.dataset = load_fixed_set(root, False)
         self.length = int(1e4) if self.dataset is None else self.dataset.shape[1]
 
-        self.is_train = train
         self.num_objects = num_objects
         self.n_frames_input = n_frames_input
         self.n_frames_output = n_frames_output
@@ -182,14 +201,45 @@ class MovingMNIST(data.Dataset):
     def __len__(self):
         return self.length
 
+    def _check_exists(self) -> bool:
+        return all(
+            check_integrity(os.path.join(self.root, filename), md5=md5)
+            for filename, md5 in self.resources
+        )
+
+    def download(self) -> None:
+        """Download the MNIST data if it doesn't exist already."""
+
+        if self._check_exists():
+            return
+
+        os.makedirs(self.root, exist_ok=True)
+
+        # download files
+        for filename, md5 in self.resources:
+            for mirror in self.mirrors:
+                url = f"{mirror}{filename}"
+                try:
+                    print(f"Downloading {url}")
+                    download_url(url, root=self.root, filename=filename, md5=md5)
+                except URLError as error:
+                    print(f"Failed to download (trying next):\n{error}")
+                    continue
+                finally:
+                    print()
+                break
+            else:
+                raise RuntimeError(f"Error downloading {filename}")
+
 def main():
     train_set = MovingMNIST(
-        root='/home/nnan/movingmnist/',
+        root='./../data',
         train=True,
         n_frames_input=10,
         n_frames_output=10,
         num_objects=[2],
-        static_prob=0.5
+        static_prob=0.5,
+        download=True
     )
     train_loader = data.DataLoader(train_set, batch_size=1, shuffle=True, num_workers=4)
     for idx, samples in enumerate(tqdm(train_loader)):
