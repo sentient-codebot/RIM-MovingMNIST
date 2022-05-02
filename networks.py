@@ -155,7 +155,7 @@ class BallModel(nn.Module):
         self.input_size = args.input_size
         self.hidden_size = args.hidden_size
         self.num_hidden = args.num_hidden # == num_rims
-        self.spotight_bias=args.spotlight_bias
+        self.spotlight_bias=args.spotlight_bias
         self.slot_size = args.slot_size
         self.num_iterations_slot = args.num_iterations_slot
         self.num_slots = args.num_slots
@@ -192,7 +192,7 @@ class BallModel(nn.Module):
                 mlp_hidden_size=128,
                 epsilon=1e-8,
                 input_size=self.input_size,
-                spotlight_bias=self.spotight_bias,
+                spotlight_bias=self.spotlight_bias,
             ).to(self.args.device) # Shape: [batch_size,num_inputs, input_size] -> [batch_size, num_slots, slot_size]
             self.num_inputs = self.num_slots # number of output vectors of SlotAttention
 

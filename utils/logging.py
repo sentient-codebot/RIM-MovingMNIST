@@ -6,8 +6,8 @@ def log_stats(args, is_train, **kwargs):
     # 
     epoch = kwargs.get('epoch', 0)
     lr = kwargs.get('lr', None)
-    ground_truth = kwargs.get('groundt_truth', None)
-    prediction = kwargs.get('pred', None)
+    ground_truth = kwargs.get('ground_truth', None)
+    prediction = kwargs.get('prediction', None)
     test_table = kwargs.get('test_table', None)
     # tensorboard
     writer = kwargs.get('writer', None)
@@ -42,7 +42,7 @@ def log_stats(args, is_train, **kwargs):
     # scalars
     #   tensorboard
     if writer is not None:
-        writer.add_scalars('Learning Rate', lr, epoch)
+        writer.add_scalar('Learning Rate', lr, epoch)
         writer.add_scalar(f'Loss/Test Loss ({args.loss_fn.upper()})', test_loss, epoch)
         writer.add_scalar(f'Metrics/MSE', mse, epoch)
         writer.add_scalar(f'Metrics/F1 Score', mse, epoch)
