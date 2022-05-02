@@ -204,7 +204,7 @@ def main():
             checkpoint_dir = f"{args.folder_save}/checkpoints"
             for f in os.listdir(checkpoint_dir):
                 if f.endswith('.pt') and int(f.split('.')[0]) < epoch:
-                    os.remove(f)
+                    os.remove(os.path.join(checkpoint_dir, f))
 
     writer.close()
         

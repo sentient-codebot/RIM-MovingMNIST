@@ -4,7 +4,7 @@ echo Running on $HOSTNAME
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate pytorch
 
-experiment_name="MMNIST_3SLOT6RIM_SPOTLIGHT"
+experiment_name="MMNIST_SASBD_SPOTLIGHT"
 cfg_json="configs/rim/rim_slot.json"
 core="RIM"
 should_resume="false"
