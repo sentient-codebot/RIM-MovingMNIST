@@ -86,6 +86,8 @@ class SlotAttention(nn.Module):
         batch_size = inputs.shape[0]
         inputs = self.norm_inputs(inputs)
         k = self.project_k(inputs) # Shape: (batch_size, num_inputs, slot_size).
+        if self.spotlight_bias_loss:
+            k = k + self.attn_param_bias
         v = self.project_v(inputs) # Shape: (batch_size, num_inputs, slot_size).
 
         # Initialize slots. Shape: (batch_size, num_slots, slot_size).
@@ -100,8 +102,6 @@ class SlotAttention(nn.Module):
             # Compute attention scores.
             q = self.project_q(slots) # Shape: (batch_size, num_slots, slot_size).     
             attn_logits = torch.matmul(k, q.transpose(1, 2)) / math.sqrt(self.slot_size) # Shape: (batch_size, num_inputs, num_slots).
-            if self.spotlight_bias_loss:
-                attn_logits = attn_logits + self.attn_param_bias
             attn = torch.softmax(attn_logits, dim=-1) # Shape: (batch_size, num_inputs, num_slots).
 
             # Weighted mean.

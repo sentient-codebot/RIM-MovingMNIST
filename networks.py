@@ -305,7 +305,7 @@ class BallModel(nn.Module):
             if self.spotlight_bias:
                 #__u = lambda x: util.unpack_seqdim(x, self.bs)
                 encoded_input, attn, attn_param_bias = self.slot_attention(encoded_input) # Shape: [batch_size, num_slots, slot_size]
-                grid_val = util.build_grid2D(self.resolution).repeat(self.bs*self.num_iterations_slot,1,1,1).reshape([self.bs*self.num_iterations,-1,2])
+                grid_val = util.build_grid2D(self.resolution).repeat(self.bs*self.num_iterations_slot,1,1,1).reshape([self.bs*self.num_iterations,-1,2]).to(h_prev.device)
                 slot_means = torch.matmul(attn,grid_val)
                 slot_means_ = slot_means.unsqueeze(2)
                 grid_val_ = grid_val.unsqueeze(1) 

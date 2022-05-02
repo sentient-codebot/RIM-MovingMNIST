@@ -74,7 +74,7 @@ def build_grid2D(resolution):
     grid = grid.astype(np.float32)
     # st()
 
-    return torch.from_numpy(grid).cuda()
+    return torch.from_numpy(grid)
 
 def distinctiveness_2(m1, m2):
     dist = torch.exp(-torch.abs((m1-m2)))
