@@ -70,15 +70,17 @@
                 "--core",
                 "RIM",
                 "--should_resume",
-                "true",
+                "false",
                 "--experiment_name",
-                "MMNIST_3SLOT6RIM",
+                "MMNIST_debug",
                 "--save_frequency",
                 "25",
                 "--num_hidden",
                 "6",
                 "--k",
                 "6",
+                "--spotlight_bias",
+                "True"
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "0"

@@ -63,7 +63,7 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
             else:
                 output, hidden, memory, intm = model(data[:, frame, :, :, :], hidden, memory)
                 target = data[:, frame+1, :, :, :]
-                loss += loss_fn(output, target)
+                loss = loss + loss_fn(output, target)
             
         loss.backward()
         grad_norm = get_grad_norm(model)
