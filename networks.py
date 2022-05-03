@@ -11,15 +11,7 @@ from slot_attn.decoder_cnn import WrappedDecoder
 from slot_attn.slot_attn import SlotAttention
 from slot_attn.pos_embed import SoftPositionEmbed
 from utils import util
-
-
-Intm = namedtuple('IntermediateVariables',
-    [
-        'input_attn',
-        'input_attn_mask',
-        'blocked_dec',
-        'rules_selected'
-    ])
+from utils.logging import enable_logging
 
 class BasicEncoder(nn.Module):
     """basic encoder as baseline
@@ -169,7 +161,6 @@ class BallModel(nn.Module):
             self.memory_mu = nn.parameter.Parameter(torch.randn(1, 1, self.memory_size)) # mean for initial memory. Shape: [1, 1, memory_size]
             self.memory_logvar = nn.parameter.Parameter(torch.randn(1, 1, self.memory_size)) # log variance for initial memory. Shape: [1, 1, memory_size]
         self.sparse = False
-        self.get_intm = False
         self.use_slot_attention = args.use_slot_attention
         self.encoder_type = args.encoder_type
         self.decoder_type = args.decoder_type
@@ -278,6 +269,9 @@ class BallModel(nn.Module):
             )
         else:
             raise ValueError('Illegal RNN Core')
+        
+        self.do_logging = False
+        self.hidden_features = {}
 
     def forward(self, x, h_prev, M_prev=None):
         """
@@ -317,69 +311,63 @@ class BallModel(nn.Module):
 
                     #slot_variances_ = __u(slot_variances)
                     #slot_means_ = __u(slot_means)
-
                 
                 else: 
                     encoded_input = self.slot_attention(encoded_input) # Shape: [batch_size, num_slots, slot_size]
+                    if self.do_logging:
+                        self.hidden_features['slots'] = encoded_input # for logging. [N, num_slots, slot_size]
 
                 
                 
 
         reg_loss = 0.
-        if self.core=='RIM':
-            if not self.sparse:
-                h_new, cs_new, M, ctx = self.rnn_model(x=encoded_input, hs=h_prev, cs=None, M=M_prev) 
-            else:
-                raise NotImplementedError('Sparse RIM not configured for slot input yet')
-        elif self.core=='GRU':
-            h_shape = h_prev.shape # Shape: [batch_size, num_units, hidden_size]
-            h_prev = h_prev.reshape((h_shape[0],-1)) # flatten, Shape: [batch_size, num_units*hidden_size]
-            _, h_new = self.rnn_model(encoded_input.flatten(start_dim=1).unsqueeze(1), # input shape: [N, 1, num_inputs*input_size|slot_size]
-                                        h_prev.unsqueeze(0)) # h shape: [1, N, num_units*hidden_size]
-            h_new = h_new.reshape(h_shape)
-        elif self.core=='LSTM':
-            raise NotImplementedError('LSTM core not implemented yet!')
-        elif self.core=="SCOFF":
-            # SCOFF requires a different input shape
-            #   - input shape: [batch_size, num_object_files*input_size], we can pass different inputs to different OFs
-            #   - h_prev shape: [batch_size, num_object_files*hidden_size]
-            if not self.scoff_share_inp:
-                encoded_input = encoded_input.view(encoded_input.shape[0], -1, 1).repeat(1, 1, self.num_hidden).flatten(start_dim=1) # Shape: [batch_size, num_object_files*input_size*num_hidden]
-            h_prev = h_prev.view(h_prev.shape[0], -1) # Shape: [batch_size, num_units*hidden_size]
-            h_new, c_new, mask, block_mask, temp_attention = self.rnn_model(inp=encoded_input, hx=h_prev, cx=None)
-            h_new = h_new.view(h_new.shape[0], self.num_hidden, -1) # Shape: [batch_size, num_units, hidden_size]
+        # pass through self.rnn_model (RNN core)
+        with enable_logging(self.rnn_model, self.do_logging) as _:
+            if self.core=='RIM':
+                if not self.sparse:
+                    h_new, cs_new, M = self.rnn_model(x=encoded_input, hs=h_prev, cs=None, M=M_prev) 
+                else:
+                    raise NotImplementedError('Sparse RIM not configured for slot input yet')
+            elif self.core=='GRU':
+                h_shape = h_prev.shape # Shape: [batch_size, num_units, hidden_size]
+                h_prev = h_prev.reshape((h_shape[0],-1)) # flatten, Shape: [batch_size, num_units*hidden_size]
+                _, h_new = self.rnn_model(encoded_input.flatten(start_dim=1).unsqueeze(1), # input shape: [N, 1, num_inputs*input_size|slot_size]
+                                            h_prev.unsqueeze(0)) # h shape: [1, N, num_units*hidden_size]
+                h_new = h_new.reshape(h_shape)
+            elif self.core=='LSTM':
+                raise NotImplementedError('LSTM core not implemented yet!')
+            elif self.core=="SCOFF":
+                # SCOFF requires a different input shape
+                #   - input shape: [batch_size, num_object_files*input_size], we can pass different inputs to different OFs
+                #   - h_prev shape: [batch_size, num_object_files*hidden_size]
+                if not self.scoff_share_inp:
+                    encoded_input = encoded_input.view(encoded_input.shape[0], -1, 1).repeat(1, 1, self.num_hidden).flatten(start_dim=1) # Shape: [batch_size, num_object_files*input_size*num_hidden]
+                h_prev = h_prev.view(h_prev.shape[0], -1) # Shape: [batch_size, num_units*hidden_size]
+                h_new, c_new, mask, block_mask, temp_attention = self.rnn_model(inp=encoded_input, hx=h_prev, cx=None)
+                h_new = h_new.view(h_new.shape[0], self.num_hidden, -1) # Shape: [batch_size, num_units, hidden_size]
 
-            # for logging
-            if self.get_intm:
-                rules_selected = torch.argmax(temp_attention, dim=2, keepdim=False) # temp_attention: [bs, num_hidden, n_templates] -> LongTensor [bs, num_hidden]
-        else:
-            raise RuntimeError('Illegal RNN Core')
+                # for logging
+                if self.do_logging:
+                    rules_selected = torch.argmax(temp_attention, dim=2, keepdim=False) # temp_attention: [bs, num_hidden, n_templates] -> LongTensor [bs, num_hidden]
+                    self.rnn_model.hidden_features['rule_attn_argmax'] = rules_selected
+                    self.rnn_model.hidden_features['rule_attn_probs'] = temp_attention
+            else:
+                raise RuntimeError('Illegal RNN Core')
         
-        blocked_out_ = torch.zeros((1,1,1)).to(x.device)
+        self.hidden_features['individual_output'] = torch.zeros((1,1,1)).to(x.device)
         if "SEP" in self.decoder_type:
             dec_out_, channels, alpha_mask = self.decoder(h_new)
-            if self.get_intm:
+            if self.do_logging:
                 blocked_out_ = channels*alpha_mask
+                self.hidden_features['individual_output'] = blocked_out_
+                
         else:
             dec_out_ = self.decoder(h_new.view(h_new.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
-
-        if ctx is not None:
-            intm = Intm(input_attn=ctx.input_attn, 
-                input_attn_mask=ctx.input_attn_mask,
-                blocked_dec=blocked_out_,
-                rules_selected=rules_selected
-                )
-        else:
-            intm = Intm(input_attn=torch.zeros(1), 
-                input_attn_mask=torch.zeros(1),
-                blocked_dec=blocked_out_,
-                rules_selected=rules_selected
-                )
         
         if self.spotlight_bias:
-            return dec_out_, h_new, M, intm, slot_means, slot_variances, attn_param_bias
+            return dec_out_, h_new, M, slot_means, slot_variances, attn_param_bias
         else:
-            return dec_out_, h_new, M, intm
+            return dec_out_, h_new, M
 
     
 

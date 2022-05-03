@@ -34,7 +34,7 @@
     "spotlight_bias"            : false,
     "use_slot_attention"        : true,
     "slot_size"                 : 100,
-    "num_slots"                 : 6,
+    "num_slots"                 : 3,
     "num_iterations_slot"       : 3,
 
     "slot_straight_input"       : false

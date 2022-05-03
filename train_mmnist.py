@@ -59,11 +59,11 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
         loss = 0.
         for frame in range(data.shape[1]-1):
             if args.spotlight_bias:
-                output, hidden, memory, intm, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
+                output, hidden, memory, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
                 target = data[:, frame+1, :, :, :]
                 loss = loss + loss_fn(output, target) + util.slot_loss(slot_means,slot_variances) + 0.1*torch.sum(attn_param_bias**2)
             else:
-                output, hidden, memory, intm = model(data[:, frame, :, :, :], hidden, memory)
+                output, hidden, memory = model(data[:, frame, :, :, :], hidden, memory)
                 target = data[:, frame+1, :, :, :]
                 loss = loss + loss_fn(output, target)
             
