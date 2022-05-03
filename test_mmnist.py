@@ -1,3 +1,4 @@
+from cgitb import enable
 from time import time
 
 import matplotlib.pyplot as plt
@@ -12,7 +13,7 @@ from datasets import setup_dataloader
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
 from utils.visualize import VecStack, make_grid_video
-from utils.logging import log_stats
+from utils.logging import log_stats, enable_logging
 from utils.metric import f1_score
 from tqdm import tqdm
 import wandb
@@ -109,7 +110,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         ) # (BS, num_blocks, T, C, H, W)
 
         for frame in range(data.shape[1]-1):
-            with torch.no_grad():
+            with torch.no_grad(), enable_logging(model, batch_idx==len(test_loader)-1 and frame==data.shape[1]-2):
                 if args.spotlight_bias:
                     if not rollout:
                         output, hidden, memory, intm, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
@@ -129,7 +130,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                 target = data[:, frame+1, :, :, :]
                 prediction[:, frame+1, :, :, :] = output
                 blocked_prediction[:, 0, frame+1, :, :, :] = output # dim == 6
-                blocked_prediction[:, 1:, frame+1, :, :, :] = intm['blocked_dec']
+                blocked_prediction[:, 1:, frame+1, :, :, :] = model.hidden_features['individual_output']
                 if args.spotlight_bias:
                     loss = loss + loss_fn(output, target) + util.slot_loss(slot_means,slot_variances) + 0.1*torch.sum(attn_param_bias**2)
                 else:
@@ -145,13 +146,13 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                     'frame_id': frame+1,
                     'prediction': wandb.Image(output[0].detach().cpu()*255),
                     'ground_truth': wandb.Image(target[0].detach().cpu()*255),
-                    'individual_prediction': wandb.Image(make_grid(intm['blocked_dec'][0]*255, pad_value=255)), # N K C H W -> K C H W -> C *H **W
+                    'individual_prediction': wandb.Image(make_grid(model.hidden_features['individual_output'][0]*255, pad_value=255)), # N K C H W -> K C H W -> C *H **W
                 }
                 if args.core == 'SCOFF':
-                    rule_list = intm['rules_selected'][0].detach().cpu().tolist()
+                    rule_attn_probs = model.rnn_model.hidden_features['rule_attn_probs'] # [N, num_hidden, num_rules]
                     for of_idx in range(args.num_hidden):
-                        table_row.update({
-                            f'rule_OF_{of_idx}': rule_list[of_idx],
+                        table_row.update({ 
+                            f'rule_OF_{of_idx}': rule_attn_probs[0,of_idx].tolist(), # list of length num_rules, rule distribution
                         })
                 if log_columns is not None:
                     test_table.add_data(
@@ -169,12 +170,12 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                 most_used_units.append(0)
             
             if args.core == 'RIM':
-                rim_actv.append(intm["input_attn"]) # shape (batchsize, num_units, 1) -> (BS, NU, T)
-                rim_actv_mask.append(intm["input_attn_mask"])
+                rim_actv.append(model.rnn_model.hidden_features['input_attention_probs']) # shape (batchsize, num_units, 1) -> (BS, NU, T)
+                rim_actv_mask.append(model.rnn_model.hidden_features["input_attention_mask"])
                 dec_util.append(intm["decoder_utilization"])
                 pass
             elif args.core == 'SCOFF':
-                rules_selected.append(intm["rules_selected"])
+                rules_selected.append(intm["rules_selected"]) # TODO to delete
                 pass
         
         if not rollout:

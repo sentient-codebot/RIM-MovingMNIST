@@ -125,3 +125,20 @@ def log_stats(args, is_train, **kwargs):
             f"test loss: {test_loss:.4f} | "+\
             f"test mse: {mse:.4f} | "+\
             f"test F1 score: {f1:.4f} | test SSIM: {ssim:.4f}")
+
+class enable_logging():
+    """enable logging of a nn.Module by setting 'do_logging' to True/False 
+    
+    `with enable_logging(model, do_logging): `
+
+    """
+    def __init__(self, model: torch.nn.Module, do_logging: bool = True):
+        self.model = model
+        self.prev = getattr(self.model, 'do_logging', False)
+        self.do_logging = do_logging
+
+    def __enter__(self,):
+        self.model.do_logging = self.do_logging
+
+    def __exit__(self,):
+        self.model.do_logging = self.prev

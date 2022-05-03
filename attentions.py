@@ -101,7 +101,7 @@ class InputAttention(Attention):
         # with torch.no_grad():
         #     out_probs = 1.-attention_probs[:,:, -1]
 
-        return inputs, mask_, not_null_probs.detach()
+        return inputs, mask_, attention_probs
 
 class PositionAttention(Attention):
     def __init__(self, 

@@ -1,3 +1,4 @@
+from typing_extensions import runtime
 import torch
 import torch.nn as nn
 import math
@@ -12,6 +13,8 @@ from typing import Any
 from group_operations import GroupLinearLayer, GroupTorchGRU, GroupLSTMCell, SharedWorkspace, SharedBlockGRU, SharedBlockLSTM
 from attentions import InputAttention, CommAttention, SparseInputAttention, PositionAttention, SelectionAttention, MultiHeadAttention
 from relational_memory import RelationalMemory
+
+from utils.logging import enable_logging
 
 
 Ctx = namedtuple('RunningContext',
@@ -92,22 +95,13 @@ class RIMCell(nn.Module):
                 read_dropout=comm_dropout/2,
             )
 
+        self.do_logging = False
+        self.hidden_features = {}
 
     def transpose_for_scores(self, x, num_attention_heads, attention_head_size):
         new_x_shape = x.size()[:-1] + (num_attention_heads, attention_head_size)
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
-
-    def nan_hook(self, out):
-        nan_mask = torch.isnan(out)
-        if nan_mask.any():
-            print("In", self.__class__.__name__)
-            raise RuntimeError(f"Found NAN in output: ", nan_mask.nonzero(), "where:", out[nan_mask.nonzero()[:, 0].unique(sorted=True)])
-
-    def inf_hook(self, _tensor):
-        inf_mask = torch.isinf(_tensor)
-        if inf_mask.any():
-            raise RuntimeError(f"Found NAN in {self.__class__.__name__}: ", inf_mask.nonzero(), "where:", _tensor[inf_mask.nonzero()[:, 0].unique(sorted=True)])
 
     def forward(self, x, hs, cs = None, M=None, get_intm=False):
         """
@@ -128,7 +122,7 @@ class RIMCell(nn.Module):
             raise RuntimeError("Invalid input size")
 
         # Compute input attention
-        inputs, mask, attn_score = self.input_attention_mask(x, hs)
+        inputs, mask, input_attn_probs = self.input_attention_mask(x, hs)
         h_old = hs * 1.0
         if cs is not None:
             c_old = cs * 1.0
@@ -152,7 +146,14 @@ class RIMCell(nn.Module):
             M, h_new = self.communication_attention(M, h_new, mask.squeeze(2))
 
         # Prepare the context/intermediate value
-        ctx = Ctx(input_attn=attn_score,
+        if self.do_logging:
+            self.hidden_features.update(
+                {
+                    'input_attention_probs': input_attn_probs, # (0,1), for logging, [N, num_hidden,]
+                    'input_attention_mask': mask.squeeze(), # {0,1}, for logging, [N, num_hidden,]
+                }
+            )
+        ctx = Ctx(input_attn=1.-input_attn_probs[:,:,-1],
             input_attn_mask=mask.squeeze(),
             rule_attn=mask.squeeze(), # not applicable here
             rule_attn_mask=mask.squeeze(), # not applicable here
@@ -264,6 +265,8 @@ class FastSCOFF(nn.Module):
             )
         else:
             raise NotImplementedError('SW not implemented')
+
+        self.do_logging = False
 
 
     def forward(self, x, hs, cs = None, get_intm=False):
@@ -558,7 +561,7 @@ class SCOFFCell(nn.Module):
         self.num_modules_read_input = num_modules_read_input
         self.direct_input = straight_through_input # if True, no input attention is used and input/ofs are associated one to one. 
         if self.direct_input:
-            print("parameters block_size_out are not used because no input attention is used")
+            raise RuntimeError('input attention is necessary.')
         self.inp_heads = inp_heads
         self.comm_heads = comm_heads
         # NOTE modified option below
@@ -583,14 +586,25 @@ class SCOFFCell(nn.Module):
             #It supports the flexibility of each module having a sperate encoder.
             self.inp_att_out = self.single_hidden_size * 1 # not necessairy tho, is the input size for each gru (!= input_size of scoff)
             if not self.direct_input:
-                print('defining inp attention')
-                self.inp_att = MultiHeadAttention(n_head=self.inp_heads, d_model_read=self.hidden_size//self.num_hidden,
-                                            d_model_write=self.input_size,
-                                            d_model_out=self.inp_att_out, d_k=64, d_v=self.inp_att_out, 
-                                            num_blocks_read=1, # each time only one hidden vector is input, so 1. 
-                                            num_blocks_write=self.num_inputs + 1, # num of input feature vectors + one null input
-                                            residual=False,
-                                            topk=self.num_inputs + 1, n_templates=1, share_comm=False, share_inp=share_inp_attn, grad_sparse=False, skip_write=True)
+                # print('defining inp attention')
+                # self.inp_att = MultiHeadAttention(n_head=self.inp_heads, d_model_read=self.hidden_size//self.num_hidden,
+                #                             d_model_write=self.input_size,
+                #                             d_model_out=self.inp_att_out, d_k=64, d_v=self.inp_att_out, 
+                #                             num_blocks_read=1, # each time only one hidden vector is input, so 1. 
+                #                             num_blocks_write=self.num_inputs + 1, # num of input feature vectors + one null input
+                #                             residual=False,
+                #                             topk=self.num_inputs + 1, n_templates=1, share_comm=False, share_inp=share_inp_attn, grad_sparse=False, skip_write=True)
+                print('using custom input attention')
+                self.inp_att = InputAttention(
+                    input_size=self.input_size,
+                    hidden_size=self.hidden_size//self.num_hidden,
+                    kdim=64,
+                    vdim=self.inp_att_out,
+                    num_heads=self.inp_heads,
+                    num_blocks=1,
+                    k=self.num_hidden,
+                    dropout=0.1,
+                )
                 self.inp_att.attention.query_compeition = True
                 print('competition among OFs happening in inp attention')
             else:
@@ -599,14 +613,6 @@ class SCOFFCell(nn.Module):
 
         else:
             raise ValueError('following lines should NEVER be run! (version=0) it is a cardinal sin.')
-            #this is dummy!
-            self.inp_att_out = attention_out
-            print('Using version 0 att_out is', self.inp_att_out)
-            d_v = self.inp_att_out//self.inp_heads
-            self.inp_att = MultiHeadAttention(n_head=self.inp_heads, d_model_read=self.single_hidden_size,
-                                          d_model_write=self.block_size_in, d_model_out=self.inp_att_out,
-                                          d_k=64, d_v=d_v, num_blocks_read=num_hidden, num_blocks_write=self.num_modules_read_input,residual=False,
-                                          dropout=0.1, topk=self.num_inputs+1, n_templates=1, share_comm=False, share_inp=share_inp, grad_sparse=False, skip_write=True)
 
 
         if do_gru:
@@ -618,42 +624,10 @@ class SCOFFCell(nn.Module):
 
         if self.do_rel:
             raise ValueError("I don't care about using Relational Memory. ")
-            memory_key_size = 32
-            gate_style = 'unit'
-            print('gate_style is', gate_style, memory_slots, num_memory_heads, memory_head_size, memory_key_size, memory_mlp)
-            self.relational_memory = RelationalMemory(
-                mem_slots=memory_slots,
-                head_size=memory_head_size,
-                input_size=self.hidden_size,
-                output_size=self.hidden_size,
-                num_heads=num_memory_heads,
-                num_blocks=1,
-                forget_bias=1,
-                input_bias=0,
-                gate_style="unit",
-                attention_mlp_layers=memory_mlp,
-                key_size=memory_key_size,
-                return_all_outputs=False,
-            )
-
-            self.memory_size = memory_head_size * num_memory_heads
-            self.mem_att = MultiHeadAttention(
-                n_head=4,
-                d_model_read=self.single_hidden_size,
-                d_model_write=self.memory_size,
-                d_model_out=self.single_hidden_size,
-                d_k=32,
-                d_v=32,
-                num_blocks_read=self.num_hidden,
-                num_blocks_write=memory_slots,
-                topk=self.num_hidden,
-                grad_sparse=False,
-                n_templates=n_templates,
-                share_comm=share_comm,
-                share_inp=share_inp,
-            )
 
         self.memory=None
+        self.do_logging = False
+        self.hidden_features = {}
 
     def blockify_params(self):
         self.block_lstm.blockify_params()
@@ -709,8 +683,7 @@ class SCOFFCell(nn.Module):
 
             split_hx = [chunk.unsqueeze(1) for chunk in
                         torch.chunk(hx, chunks=self.num_hidden, dim=1)] # [bs, d_hidden] -> num_hidden x [bs, 1, d_hidden//num_hidden]
-
-            if not self.direct_input:
+            if not isinstance(self.inp_att, InputAttention):
                 if not self.share_inp:
                     output = [self.inp_att(q=_hx, k=_inp, v=_inp) for
                         _hx, _inp in zip(split_hx, input_to_attention)] # num_hidden x ([bs, 1, attn_out], attn, extra_loss); attn_out == block_size_out
@@ -721,8 +694,11 @@ class SCOFFCell(nn.Module):
                 inp_use = torch.cat(inp_use_list, dim=1) # [bs, num_hidden, attn_out]
                 iatt = torch.cat(iatt_list, dim=1) # [bs, num_hidden, 2]
             else:
-                inp_use = inp # Shape: [bs, num_inputs, input_size] NO null input included, but might contain empty slots
-                iatt = torch.ones((inp.shape[0], inp.shape[1], 2), device=inp.device) # dummy iatt score. Shape: [bs, num_hidden, 2] 
+                iatt = torch.zeros((inp.shape[0], self.num_hidden, 2)).to(inp.device)
+                inp_use, mask_, input_attn_probs = self.inp_att(inp, hx.view(hx.shape[0], self.num_hidden, -1))
+                iatt[:,:,0] = 1. - input_attn_probs[:,:,-1]
+                if self.do_logging:
+                    self.hidden_features['input_attention_probs'] = input_attn_probs
 
             inp_use = inp_use.reshape((inp_use.shape[0], self.inp_att_out * self.num_hidden)) # [bs, self.inp_att_out * num_hidden], self.inp_att_out ~= input_size for following GRU
 
@@ -759,8 +735,10 @@ class SCOFFCell(nn.Module):
 
 
         if self.do_gru:
-            hx_new, temp_attention = self.block_lstm(inp_use, hx) # temp_attention: [bs, num_hidden, n_templates]
+            hx_new, temp_attention = self.block_lstm(inp_use, hx) # template attention: temp_attention: [bs, num_hidden, n_templates]
             cx_new = hx_new
+            if self.do_logging:
+                self.hidden_features['rule_attention_probs'] = temp_attention
         else:
             hx_new, cx_new, temp_attention = self.block_lstm(inp_use, hx, cx)
         
