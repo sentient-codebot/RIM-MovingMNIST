@@ -299,27 +299,28 @@ class BallModel(nn.Module):
 
         # computations
         M = None
-        encoded_input = self.encoder(x) # Shape: (batch_size, 6*6, self.input_size) OR [batch_size, 1, self.input_size]
+        with torch.no_grad() if self.args.load_trained_slot_attention else torch.enable_grad():
+            encoded_input = self.encoder(x) # Shape: (batch_size, 6*6, self.input_size) OR [batch_size, 1, self.input_size]
         if self.use_slot_attention:
+            with torch.no_grad() if self.args.load_trained_slot_attention else torch.enable_grad():
+                if self.spotlight_bias:
+                    #__u = lambda x: util.unpack_seqdim(x, self.bs)
+                    encoded_input, attn, attn_param_bias = self.slot_attention(encoded_input) # Shape: [batch_size, num_slots, slot_size]
+                    grid_val = util.build_grid2D(self.resolution).repeat(encoded_input.shape[0]*self.slot_attention.num_iterations,1,1,1).reshape([encoded_input.shape[0]*self.slot_attention.num_iterations,-1,2]).to(h_prev.device)
+                    raise RuntimeError("What's this supposed to mean?")
+                    slot_means = torch.matmul(attn,grid_val)
+                    slot_means_ = slot_means.unsqueeze(2)
+                    grid_val_ = grid_val.unsqueeze(1)
+                    slot_variances_ = ((slot_means_ - grid_val_)**2).sum(-1)
+                    slot_variances_ = slot_variances_ * attn
+                    slot_variances = slot_variances_.sum(-1)
 
-            if self.spotlight_bias:
-                #__u = lambda x: util.unpack_seqdim(x, self.bs)
-                encoded_input, attn, attn_param_bias = self.slot_attention(encoded_input) # Shape: [batch_size, num_slots, slot_size]
-                grid_val = util.build_grid2D(self.resolution).repeat(encoded_input.shape[0]*self.slot_attention.num_iterations,1,1,1).reshape([encoded_input.shape[0]*self.slot_attention.num_iterations,-1,2]).to(h_prev.device)
-                raise RuntimeError("What's this supposed to mean?")
-                slot_means = torch.matmul(attn,grid_val)
-                slot_means_ = slot_means.unsqueeze(2)
-                grid_val_ = grid_val.unsqueeze(1)
-                slot_variances_ = ((slot_means_ - grid_val_)**2).sum(-1)
-                slot_variances_ = slot_variances_ * attn
-                slot_variances = slot_variances_.sum(-1)
+                    #slot_variances_ = __u(slot_variances)
+                    #slot_means_ = __u(slot_means)
 
-                #slot_variances_ = __u(slot_variances)
-                #slot_means_ = __u(slot_means)
-
-            
-            else: 
-                encoded_input = self.slot_attention(encoded_input) # Shape: [batch_size, num_slots, slot_size]
+                
+                else: 
+                    encoded_input = self.slot_attention(encoded_input) # Shape: [batch_size, num_slots, slot_size]
 
                 
                 
@@ -426,7 +427,7 @@ class SlotAttentionAutoEncoder(nn.Module):
         self.num_iterations = num_iterations
         self.num_slots = num_slots
         self.slot_size = slot_size
-        self.Encoder = NonFlattenEncoder(input_size=self.input_size) # output shape: [batch_size, num_inputs, input_size]
+        self.encoder = NonFlattenEncoder(input_size=self.input_size) # output shape: [batch_size, num_inputs, input_size]
         self.slot_attention = SlotAttention(
                 num_iterations=self.num_iterations,
                 num_slots=self.num_slots,
@@ -435,7 +436,7 @@ class SlotAttentionAutoEncoder(nn.Module):
                 epsilon=1e-8,
                 input_size=self.input_size,
             ) # output shape: [batch_size, num_slots, slot_size]
-        self.Decoder = WrappedDecoder(hidden_size=self.slot_size, decoder='transconv') # input shape: [batch_size, num_slots, slot_size]
+        self.decoder = WrappedDecoder(hidden_size=self.slot_size, decoder='transconv') # input shape: [batch_size, num_slots, slot_size]
 
     def forward(self, x):
         """
@@ -444,9 +445,9 @@ class SlotAttentionAutoEncoder(nn.Module):
             
         Returns:
             `output`: a float tensor with shape [batch_size, C, H, W]."""
-        encoded_input = self.Encoder(x)
+        encoded_input = self.encoder(x)
         slot_attn = self.slot_attention(encoded_input)
-        fused, channels, alpha_mask = self.Decoder(slot_attn)
+        fused, channels, alpha_mask = self.decoder(slot_attn)
         return fused
 
 class TrafficModel(nn.Module):

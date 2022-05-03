@@ -34,7 +34,6 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn)
         data = torch.cat((in_frames, out_frames), dim=1) # Shape; [N, T, C, H, W]
         start_time = time()
         data = data.to(args.device)
-        data = data.unsqueeze(2).float()
         optimizer.zero_grad()
 
         loss = 0.
@@ -105,11 +104,11 @@ def main():
     args = argument_parser()
 
     if not args.should_resume:
-        make_dir(f"{args.folder_log}/pretrain/checkpoints")
-        make_dir(f"{args.folder_log}/pretrain/model")
+        make_dir(f"{args.folder_save}/pretrain/checkpoints")
+        make_dir(f"{args.folder_save}/pretrain/args")
         torch.save({
             "args": vars(args)
-        }, f"{args.folder_log}/pretrain/model/args")
+        }, f"{args.folder_save}/pretrain/args/args")
 
     cudable = torch.cuda.is_available()
     args.device = torch.device("cuda" if cudable else "cpu")
@@ -143,7 +142,7 @@ def main():
 
         # test done here
         writer.add_scalar('Loss/Train Loss '+f'({args.loss_fn.upper()})', epoch_loss.detach(), epoch)
-        if args.log_intm_frequency > 0 and epoch % args.log_intm_frequency == 0 or epoch <= 15:
+        if args.test_frequency > 0 and epoch % args.test_frequency == 0 or epoch <= 15:
             test_loss, metrics = test(
                 model = model,
                 test_loader = test_loader,
@@ -160,23 +159,23 @@ def main():
             print(f"Epoch {epoch} | Train Loss: {epoch_loss:.4f}")
 
         # save checkpoints here
-        if args.model_persist_frequency > 0 and epoch % args.model_persist_frequency == 0 or epoch==1: # regularly save checkpoints
-            print(f"Saving model to {args.folder_log}/pretrain/checkpoints/{epoch}")
+        if args.save_frequency > 0 and epoch % args.save_frequency == 0 or epoch==1: # regularly save checkpoints
+            print(f"Saving model to {args.folder_save}/pretrain/checkpoints/{epoch}.pt")
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': epoch_loss,
-            }, f"{args.folder_log}/pretrain/checkpoints/{epoch}")
+            }, f"{args.folder_save}/pretrain/checkpoints/{epoch}.pt")
 
     writer.close()
         
 def setup_model(args):
     model = SlotAttentionAutoEncoder(
         input_size=args.input_size,
-        num_iterations=args.num_iterations,
-        num_slots=args.num_units,
-        slot_size=args.hidden_size,
+        num_iterations=args.num_iterations_slot,
+        num_slots=args.num_slots,
+        slot_size=args.slot_size,
     ).to(args.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     start_epoch = 1

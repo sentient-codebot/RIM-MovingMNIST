@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import make_grid
 import wandb
 from utils import util
-from networks import BallModel, TrafficModel
+from networks import BallModel, SlotAttentionAutoEncoder, TrafficModel
 from argument_parser import argument_parser
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
@@ -26,6 +26,8 @@ from os.path import isfile, join
 print("Python Process PID: ", os.getpid())
 
 set_seed(1997)
+
+PRETRAINED_MODEL_PATH = './saves/PRETRAIN_MMNIST_SLOT_SA_3_100_3_RIM_6_100_ver_0/pretrain/checkpoints/encoder_sa.pt'
 
 def get_grad_norm(model):
     total_norm = 0.
@@ -237,6 +239,15 @@ def setup_model(args):
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
     start_epoch = 1
     train_batch_idx = 0
+
+    # load encoder+slot_attention
+    if args.load_trained_slot_attention:
+        print(f"load pretrained encoder and slot attention from {PRETRAINED_MODEL_PATH}")
+        sa_autoae = SlotAttentionAutoEncoder(input_size=args.input_size, num_iterations=args.num_iterations_slot, num_slots=args.num_slots, slot_size=args.slot_size)
+        sa_autoae.load_state_dict(torch.load(PRETRAINED_MODEL_PATH)['model_state_dict'])
+        model.encoder.load_state_dict(sa_autoae.encoder.state_dict())
+        model.slot_attention.load_state_dict(sa_autoae.slot_attention.state_dict())
+        
 
     # resume model state dict
     if args.path_to_load_model != "":
