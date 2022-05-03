@@ -56,6 +56,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         dec_util = VecStack()
     if args.core == 'SCOFF':
         rule_attn_argmax = VecStack()
+        dec_util = VecStack()
 
     mse = lambda x, y: ((x - y)**2).mean(dim=(0,1,2)).sum() # x Shape: [batch_size, T, C, H, W]
 
@@ -167,7 +168,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                     rim_actv_mask.append(model.rnn_model.hidden_features["input_attention_mask"])
                     pass
                 elif args.core == 'SCOFF':
-                    rule_attn_argmax.append(model.hidden_features['rule_attn_argmax']) # TODO to delete
+                    rule_attn_argmax.append(model.rnn_model.hidden_features['rule_attn_argmax']) # TODO to delete
                     pass
         
         if not rollout:

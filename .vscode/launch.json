@@ -141,9 +141,13 @@
                 "MMNIST_SASBD",
                 "--save_frequency",
                 "25",
+                "--batch_size",
+                "32",
+                "--sbd_mem_efficient",
+                "true"
             ],
             "env": {
-                "CUDA_VISIBLE_DEVICES": "0"
+                "CUDA_VISIBLE_DEVICES": "1"
             }
         },
         {

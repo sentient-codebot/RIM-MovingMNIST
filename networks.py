@@ -13,15 +13,6 @@ from slot_attn.pos_embed import SoftPositionEmbed
 from utils import util
 from utils.logging import enable_logging
 
-
-Intm = namedtuple('IntermediateVariables',
-    [
-        'input_attn',
-        'input_attn_mask',
-        'blocked_dec',
-        'rules_selected'
-    ])
-
 class BasicEncoder(nn.Module):
     """basic encoder as baseline
     
@@ -334,7 +325,7 @@ class BallModel(nn.Module):
         with enable_logging(self.rnn_model, self.do_logging) as _:
             if self.core=='RIM':
                 if not self.sparse:
-                    h_new, cs_new, M, ctx = self.rnn_model(x=encoded_input, hs=h_prev, cs=None, M=M_prev) 
+                    h_new, cs_new, M = self.rnn_model(x=encoded_input, hs=h_prev, cs=None, M=M_prev) 
                 else:
                     raise NotImplementedError('Sparse RIM not configured for slot input yet')
             elif self.core=='GRU':
@@ -358,7 +349,8 @@ class BallModel(nn.Module):
                 # for logging
                 if self.do_logging:
                     rules_selected = torch.argmax(temp_attention, dim=2, keepdim=False) # temp_attention: [bs, num_hidden, n_templates] -> LongTensor [bs, num_hidden]
-                    self.hidden_features['rule_attn_argmax'] = rules_selected
+                    self.rnn_model.hidden_features['rule_attn_argmax'] = rules_selected
+                    self.rnn_model.hidden_features['rule_attn_probs'] = temp_attention
             else:
                 raise RuntimeError('Illegal RNN Core')
         
@@ -371,19 +363,6 @@ class BallModel(nn.Module):
                 
         else:
             dec_out_ = self.decoder(h_new.view(h_new.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
-
-        if ctx is not None:
-            intm = Intm(input_attn=ctx.input_attn, 
-                input_attn_mask=ctx.input_attn_mask,
-                blocked_dec=self.hidden_features['individual_output'],
-                rules_selected=rules_selected
-                )
-        else:
-            intm = Intm(input_attn=torch.zeros(1), 
-                input_attn_mask=torch.zeros(1),
-                blocked_dec=blocked_out_,
-                rules_selected=rules_selected
-                )
         
         if self.spotlight_bias:
             return dec_out_, h_new, M, slot_means, slot_variances, attn_param_bias

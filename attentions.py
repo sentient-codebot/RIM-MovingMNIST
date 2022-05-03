@@ -45,27 +45,38 @@ class Attention(nn.Module):
         return output
 
 class InputAttention(Attention):
+    """
+    Args:
+        `num_blocks`: always equal to number of OFs/hidden state vectors
+        `share_query_proj`: whether to share the same projection matrix for all query vectors. 
+        `num_shared_query_proj`: number of shared query projection matrices."""
     def __init__(self, 
         input_size,
         hidden_size, 
         kdim,
         vdim,
         num_heads,
-        num_blocks,
+        num_hidden,
         k,
         dropout,
-        epsilon=1e-8
+        epsilon=1e-8,
+        share_query_proj=False,
+        num_shared_query_proj=1,
         ):
         super().__init__(dropout)
         self.num_heads = num_heads
         self.kdim = kdim
         self.vdim = vdim
-        self.num_blocks = num_blocks
+        self.num_hidden = num_hidden
         self.k = k
 
         self.key = nn.Linear(input_size, num_heads * kdim, bias=False)
         self.value = nn.Linear(input_size, num_heads * vdim, bias=False)
-        self.query = GroupLinearLayer(hidden_size, kdim * num_heads, num_blocks)
+        if not share_query_proj:
+            self.query = GroupLinearLayer(hidden_size, kdim * num_heads, num_hidden) # giving each query vector different projection matrix (one-to-one)
+        else:
+            self.query = SharedGroupLinearLayer(hidden_size, kdim * num_heads, num_hidden) # giving each query vector different projection matrix (one-to-one)
+            # all query share the same projection *proj*
         self.dropout = nn.Dropout(p = dropout)
         self.epsilon = epsilon
 
@@ -86,7 +97,7 @@ class InputAttention(Attention):
         attention_probs = attention_probs + self.epsilon # in case of unstability
         attention_probs = attention_probs / torch.sum(attention_probs, dim=2, keepdim=True)
 
-        mask_ = torch.zeros((x.size(0), self.num_blocks), device=x.device)
+        mask_ = torch.zeros((x.size(0), self.num_hidden), device=x.device)
         not_null_probs = 1. - attention_probs[:, :, -1] # Shape: [batch_size, num_blocks, ] NOTE how much focus is NOT on the null input
         topk1 = torch.topk(not_null_probs, self.k, dim = 1)
         batch_indices = torch.arange(x.shape[0]).unsqueeze(1)
@@ -594,13 +605,13 @@ class MultiHeadAttention(nn.Module):
 
         print('d model read', d_model_read)
         if share_inp:
-            assert(n_templates!=0, "provide number of paramters for sharing")
+            assert n_templates!=0, "provide number of paramters for sharing"
             self.GLN_qs = SharedGroupLinearLayer(d_model_read, n_head * d_k, n_templates)
             self.GLN_ks = GroupLinearLayer(d_model_write, n_head * d_k, num_blocks_write)
             self.GLN_vs = GroupLinearLayer(d_model_write, n_head * d_v, num_blocks_write)
         elif share_comm:
             # share Q,K,V for commuication
-            assert(n_templates!=0, "provide number of paramters for sharing")
+            assert n_templates!=0, "provide number of paramters for sharing"
             self.GLN_qs = SharedGroupLinearLayer(d_model_read, n_head * d_k, n_templates)
             self.GLN_ks = SharedGroupLinearLayer(d_model_write, n_head * d_k, n_templates)
             self.GLN_vs = SharedGroupLinearLayer(d_model_write, n_head * d_v, n_templates)

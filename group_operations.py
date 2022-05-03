@@ -289,13 +289,13 @@ class SharedGroupLinearLayer(nn.Module):
     
     Outputs are soft weighted sum of all layer blocks. 
     """
-
+    kdim = 16
     def __init__(self, din, dout, n_templates):
         super(SharedGroupLinearLayer, self).__init__()
 
         self.w = nn.ParameterList([nn.Parameter(0.01 * torch.randn(din,dout)) for _ in range(0,n_templates)])
-        self.gll_write = GroupLinearLayer(dout,16, n_templates) # 16 == key size
-        self.gll_read = GroupLinearLayer(din,16,1)
+        self.gll_write = GroupLinearLayer(dout,self.kdim, n_templates) # 16 == key size
+        self.gll_read = GroupLinearLayer(din,self.kdim,1)
 
     def forward(self,x):
         #input size (bs,num_blocks,din), required matching num_blocks vs n_templates
