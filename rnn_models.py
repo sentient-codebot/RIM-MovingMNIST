@@ -594,6 +594,7 @@ class SCOFFCell(nn.Module):
                 #                             num_blocks_write=self.num_inputs + 1, # num of input feature vectors + one null input
                 #                             residual=False,
                 #                             topk=self.num_inputs + 1, n_templates=1, share_comm=False, share_inp=share_inp_attn, grad_sparse=False, skip_write=True)
+                # self.inp_att.attention.query_compeition = True
                 print('using custom input attention')
                 self.inp_att = InputAttention(
                     input_size=self.input_size,
@@ -605,7 +606,7 @@ class SCOFFCell(nn.Module):
                     k=self.num_hidden,
                     dropout=0.1,
                 )
-                self.inp_att.attention.query_compeition = True
+                
                 print('competition among OFs happening in inp attention')
             else:
                 print('no inp attention defined. slots directly fed to schemata with respective OF')

@@ -170,7 +170,6 @@ class BallModel(nn.Module):
             self.memory_mu = nn.parameter.Parameter(torch.randn(1, 1, self.memory_size)) # mean for initial memory. Shape: [1, 1, memory_size]
             self.memory_logvar = nn.parameter.Parameter(torch.randn(1, 1, self.memory_size)) # log variance for initial memory. Shape: [1, 1, memory_size]
         self.sparse = False
-        self.get_intm = False
         self.use_slot_attention = args.use_slot_attention
         self.encoder_type = args.encoder_type
         self.decoder_type = args.decoder_type
@@ -332,7 +331,7 @@ class BallModel(nn.Module):
 
         reg_loss = 0.
         # pass through self.rnn_model (RNN core)
-        with enable_logging(self.rnn_model, self.do_logging):
+        with enable_logging(self.rnn_model, self.do_logging) as _:
             if self.core=='RIM':
                 if not self.sparse:
                     h_new, cs_new, M, ctx = self.rnn_model(x=encoded_input, hs=h_prev, cs=None, M=M_prev) 
@@ -359,7 +358,7 @@ class BallModel(nn.Module):
                 # for logging
                 if self.do_logging:
                     rules_selected = torch.argmax(temp_attention, dim=2, keepdim=False) # temp_attention: [bs, num_hidden, n_templates] -> LongTensor [bs, num_hidden]
-                    self.hidden_features['rules_selected'] = rules_selected
+                    self.hidden_features['rule_attn_argmax'] = rules_selected
             else:
                 raise RuntimeError('Illegal RNN Core')
         
@@ -376,7 +375,7 @@ class BallModel(nn.Module):
         if ctx is not None:
             intm = Intm(input_attn=ctx.input_attn, 
                 input_attn_mask=ctx.input_attn_mask,
-                blocked_dec=blocked_out_,
+                blocked_dec=self.hidden_features['individual_output'],
                 rules_selected=rules_selected
                 )
         else:
@@ -387,9 +386,9 @@ class BallModel(nn.Module):
                 )
         
         if self.spotlight_bias:
-            return dec_out_, h_new, M, intm, slot_means, slot_variances, attn_param_bias
+            return dec_out_, h_new, M, slot_means, slot_variances, attn_param_bias
         else:
-            return dec_out_, h_new, M, intm
+            return dec_out_, h_new, M
 
     
 

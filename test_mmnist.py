@@ -50,14 +50,12 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     if log_columns is not None:
         test_table = wandb.Table(columns=log_columns)
 
-    previous_get_intm = model.get_intm
-    model.get_intm = True
     if args.core == 'RIM':
         rim_actv = VecStack()
         rim_actv_mask = VecStack()
         dec_util = VecStack()
     if args.core == 'SCOFF':
-        rules_selected = VecStack()
+        rule_attn_argmax = VecStack()
 
     mse = lambda x, y: ((x - y)**2).mean(dim=(0,1,2)).sum() # x Shape: [batch_size, T, C, H, W]
 
@@ -92,7 +90,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             rim_actv_mask.reset()
             dec_util.reset()
         if args.core == 'SCOFF':
-            rules_selected.reset()
+            rule_attn_argmax.reset()
         data = data.to(args.device) # Shape: [batch_size, T, C, H, W] or [batch_size, T, H, W]
         if data.dim()==4:
             data = data.unsqueeze(2).float() # Shape: [batch_size, T, 1, H, W]
@@ -109,74 +107,68 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             data.shape[4])
         ) # (BS, num_blocks, T, C, H, W)
 
+        do_logging = batch_idx==len(test_loader)-1
+
         for frame in range(data.shape[1]-1):
-            with torch.no_grad(), enable_logging(model, batch_idx==len(test_loader)-1 and frame==data.shape[1]-2):
+            with torch.no_grad(), enable_logging(model, do_logging):
                 if args.spotlight_bias:
                     if not rollout:
-                        output, hidden, memory, intm, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
+                        output, hidden, memory, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
                     elif frame >= rollout_start :
-                        output, hidden, memory, intm, slot_means, slot_variances, attn_param_bias = model(output, hidden, memory)
+                        output, hidden, memory, slot_means, slot_variances, attn_param_bias = model(output, hidden, memory)
                     else:
-                        output, hidden, memory, intm, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
+                        output, hidden, memory, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
                 else:
                     if not rollout:
-                        output, hidden, memory, intm = model(data[:, frame, :, :, :], hidden, memory)
+                        output, hidden, memory = model(data[:, frame, :, :, :], hidden, memory)
                     elif frame >= rollout_start :
-                        output, hidden, memory, intm = model(output, hidden, memory)
+                        output, hidden, memory = model(output, hidden, memory)
                     else:
-                        output, hidden, memory, intm = model(data[:, frame, :, :, :], hidden, memory)
-
-                intm = intm._asdict()
+                        output, hidden, memory = model(data[:, frame, :, :, :], hidden, memory)
                 target = data[:, frame+1, :, :, :]
-                prediction[:, frame+1, :, :, :] = output
-                blocked_prediction[:, 0, frame+1, :, :, :] = output # dim == 6
-                blocked_prediction[:, 1:, frame+1, :, :, :] = model.hidden_features['individual_output']
                 if args.spotlight_bias:
                     loss = loss + loss_fn(output, target) + util.slot_loss(slot_means,slot_variances) + 0.1*torch.sum(attn_param_bias**2)
                 else:
                     loss += loss_fn(output, target) 
+                
+            # frame-wise metrics
+            f1_frame = f1_score(target, output)
+            f1 += f1_frame
 
-                f1_frame = f1_score(target, output)
-                # writer.add_scalar(f'Metrics/F1 at Frame {frame}', f1_frame, epoch)
-                f1 += f1_frame
+            prediction[:, frame+1, :, :, :] = output
+            if do_logging:
+                blocked_prediction[:, 0, frame+1, :, :, :] = output # dim == 6
+                blocked_prediction[:, 1:, frame+1, :, :, :] = model.hidden_features['individual_output']
 
-                # wandb logging
-                table_row = {
-                    'sample_id': str(batch_idx)+'_'+'0',
-                    'frame_id': frame+1,
-                    'prediction': wandb.Image(output[0].detach().cpu()*255),
-                    'ground_truth': wandb.Image(target[0].detach().cpu()*255),
-                    'individual_prediction': wandb.Image(make_grid(model.hidden_features['individual_output'][0]*255, pad_value=255)), # N K C H W -> K C H W -> C *H **W
-                }
-                if args.core == 'SCOFF':
-                    rule_attn_probs = model.rnn_model.hidden_features['rule_attn_probs'] # [N, num_hidden, num_rules]
-                    for of_idx in range(args.num_hidden):
-                        table_row.update({ 
-                            f'rule_OF_{of_idx}': rule_attn_probs[0,of_idx].tolist(), # list of length num_rules, rule distribution
-                        })
-                if log_columns is not None:
-                    test_table.add_data(
-                        *[table_row[col] for col in log_columns],
-                    )
-
-            if __name__ == "__main__" and False:
-                if not args.use_memory_for_decoder:
-                    intm["decoder_utilization"] = dec_rim_util(model, hidden)
-                else:
-                    intm['decoder_utilization'] = dec_rim_util(model, memory)
-                most_used_units.extend(torch.topk(intm["decoder_utilization"], k=args.num_hidden//2, dim=-1).indices.tolist())
-            else:
-                intm['decoder_utilization'] = torch.zeros(1, 1)
+                # wandb logging for table
+                for sample_idx in range(data.shape[0]):
+                    table_row = {
+                        'sample_id': str(batch_idx)+'_'+str(sample_idx),
+                        'frame_id': frame+1,
+                        'prediction': wandb.Image(output[sample_idx].detach().cpu()*255),
+                        'ground_truth': wandb.Image(target[sample_idx].detach().cpu()*255),
+                        'individual_prediction': wandb.Image(make_grid(model.hidden_features['individual_output'][sample_idx]*255, pad_value=255)), # N K C H W -> K C H W -> C *H **W
+                    }
+                    if args.core == 'SCOFF':
+                        rule_attn_probs = model.rnn_model.hidden_features['rule_attn_probs'][sample_idx] # [num_hidden, num_rules]
+                        for of_idx in range(args.num_hidden):
+                            table_row.update({ 
+                                f'rule_OF_{of_idx}': rule_attn_probs[of_idx].tolist(), # list of length num_rules, rule distribution
+                            })
+                    if log_columns is not None:
+                        test_table.add_data(
+                            *[table_row[col] for col in log_columns],
+                        )
+                # wandb/tb logging for concatenated image
+                dec_util.append(model.rnn_model.hidden_features.get("decoder_utilization", torch.zeros(1, 1)))
                 most_used_units.append(0)
-            
-            if args.core == 'RIM':
-                rim_actv.append(model.rnn_model.hidden_features['input_attention_probs']) # shape (batchsize, num_units, 1) -> (BS, NU, T)
-                rim_actv_mask.append(model.rnn_model.hidden_features["input_attention_mask"])
-                dec_util.append(intm["decoder_utilization"])
-                pass
-            elif args.core == 'SCOFF':
-                rules_selected.append(intm["rules_selected"]) # TODO to delete
-                pass
+                if args.core == 'RIM':
+                    rim_actv.append(model.rnn_model.hidden_features['input_attention_probs']) # shape (batchsize, num_units, 1) -> (BS, NU, T)
+                    rim_actv_mask.append(model.rnn_model.hidden_features["input_attention_mask"])
+                    pass
+                elif args.core == 'SCOFF':
+                    rule_attn_argmax.append(model.hidden_features['rule_attn_argmax']) # TODO to delete
+                    pass
         
         if not rollout:
             ssim += pt_ssim.ssim(data[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
@@ -191,7 +183,6 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         epoch_mseloss += mseloss.detach()
         if args.device == torch.device("cpu"):
             break
-    
 
     prediction = prediction[:, 1:, :, :, :] # last batch of prediction, starting from frame 1
     blocked_prediction = blocked_prediction[:, :, 1:, :, :, :]
@@ -208,7 +199,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             'rim_actv': rim_actv.show(),
             'rim_actv_mask': rim_actv_mask.show(),
             'dec_util': dec_util.show(),
-            'blocked_dec': blocked_prediction,
+            'individual_output': blocked_prediction,
             'most_used_units': most_used_units
         }
     elif args.core == 'SCOFF':
@@ -216,18 +207,17 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             'mse': epoch_mseloss,
             'ssim': ssim,
             'f1': f1_avg,
-            'blocked_dec': blocked_prediction,
-            'rules_selected': rules_selected.show(),
+            'individual_output': blocked_prediction,
+            'rule_attn_argmax': rule_attn_argmax.show(),
         }
     else:
         metrics = {
             'mse': epoch_mseloss,
             'ssim': ssim,
             'f1': f1_avg,
-            'blocked_dec': blocked_prediction
+            'individual_output': blocked_prediction
         }
 
-    model.get_intm = previous_get_intm
     print('test runtime:', time() - start_time)
     return epoch_loss, prediction, data, metrics, test_table
 
@@ -276,7 +266,6 @@ def main():
     project, name = args.id.split('_',1)
     wandb.init(project=project, name=name+'_test', config=vars(args), entity='nan-team')
     print(args)
-    wandb_artf = wandb.Artifact(project+'_'+name+'_test', type='predictions', metadata=vars(args).update({'epoch': epoch}))
     columns = ['sample_id', 'frame_id', 'ground_truth', 'prediction', 'individual_prediction']
     if args.core == 'SCOFF':
         for idx in range(args.num_hidden):
@@ -319,6 +308,7 @@ def main():
         prediction=prediction,
         metrics=metrics,
         test_table=test_table,
+        writer=writer
     )
 
     writer.close()

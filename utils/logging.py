@@ -3,6 +3,9 @@ from .visualize import make_grid_video
 import torch
 
 def log_stats(args, is_train, **kwargs):
+    """
+    log one sample of predictions in a batch
+    """
     # 
     epoch = kwargs.get('epoch', 0)
     lr = kwargs.get('lr', None)
@@ -25,15 +28,15 @@ def log_stats(args, is_train, **kwargs):
         dec_util = metrics['dec_util']
         most_used_units = metrics['most_used_units']
     elif args.core == 'SCOFF':
-        rules_selected = metrics['rules_selected']
+        rule_attn_argmax = metrics['rule_attn_argmax']
     # videos patching
-    blocked_dec = metrics['blocked_dec'] # dim == 6
+    individual_output = metrics['individual_output'] # dim == 6
     if args.task == 'MMNIST':
         num_vids = 4
     else:
         num_vids = 1
     grided_ind_pred = make_grid_video(
-        target = blocked_dec[0],
+        target = individual_output[0],
         return_dim = 5,
     )
     cat_video = make_grid_video(ground_truth[0:num_vids, 1:, :, :, :],
@@ -70,7 +73,7 @@ def log_stats(args, is_train, **kwargs):
             writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
             writer.add_image('Stats/Unit Decoder Utilization', dec_util[0], epoch, dataformats='HW')
         elif args.core == 'SCOFF':
-            writer.add_image('Stats/Rules Selected', rules_selected[0], epoch, dataformats='HW')
+            writer.add_image('Stats/Most Likely Rule', rule_attn_argmax[0], epoch, dataformats='HW')
     #   wandb
     if args.core == "RIM":
         stat_dict.update({
@@ -80,14 +83,14 @@ def log_stats(args, is_train, **kwargs):
         })
     elif args.core == 'SCOFF':
         stat_dict.update({
-            'Rules Selected': wandb.Image(rules_selected[0].cpu()*255/9), # 0 to 9 classes
+            'Rules Selected': wandb.Image(rule_attn_argmax[0].cpu()*255/9), # 0 to 9 classes
         })
 
     # videos
     #   tensorboard
     if writer is not None:
         writer.add_video('Predicted Videos', cat_video, epoch)
-        writer.add_video('Blocked Predictions', grided_ind_pred) # N num_blocks T 1 H W
+        writer.add_video('Individual Predictions', grided_ind_pred) # N num_blocks T 1 H W
     #   wandb
     video_dict = {
         'Predicted Videos': wandb.Video((cat_video.cpu()*255).to(torch.uint8), fps=3),
@@ -140,5 +143,5 @@ class enable_logging():
     def __enter__(self,):
         self.model.do_logging = self.do_logging
 
-    def __exit__(self,):
+    def __exit__(self, type, value, traceback):
         self.model.do_logging = self.prev

@@ -72,15 +72,13 @@
                 "--should_resume",
                 "false",
                 "--experiment_name",
-                "MMNIST_debug",
+                "MMNIST_SASBD",
                 "--save_frequency",
                 "25",
                 "--num_hidden",
                 "6",
                 "--k",
                 "6",
-                "--spotlight_bias",
-                "True"
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "0"
@@ -126,6 +124,26 @@
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "1"
+            }
+        },
+        {
+            "name": "train/test mmnist SCOFF SA SBD",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "--cfg_json",
+                "configs/scoff/scoff_slot.json",
+                "--should_resume",
+                "false",
+                "--experiment_name",
+                "MMNIST_SASBD",
+                "--save_frequency",
+                "25",
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0"
             }
         },
         {
