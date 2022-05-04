@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/bash
 echo Running on $HOSTNAME
 # source ../../cas_env/bin/activate
 source ~/.bashrc
