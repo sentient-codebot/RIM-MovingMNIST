@@ -5,6 +5,7 @@ source ~/.bashrc
 conda activate /scratch/cristianmeo/.conda/envs/pytorch
 
 wandb login cc879c952bfc023d10e378c7a850ba349227cd1c
+wandb offline
 
 experiment_name="BBALL_4_678_SASBD"
 cfg_json="configs/scoff/scoff_slot.json"
