@@ -74,7 +74,7 @@ def setup_dataloader(args):
     return train_loader, test_loader
 
 def main():
-    train_set = BouncingBall(root='/home/nnan/BouncingBall/', train=True, length=20, filename='balls4mass64.h5')
+    train_set = BouncingBall(root='./data', train=True, length=20, filename='balls4mass64.h5')
     print(len(train_set))
     # train_set = @mini_dataset(nfold=10)(train_set)
     train_loader = torch.utils.data.DataLoader(

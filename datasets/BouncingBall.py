@@ -27,12 +27,14 @@ class BouncingBall(Dataset):
     }
     filename_list = ['balls3curtain64.h5', 'balls4mass64.h5',
                     'balls678mass64.h5']
+    MAX_LENGTH = 51
     def __init__(self, train=True, length=50, root='/Data', download=False,
                  filename="balls4mass64.h5"):
         """
         
         """
         self.length = length
+        self.downsample_ratio = max(self.MAX_LENGTH // self.length, 1)
         self.mode = 'training' if train else 'test'
         self.directory = root
         self.filename = filename
@@ -54,7 +56,8 @@ class BouncingBall(Dataset):
         # ['collisions', 'events', 'features', 'groups', 'positions', 'velocities']
         # Currently MAX (51 ,64, 64, 1)
 
-        features = 1.0 * self.input_data[:self.length, index, :, :, :]
+        frame_indices = [frame_idx for frame_idx in range(0, self.MAX_LENGTH, self.downsample_ratio)]
+        features = 1.0 * self.input_data[frame_indices[:self.length], index, :, :, :]
         # True, False label, conert to int
         # Convert to tensors
         features = torch.tensor(features.reshape(features.shape[0], 1, 64, 64)) # [50, 1, 64, 64]
