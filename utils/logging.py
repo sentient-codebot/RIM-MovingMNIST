@@ -104,7 +104,7 @@ def log_stats(args, is_train, **kwargs):
     }
     if args.core == 'SCOFF':
         video_dict.update({
-            'Rule Attention Probs': wandb.Video((rule_attn_probs[:1].cput()*255).to(torch.uint8)), # [1, T, 1, H, W]
+            'Rule Attention Probs': wandb.Video((rule_attn_probs[:1].cpu()*255).to(torch.uint8)), # [1, T, 1, H, W]
         })
     
     # histograms
