@@ -23,11 +23,12 @@ def log_stats(args, is_train, **kwargs):
     f1 = metrics.get('f1')
     ssim = metrics.get('ssim')
     if args.core == 'RIM':
-        rim_actv = metrics['rim_actv']
+        input_attn_probs = metrics['input_attn_probs']
         rim_actv_mask = metrics['rim_actv_mask']
         dec_util = metrics['dec_util']
         most_used_units = metrics['most_used_units']
     elif args.core == 'SCOFF':
+        input_attn_probs = metrics['input_attn_probs']
         rule_attn_argmax = metrics['rule_attn_argmax']
         rule_attn_probs = metrics.get('rule_attn_probs') 
     # videos patching
@@ -70,7 +71,6 @@ def log_stats(args, is_train, **kwargs):
     #   tensorboard
     if writer is not None:
         if args.core == 'RIM':
-            writer.add_image('Stats/RIM Activation', rim_actv[0], epoch, dataformats='HW')
             writer.add_image('Stats/RIM Activation Mask', rim_actv_mask[0], epoch, dataformats='HW')
             writer.add_image('Stats/Unit Decoder Utilization', dec_util[0], epoch, dataformats='HW')
         elif args.core == 'SCOFF':
@@ -78,25 +78,35 @@ def log_stats(args, is_train, **kwargs):
     #   wandb
     if args.core == "RIM":
         stat_dict.update({
-            'RIM Input Attention': wandb.Image(rim_actv[0].cpu()*255),
+            # 'RIM Input Attention Probs': wandb.Image(input_attn_probs[0].cpu()*255),
             'RIM Activation Mask': wandb.Image(rim_actv_mask[0].cpu()*255),
             'Unit Decoder Utilization': wandb.Image(dec_util[0].cpu()*255),
         })
     elif args.core == 'SCOFF':
         stat_dict.update({
+            # 'SCOFF Input Attention Probs': wandb.Image(input_attn_probs[0].cpu()*255),
             'Rules Selected': wandb.Image(rule_attn_argmax[0].cpu()*255/9), # 0 to 9 classes
         })
 
     # videos
     #   tensorboard
     if writer is not None:
+        writer.add_video('Input Attention Probs', input_attn_probs[:1], epoch)
+        if args.core == 'SCOFF':
+            writer.add_video('Rule Attention Probs', rule_attn_probs[:1], epoch)
         writer.add_video('Predicted Videos', cat_video, epoch)
         writer.add_video('Individual Predictions', grided_ind_pred) # N num_blocks T 1 H W
     #   wandb
     video_dict = {
+        'Input Attention Probs': wandb.Video((input_attn_probs[:1].cpu()*255).to(torch.uint8)), # [1, T, 1, H, W]
         'Predicted Videos': wandb.Video((cat_video.cpu()*255).to(torch.uint8), fps=3),
         'Individual Predictions': wandb.Video((grided_ind_pred.cpu()*255).to(torch.uint8), fps=4),
     }
+    if args.core == 'SCOFF':
+        video_dict.update({
+            'Rule Attention Probs': wandb.Video((rule_attn_probs[:1].cput()*255).to(torch.uint8)), # [1, T, 1, H, W]
+        })
+    
     # histograms
     if args.core == 'RIM':
         stat_dict.update({

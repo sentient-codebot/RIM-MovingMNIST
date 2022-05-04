@@ -100,6 +100,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         loss = 0.
         mseloss = 0.
         prediction = torch.zeros_like(data)
+        input_attn_probs = []
+        rule_attn_probs_list = []
         blocked_prediction = torch.zeros(
             (data.shape[0],
             args.num_hidden+1,
@@ -166,11 +168,14 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                 most_used_units.append(0)
                 if args.core == 'RIM':
                     rim_actv.append(model.rnn_model.hidden_features['input_attention_probs']) # shape (batchsize, num_units, 1) -> (BS, NU, T)
+                    input_attn_probs.append(model.rnn_model.hidden_features['input_attention_probs'].unsqueeze(1)) # Shape: [N, 1, num_hidden, num_inputs]
                     rim_actv_mask.append(model.rnn_model.hidden_features["input_attention_mask"])
                     pass
                 elif args.core == 'SCOFF':
                     rule_attn_argmax.append(model.rnn_model.hidden_features['rule_attn_argmax']) # TODO to delete
-                    # rule_attn_probs_stack.append(model.rnn_model.hidden_features['rule_attn_probs']) # NOTE not a matrix
+                    rule_attn_probs_list.append(model.rnn_model.hidden_features['rule_attn_probs'].unsqueeze(1)) # NOTE [N, 1, num_hidden, num_rules]
+                    if 'input_attention_probs' in model.rnn_model.hidden_features:
+                        input_attn_probs.append(model.rnn_model.hidden_features['input_attention_probs'].unsqueeze(1)) # Shape: [N, 1, num_hidden, num_inputs]
         
         if not rollout:
             ssim += pt_ssim.ssim(data[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
@@ -199,6 +204,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             'ssim': ssim,
             'f1': f1_avg,
             'rim_actv': rim_actv.show(),
+            'input_attn_probs': torch.stack(input_attn_probs, dim=1), # Shape: [N, T, 1, num_hidden, num_inputs]
             'rim_actv_mask': rim_actv_mask.show(),
             'dec_util': dec_util.show(),
             'individual_output': blocked_prediction,
@@ -210,8 +216,9 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             'ssim': ssim,
             'f1': f1_avg,
             'individual_output': blocked_prediction,
+            'input_attn_probs': torch.stack(input_attn_probs, dim=1), # Shape: [N, T, 1, num_hidden, num_inputs]
             'rule_attn_argmax': rule_attn_argmax.show(),
-            # 'rule_attn_probs': rule_attn_probs_stack.show(),
+            'rule_attn_probs': torch.stack(rule_attn_probs_list, dim=1), # Shape: [N, T, 1, num_hidden, num_rules]
         }
     else:
         metrics = {

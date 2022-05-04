@@ -59,7 +59,7 @@
             ]
         },
         {
-            "name": "train/test mmnist slotrim",
+            "name": "[MINI] train/test mmnist slotrim",
             "type": "python",
             "request": "launch",
             "program": "${file}",
@@ -79,9 +79,16 @@
                 "6",
                 "--k",
                 "6",
+                "--dataset_dir",
+                "./data",
+                "--sbd_mem_efficient",
+                "true",
+                "--batch_size",
+                "16"
             ],
             "env": {
-                "CUDA_VISIBLE_DEVICES": "0"
+                "CUDA_VISIBLE_DEVICES": "0",
+                "DEBUG": "1"
             }
         },
         {

@@ -149,7 +149,7 @@ class RIMCell(nn.Module):
         if self.do_logging:
             self.hidden_features.update(
                 {
-                    'input_attention_probs': input_attn_probs, # (0,1), for logging, [N, num_hidden,]
+                    'input_attention_probs': input_attn_probs, # (0,1), for logging, [N, num_hidden, num_inputs+1]
                     'input_attention_mask': mask.squeeze(), # {0,1}, for logging, [N, num_hidden,]
                 }
             )
