@@ -185,7 +185,7 @@ def main():
             )
             wandb.log({
                 'Loss': loss_dict,
-                'lr': optimizer.param_groups[0]['lr'],
+                'Stats': {'Learning Rate': optimizer.param_groups[0]['lr']},
             }, step=epoch)
         writer.add_scalars(f'Loss/{args.loss_fn.upper()}', 
             loss_dict, 

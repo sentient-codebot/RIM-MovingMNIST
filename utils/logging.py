@@ -29,6 +29,7 @@ def log_stats(args, is_train, **kwargs):
         most_used_units = metrics['most_used_units']
     elif args.core == 'SCOFF':
         rule_attn_argmax = metrics['rule_attn_argmax']
+        rule_attn_probs = metrics.get('rule_attn_probs') 
     # videos patching
     individual_output = metrics['individual_output'] # dim == 6
     if args.task == 'MMNIST':
@@ -52,10 +53,10 @@ def log_stats(args, is_train, **kwargs):
         writer.add_scalar(f'Metrics/SSIM', mse, epoch)
     #   wandb
     loss_dict = {
-        'test_loss': test_loss,
+        'test loss': test_loss,
     }
     if train_loss is not None:
-        loss_dict['train_loss'] = train_loss
+        loss_dict['train loss'] = train_loss
     metric_dict = {
         'MSE': mse,
         'F1 Score': f1,

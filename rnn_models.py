@@ -725,7 +725,7 @@ class SCOFFCell(nn.Module):
             hx_new, temp_attention = self.block_lstm(inp_use, hx) # template attention: temp_attention: [bs, num_hidden, n_templates]
             cx_new = hx_new
             if self.do_logging:
-                self.hidden_features['rule_attention_probs'] = temp_attention
+                self.hidden_features['rule_attn_probs'] = temp_attention
         else:
             hx_new, cx_new, temp_attention = self.block_lstm(inp_use, hx, cx)
         

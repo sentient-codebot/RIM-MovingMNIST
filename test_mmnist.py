@@ -56,6 +56,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         dec_util = VecStack()
     if args.core == 'SCOFF':
         rule_attn_argmax = VecStack()
+        rule_attn_probs_stack = VecStack()
         dec_util = VecStack()
 
     mse = lambda x, y: ((x - y)**2).mean(dim=(0,1,2)).sum() # x Shape: [batch_size, T, C, H, W]
@@ -169,7 +170,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                     pass
                 elif args.core == 'SCOFF':
                     rule_attn_argmax.append(model.rnn_model.hidden_features['rule_attn_argmax']) # TODO to delete
-                    pass
+                    # rule_attn_probs_stack.append(model.rnn_model.hidden_features['rule_attn_probs']) # NOTE not a matrix
         
         if not rollout:
             ssim += pt_ssim.ssim(data[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
@@ -210,6 +211,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             'f1': f1_avg,
             'individual_output': blocked_prediction,
             'rule_attn_argmax': rule_attn_argmax.show(),
+            # 'rule_attn_probs': rule_attn_probs_stack.show(),
         }
     else:
         metrics = {
