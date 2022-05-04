@@ -2,7 +2,7 @@
 echo Running on $HOSTNAME
 # source ../../cas_env/bin/activate
 source ~/.bashrc
-conda activate /scratch/cristianmeo/pytorch
+conda activate /scratch/cristianmeo/.conda/envs/pytorch
 
 wandb login cc879c952bfc023d10e378c7a850ba349227cd1c
 
