@@ -1,6 +1,7 @@
 import wandb
 from .visualize import make_grid_video
 import torch
+import os
 
 def log_stats(args, is_train, **kwargs):
     """
@@ -115,12 +116,13 @@ def log_stats(args, is_train, **kwargs):
 
     # wandb log
     project, name = args.id.split('_',1)
-    if is_train:
-        wandb_artf = wandb.Artifact(project+'_'+name, type='predictions', metadata=vars(args).update({'epoch': epoch}))
-    else:
-        wandb_artf = wandb.Artifact(project+'_'+name+'_test', type='predictions', metadata=vars(args).update({'epoch': epoch}))
-    wandb_artf.add(test_table, "predictions")
-    wandb.run.log_artifact(wandb_artf)
+    if not os.environ.get('DISABLE_ARTIFACT', False):
+        if is_train:
+            wandb_artf = wandb.Artifact(project+'_'+name, type='predictions', metadata=vars(args).update({'epoch': epoch}))
+        else:
+            wandb_artf = wandb.Artifact(project+'_'+name+'_test', type='predictions', metadata=vars(args).update({'epoch': epoch}))
+        wandb_artf.add(test_table, "predictions")
+        wandb.run.log_artifact(wandb_artf)
     wandb.log({
         'Loss': loss_dict,
         'Metrics': metric_dict,

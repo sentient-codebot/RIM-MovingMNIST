@@ -23,7 +23,7 @@ batch_size=32
 epochs=300
 
 
-python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --save_frequency $save_freq \
+DISABLE_ARTIFACT=1 python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --save_frequency $save_freq \
     --batch_size $batch_size --epochs $epochs\
     --k $k --num_hidden $num_hidden --num_slots $num_slots \
     --task $task --ball_options $ball_options --ball_trainset $ball_trainset --ball_testset $ball_testset \

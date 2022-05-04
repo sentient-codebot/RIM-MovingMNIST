@@ -5,7 +5,6 @@ source ~/.bashrc
 conda activate /scratch/cristianmeo/.conda/envs/pytorch
 
 wandb login cc879c952bfc023d10e378c7a850ba349227cd1c
-wandb offline
 
 experiment_name="BBALL_4_678_SASBD"
 cfg_json="configs/scoff/scoff_slot.json"
@@ -24,7 +23,7 @@ batch_size=64
 epochs=300
 
 
-python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --save_frequency $save_freq \
+DISABLE_ARTIFACT=1 python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --save_frequency $save_freq \
     --batch_size $batch_size --epochs $epochs\
     --k $k --num_hidden $num_hidden --num_slots $num_slots \
     --task $task --ball_options $ball_options --ball_trainset $ball_trainset --ball_testset $ball_testset \
