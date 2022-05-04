@@ -4,14 +4,16 @@ echo Running on $HOSTNAME
 source ~/.bashrc
 conda activate /scratch/cristianmeo/pytorch
 
-experiment_name="BBALL_slotrim_3_6_678ball"
+wandb login cc879c952bfc023d10e378c7a850ba349227cd1c
+
+experiment_name="BBALL_4_678_SASBD"
 cfg_json="configs/rim/rim_slot.json"
 core="RIM"
 should_resume="false"
 save_freq=10
 num_hidden=9
 num_slots=9
-k=6
+k=9
 task="bball"
 dataset_dir="/scratch/cristianmeo/bouncingball"
 ball_options='transfer'
