@@ -421,7 +421,7 @@ class SharedGroupGRU(nn.Module):
     """
     key_size = 64
     def __init__(self, input_size: int, hidden_size: int, num_hidden: int, num_rules: int, use_rule_embedding: bool=False):
-        super(SharedBlockGRU, self).__init__()
+        super().__init__()
 
         self.input_size = input_size
         self.hidden_size = hidden_size # dimension of each block's hidden state
