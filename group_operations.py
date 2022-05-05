@@ -478,9 +478,9 @@ class SharedGroupGRU(nn.Module):
         if not self.use_rule_embedding:
             write_key = self.gll_write(hnext) # from candidate hidden to k, shape: [N*num_hidden, num_rules, key_size]
         else:
-            write_key = self.rule_embeddings # [1, num_rules, key_size]
+            write_key = self.rule_embeddings # [1, num_rules, kdim]
 
-        att = torch.nn.functional.gumbel_softmax(torch.bmm(h_read, write_key.permute(0, 2, 1)),  tau=0.5, hard=True)    # Shape: [N*num_hidden, 1, num_rules]
+        att = torch.nn.functional.gumbel_softmax(torch.matmul(h_read, write_key.permute(0, 2, 1)),  tau=0.5, hard=True)    # Shape: [N*num_hidden, 1, num_rules]
 
         #print('hnext shape before att', hnext.shape)
         hnext = torch.bmm(att, hnext)   # [N*num_hidden, 1, num_rules], [N*num_hidden, num_rules, hidden_size] -> [N*num_hidden, 1, hidden_size]
