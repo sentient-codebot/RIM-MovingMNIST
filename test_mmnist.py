@@ -170,7 +170,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                     rim_actv.append(model.rnn_model.hidden_features['input_attention_probs']) # shape (batchsize, num_units, 1) -> (BS, NU, T)
                     input_attn_probs.append(model.rnn_model.hidden_features['input_attention_probs'].unsqueeze(1)) # Shape: [N, 1, num_hidden, num_inputs]
                     rim_actv_mask.append(model.rnn_model.hidden_features["input_attention_mask"])
-                    pass
+                    if 'rule_attn_probs' in model.rnn_model.hidden_features:
+                        rule_attn_probs_list.append(model.rnn_model.hidden_features['rule_attn_probs'].unsqueeze(1)) # NOTE [N, 1, num_hidden, num_rules]
                 elif args.core == 'SCOFF':
                     rule_attn_argmax.append(model.rnn_model.hidden_features['rule_attn_argmax']) # TODO to delete
                     rule_attn_probs_list.append(model.rnn_model.hidden_features['rule_attn_probs'].unsqueeze(1)) # NOTE [N, 1, num_hidden, num_rules]
@@ -210,6 +211,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             'individual_output': blocked_prediction,
             'most_used_units': most_used_units
         }
+        if 'rule_attn_probs' in model.rnn_model.hidden_features:
+            metrics['rule_attn_probs'] = torch.stack(rule_attn_probs_list, dim=1), # Shape: [N, T, 1, num_hidden, num_rules]
     elif args.core == 'SCOFF':
         metrics = {
             'mse': epoch_mseloss,

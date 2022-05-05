@@ -28,6 +28,8 @@ def log_stats(args, is_train, **kwargs):
         rim_actv_mask = metrics['rim_actv_mask']
         dec_util = metrics['dec_util']
         most_used_units = metrics['most_used_units']
+        if args.use_rule_sharing:
+            rule_attn_probs = metrics['rule_attn_probs']
     elif args.core == 'SCOFF':
         input_attn_probs = metrics['input_attn_probs']
         rule_attn_argmax = metrics['rule_attn_argmax']
@@ -93,7 +95,7 @@ def log_stats(args, is_train, **kwargs):
     #   tensorboard
     if writer is not None:
         writer.add_video('Input Attention Probs', input_attn_probs[:1], epoch)
-        if args.core == 'SCOFF':
+        if args.core == 'SCOFF' or args.use_rule_sharing:
             writer.add_video('Rule Attention Probs', rule_attn_probs[:1], epoch)
         writer.add_video('Predicted Videos', cat_video, epoch)
         writer.add_video('Individual Predictions', grided_ind_pred) # N num_blocks T 1 H W
@@ -103,7 +105,7 @@ def log_stats(args, is_train, **kwargs):
         'Predicted Videos': wandb.Video((cat_video.cpu()*255).to(torch.uint8), fps=3),
         'Individual Predictions': wandb.Video((grided_ind_pred.cpu()*255).to(torch.uint8), fps=4),
     }
-    if args.core == 'SCOFF':
+    if args.core == 'SCOFF' or args.use_rule_sharing:
         video_dict.update({
             'Rule Attention Probs': wandb.Video((rule_attn_probs[:1].cpu()*255).to(torch.uint8)), # [1, T, 1, H, W]
         })
