@@ -19,7 +19,7 @@ dataset_dir="/scratch/cristianmeo/bouncingball"
 ball_options='transfer'
 ball_trainset="4ball"
 ball_testset="678ball"
-batch_size=32
+batch_size=64
 epochs=300
 
 
