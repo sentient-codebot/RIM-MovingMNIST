@@ -212,7 +212,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             'most_used_units': most_used_units
         }
         if 'rule_attn_probs' in model.rnn_model.hidden_features:
-            metrics['rule_attn_probs'] = torch.stack(rule_attn_probs_list, dim=1), # Shape: [N, T, 1, num_hidden, num_rules]
+            metrics['rule_attn_probs'] = torch.stack(rule_attn_probs_list, dim=1) # Shape: [N, T, 1, num_hidden, num_rules]
     elif args.core == 'SCOFF':
         metrics = {
             'mse': epoch_mseloss,
