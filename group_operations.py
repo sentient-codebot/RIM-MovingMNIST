@@ -436,7 +436,7 @@ class SharedGroupGRU(nn.Module):
             self.gll_read = GroupLinearLayer(self.hidden_size,self.key_size,1) # hidden -> q, 16 == key size
             self.gll_write = GroupLinearLayer(self.hidden_size,self.key_size, self.num_rules) # hidden_new -> k, 16 == key size
         else:
-            self.gll_read = GroupLinearLayer(self.input_size+self.hidden_size,self.key_size, self.num_rules) # input+hidden -> q, 16 == key size
+            self.gll_read = GroupLinearLayer(self.input_size+self.hidden_size,self.key_size, 1) # input+hidden -> q, 16 == key size
             self.rule_embeddings = nn.Parameter(torch.randn(1, self.num_rules, self.key_size)) # Shape: [1, num_rules, key_size]
             print('Use rule embedding in', __class__.__name__) 
 
@@ -462,7 +462,7 @@ class SharedGroupGRU(nn.Module):
         if not self.use_rule_embedding:
             h_read = self.gll_read((h*1.0).reshape((h.shape[0], 1, h.shape[1]))) # from current hidden to q, shape: [N*num_hidden, 1, kdim]
         else:
-            h_read = self.gll_read(torch.cat([input, h], dim=1).unsqueeze(1)) # from input+hidden to q, shape: [N*num_hidden, 1, kdim]
+            h_read = self.gll_read(torch.cat((input, h), dim=1).unsqueeze(1)) # from input+hidden to q, shape: [N*num_hidden, 1, kdim]
 
 
         hnext_stack = []
