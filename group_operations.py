@@ -402,6 +402,94 @@ class SharedBlockGRU(nn.Module):
 
         return hnext, att.data.reshape(bs,self.num_hidden,self.n_templates)
 
+class SharedGroupGRU(nn.Module):
+    """Dynamic sharing of parameters (GRU) between hidden state vectors.
+    
+    Args:
+        `input_size`: dimension of a single input
+        `hidden_size`: dimension of a single hidden state vector
+        `num_hidden`:
+        `num_rules`:
+        `use_rule_embedding`: bool = False
+    Inputs:
+        `input`: [N, num_hidden, single_input_size]
+        `h`: [N, num_hidden, single_hidden_size]
+        
+    Outputs:
+        `h_new`: [N, num_hidden, single_hidden_size],
+        `attn`: [N, num_hidden, num_rules] 
+    """
+    key_size = 64
+    def __init__(self, input_size: int, hidden_size: int, num_hidden: int, num_rules: int, use_rule_embedding: bool=False):
+        super(SharedBlockGRU, self).__init__()
+
+        self.input_size = input_size
+        self.hidden_size = hidden_size # dimension of each block's hidden state
+
+        self.num_hidden = num_hidden
+
+        self.num_rules = num_rules
+        self.rules = nn.ModuleList([nn.GRUCell(self.input_size,self.hidden_size) for _ in range(0,self.num_rules)]) # GRUCell: input_size: ninp, hidden_size: m
+
+        self.use_rule_embedding = use_rule_embedding # we can use a higher rule_emb size and then project to kdim, but also directly use kdim
+        if not self.use_rule_embedding:
+            self.gll_read = GroupLinearLayer(self.hidden_size,self.key_size,1) # hidden -> q, 16 == key size
+            self.gll_write = GroupLinearLayer(self.hidden_size,self.key_size, self.num_rules) # hidden_new -> k, 16 == key size
+        else:
+            self.gll_read = GroupLinearLayer(self.input_size+self.hidden_size,self.key_size, self.num_rules) # input+hidden -> q, 16 == key size
+            self.rule_embeddings = nn.Parameter(torch.randn(1, self.num_rules, self.key_size)) # Shape: [1, num_rules, key_size]
+            print('Use rule embedding in', __class__.__name__) 
+
+        print("Using Gumble sparsity in", __class__.__name__)
+
+    def forward(self, input, h):
+        """
+        Inputs:
+            `input`: [N, num_hidden,single_input_size]
+            `h`: [N, num_hidden,single_hidden_size]
+            
+        Outputs:
+            `hnext`: [N, num_hidden*single_hidden_size],
+            `attn`: [N, num_OFs, n_templates] (num_bloccks==k==num_object_files)
+        """
+
+        #self.blockify_params()
+        bs = h.shape[0]                                                                      # h: previous hidden state  
+        h = h.reshape((h.shape[0]*self.num_hidden, self.hidden_size))   # h.shape: (bs*num_hidden, hidden_size)
+
+        input = input.reshape(input.shape[0]*self.num_hidden, self.input_size)  # Shape: [N*num_hidden, input_sixe]
+
+        if not self.use_rule_embedding:
+            h_read = self.gll_read((h*1.0).reshape((h.shape[0], 1, h.shape[1]))) # from current hidden to q, shape: [N*num_hidden, 1, kdim]
+        else:
+            h_read = self.gll_read(torch.cat([input, h], dim=1).unsqueeze(1)) # from input+hidden to q, shape: [N*num_hidden, 1, kdim]
+
+
+        hnext_stack = []
+
+
+        for rule in self.rules:         # input [N*num_hidden, input_size], h [N*num_hidden, hidden_size]
+            hnext_l = rule(input, h)    # Shape: [N*num_hidden, hidden_size]
+            hnext_l = hnext_l.reshape((hnext_l.shape[0], 1, hnext_l.shape[1])) # Shape: [N*num_hidden, 1, hidden_size]
+            hnext_stack.append(hnext_l)
+
+        hnext = torch.cat(hnext_stack, 1) # Shape: [N*num_hidden, num_rules, hidden_sixe]
+
+        if not self.use_rule_embedding:
+            write_key = self.gll_write(hnext) # from candidate hidden to k, shape: [N*num_hidden, num_rules, key_size]
+        else:
+            write_key = self.rule_embeddings # [1, num_rules, key_size]
+
+        att = torch.nn.functional.gumbel_softmax(torch.bmm(h_read, write_key.permute(0, 2, 1)),  tau=0.5, hard=True)    # Shape: [N*num_hidden, 1, num_rules]
+
+        #print('hnext shape before att', hnext.shape)
+        hnext = torch.bmm(att, hnext)   # [N*num_hidden, 1, num_rules], [N*num_hidden, num_rules, hidden_size] -> [N*num_hidden, 1, hidden_size]
+        hnext = hnext.mean(dim=1) # [N*num_hidden, hidden_size]
+        hnext = hnext.reshape((bs, self.num_hidden, self.hidden_size)) # [N, num_hidden, hidden_size]
+        #print('shapes', hnext.shape, cnext.shape)
+
+        return hnext, att.data.reshape(bs,self.num_hidden,self.num_rules)
+    
 class SharedBlockLSTM(nn.Module):
     """Dynamic sharing of parameters between blocks(RIM's)
     

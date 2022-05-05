@@ -174,6 +174,9 @@ def argument_parser():
     parser.add_argument("--slot_straight_input", type=str2bool, default=False, 
                         help="straight through input from slot to ofs without input attention")
     #   RIM settings
+    parser.add_argument('--use_rule_sharing', type=str2bool, default=False)
+    parser.add_argument('--use_rule_embedding', type=str2bool, default=False)
+    # parser.add_argument('--num_rules', type=int, default=None) # already exists for SCOFF
     parser.add_argument('--input_dropout', type=float,
                         default=0.1, metavar='dropout', help='dropout')
     parser.add_argument('--comm_dropout', type=float, default=0.5)

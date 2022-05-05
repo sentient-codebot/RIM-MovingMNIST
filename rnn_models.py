@@ -10,7 +10,7 @@ from collections import namedtuple
 from abc import ABC, abstractmethod
 from typing import Any
 
-from group_operations import GroupLinearLayer, GroupTorchGRU, GroupLSTMCell, SharedWorkspace, SharedBlockGRU, SharedBlockLSTM
+from group_operations import GroupLinearLayer, GroupTorchGRU, GroupLSTMCell, SharedWorkspace, SharedBlockGRU, SharedBlockLSTM, SharedGroupGRU
 from attentions import InputAttention, CommAttention, SparseInputAttention, PositionAttention, SelectionAttention, MultiHeadAttention
 from relational_memory import RelationalMemory
 
@@ -41,7 +41,7 @@ class RIMCell(nn.Module):
     def __init__(self, 
         device, input_size, hidden_size, num_units, k, rnn_cell, input_key_size = 64, input_value_size = 400,
         num_input_heads = 1, input_dropout = 0.1, use_sw = False, comm_key_size = 32, comm_value_size = 100, num_comm_heads = 4, comm_dropout = 0.1, 
-        memory_size = None,
+        memory_size = None, use_rule_sharing = False, use_rule_embedding = False, num_rules = None,
     ):
         super().__init__()
         if comm_value_size != hidden_size:
@@ -60,10 +60,16 @@ class RIMCell(nn.Module):
 
         self.comm_key_size = comm_key_size
         self.comm_value_size = comm_value_size
+        
+        self.use_rule_sharing = use_rule_sharing
+        self.use_rule_embedding = use_rule_embedding
+        self.num_rules = num_units if num_rules is None else num_rules
 
         if self.rnn_cell == 'GRU':
-            # self.rnn = GroupGRUCell(input_value_size, hidden_size, num_units)
-            self.rnn = GroupTorchGRU(input_value_size, hidden_size, num_units) 
+            if self.use_rule_sharing:
+                self.rnn = SharedGroupGRU(input_value_size, hidden_size, num_units, self.num_rules, use_rule_embedding=self.use_rule_embedding)
+            else:
+                self.rnn = GroupTorchGRU(input_value_size, hidden_size, num_units) 
         else:
             self.rnn = GroupLSTMCell(input_value_size, hidden_size, num_units)
         

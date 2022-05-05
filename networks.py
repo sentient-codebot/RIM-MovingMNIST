@@ -213,6 +213,9 @@ class BallModel(nn.Module):
                                         num_comm_heads = self.args.num_comm_heads, 
                                         comm_dropout = self.args.comm_dropout,
                                         memory_size = self.args.memory_size,
+                                        use_rule_sharing=self.args.use_rule_sharing,
+                                        use_rule_embedding=self.args.use_rule_embedding,
+                                        num_rules=self.args.num_rules,
                 ).to(self.args.device)
             else:
                 raise NotImplementedError('Sparse RIM not updated with new args yet')
