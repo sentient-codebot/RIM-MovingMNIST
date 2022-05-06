@@ -33,6 +33,8 @@ def setup_dataloader(args):
     
     Args:
         `args`: parsed args. """
+    val_set = None
+    val_loader = None
     if args.task == 'MMNIST':
         train_set = MovingMNIST(
             root=args.dataset_dir, 
@@ -48,6 +50,14 @@ def setup_dataloader(args):
             n_frames_input=10,
             n_frames_output=10,
             num_objects=[2],
+            download=True
+        )
+        val_set = MovingMNIST(
+            root=args.dataset_dir,
+            train=True,
+            n_frames_input=10,
+            n_frames_output=10,
+            num_objects=[1,2,3],
             download=True
         )
     elif args.task == 'BBALL':
@@ -70,8 +80,15 @@ def setup_dataloader(args):
         shuffle=True,
         num_workers=4,
     )
+    if val_set is not None:
+        val_loader = torch.utils.data.DataLoader(
+            dataset=val_set,
+            batch_size=args.batch_size,
+            shuffle=True,
+            num_workers=4,
+        )
 
-    return train_loader, test_loader
+    return train_loader, val_loader, test_loader
 
 def main():
     train_set = BouncingBall(root='./data', train=True, length=20, filename='balls4mass64.h5')

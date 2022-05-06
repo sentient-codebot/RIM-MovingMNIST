@@ -105,7 +105,7 @@ def main():
             columns.append('rule_OF_'+str(idx))
 
     # data setup
-    train_loader, test_loader = setup_dataloader(args=args)
+    train_loader, _, test_loader = setup_dataloader(args=args)
 
     # model setup
     model, optimizer, scheduler, loss_fn, start_epoch, train_batch_idx = setup_model(args=args)

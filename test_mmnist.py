@@ -285,7 +285,7 @@ def main():
             columns.append('rule_OF_'+str(idx))
 
     # data setup
-    train_loader, test_loader = setup_dataloader(args=args)
+    train_loader, val_loader, test_loader = setup_dataloader(args=args)
 
     # model setup
     model, epoch = setup_model(args=args)
