@@ -50,11 +50,12 @@ def log_stats(args, is_train, **kwargs):
     # scalars
     #   tensorboard
     if writer is not None:
-        writer.add_scalar('Learning Rate', lr, epoch)
         writer.add_scalar(f'Loss/Test Loss ({args.loss_fn.upper()})', test_loss, epoch)
         writer.add_scalar(f'Metrics/MSE', mse, epoch)
         writer.add_scalar(f'Metrics/F1 Score', mse, epoch)
         writer.add_scalar(f'Metrics/SSIM', mse, epoch)
+        if is_train:
+             writer.add_scalar('Learning Rate', lr, epoch)
     #   wandb
     loss_dict = {
         'test loss': test_loss,

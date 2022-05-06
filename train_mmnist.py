@@ -223,7 +223,7 @@ def setup_model(args):
     
     if args.path_to_load_model != "":
         print(f"Loading args from "+f"{args.folder_save}/args/args.pt")
-        args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt"))
+        args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt")['args'])
     
     # initialize
     if args.task == 'MMNIST':

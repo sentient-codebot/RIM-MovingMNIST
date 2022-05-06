@@ -189,8 +189,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             
         epoch_loss += loss.detach()
         epoch_mseloss += mseloss.detach()
-        if args.device == torch.device("cpu"):
-            break
+        # if args.device == torch.device("cpu"):
+        #     break
 
     prediction = prediction[:, 1:, :, :, :] # last batch of prediction, starting from frame 1
     blocked_prediction = blocked_prediction[:, :, 1:, :, :, :]
@@ -269,7 +269,7 @@ def main():
     # parse and process args
     args = argument_parser()
     print(f"Loading args from "+f"{args.folder_log}/args/args.pt")
-    args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt"))
+    args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt")['args'])
     if not args.should_resume:
         args.should_resume = True
     cudable = torch.cuda.is_available()
@@ -346,7 +346,7 @@ def setup_model(args) -> torch.nn.Module:
 
     if args.path_to_load_model != "":
         print(f"Loading args from "+f"{args.folder_save}/args/args.pt")
-        args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt"))
+        args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt")['args'])
 
         print(f"Resuming experiment id: {args.id} from epoch: {args.checkpoint}")
         checkpoint = torch.load(args.path_to_load_model.strip(), map_location=args.device)

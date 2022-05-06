@@ -86,7 +86,7 @@
                 "--batch_size",
                 "16",
                 "--use_rule_sharing",
-                "true",
+                "false",
                 "--use_rule_embedding",
                 "true",
                 "--num_rules",
