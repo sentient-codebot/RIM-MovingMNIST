@@ -1,6 +1,7 @@
 #!/bin/bash
 echo Running on $HOSTNAME
 source ~/.bashrc
+conda deactivate
 conda activate /tudelft.net/staff-umbrella/nanthesis/.conda/envs/pytorch
 
 wandb login cc879c952bfc023d10e378c7a850ba349227cd1c

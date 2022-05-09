@@ -59,7 +59,7 @@
             ]
         },
         {
-            "name": "[MINI] train/test mmnist slotrim",
+            "name": "[MINI] train/test slotrim",
             "type": "python",
             "request": "launch",
             "program": "${file}",
@@ -69,10 +69,12 @@
                 "configs/rim/rim_slot.json",
                 "--core",
                 "RIM",
+                "--task",
+                "SPRITESMOT",
                 "--should_resume",
                 "false",
                 "--experiment_name",
-                "MMNIST_SASBD",
+                "SPRITES_SASBD",
                 "--save_frequency",
                 "25",
                 "--num_hidden",
@@ -80,7 +82,7 @@
                 "--k",
                 "6",
                 "--dataset_dir",
-                "./data",
+                "/Users/nanlin/data/tracking-by-animation/data/sprites/train",
                 "--sbd_mem_efficient",
                 "true",
                 "--batch_size",
@@ -90,7 +92,7 @@
                 "--use_rule_embedding",
                 "true",
                 "--num_rules",
-                "4"
+                "4",
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "0",

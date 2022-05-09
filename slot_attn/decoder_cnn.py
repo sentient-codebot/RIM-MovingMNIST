@@ -50,6 +50,27 @@ def make_decoder_transconv(hidden_size):
         LayerNorm(),
         nn.ConvTranspose2d(32, 2, 3, 1, padding=1), # 64 + 2 - 2 = 64
     )
+    
+def make_sprites_decoder(hidden_size):
+    """
+    decoder takes: [N, num_hidden, hidden_size] 
+    outputs: [N, num_hidden, 3+1, 128, 128]
+    """
+    return nn.Sequential(
+        nn.ConvTranspose2d(hidden_size, 128, 5, 2, padding=2, output_padding=1), # 8*2 + 3 -4+1 = 16
+        nn.ReLU(),
+        LayerNorm(),
+        nn.ConvTranspose2d(128, 64, 5, 2, padding=2, output_padding=1), # 16*2 + 3 -4 + 1 = 32
+        nn.ReLU(),
+        LayerNorm(),
+        nn.ConvTranspose2d(64, 32, 5, 2, padding=2, output_padding=1), # 32*2 + 3 -4 + 1 = 64
+        nn.ReLU(),
+        LayerNorm(),
+        nn.ConvTranspose2d(32, 32, 3, 2, padding=1, output_padding=1), # 64*2 +1 -2 +1 = 128
+        nn.ReLU(),
+        LayerNorm(),
+        nn.ConvTranspose2d(32, 4, 3, 1, padding=1), # 128 + 2 - 2 = 64
+    )
 
 def make_decoder_interp(hidden_size):
     """Method to initialize the decoder"""
@@ -106,10 +127,15 @@ class WrappedDecoder(nn.Module):
         `hidden`: (BS, K, d_slot) """
     def __init__(self, hidden_size, decoder='interp', mem_efficient=False):
         super().__init__()
-        if 'interp' in decoder:
+        if decoder == 'sprites':
+            self.decoder = make_sprites_decoder(hidden_size)
+            self.out_channels = 3
+        elif 'interp' in decoder:
             self.decoder = make_decoder_interp(hidden_size=hidden_size)
+            self.out_channels = 1
         else:
             self.decoder = make_decoder_transconv(hidden_size=hidden_size)
+            self.out_channels = 1
         self.pos_embed = SoftPositionEmbed(hidden_size, (8,8))
         self.hidden_size = hidden_size
         self.mem_efficient = mem_efficient
@@ -127,7 +153,7 @@ class WrappedDecoder(nn.Module):
             dec_out = torch.cat(dec_out_list, dim=0) # Shape: [BS*self.hidden, 2, 64, 64]
         else:
             dec_out = self.decoder(hidden) # (BS*K, 2, 64, 64)
-        channels, alpha_mask = unstack_and_split(dec_out, batch_size=batch_size, num_channels=1) # (BS, K, *, H, W)
+        channels, alpha_mask = unstack_and_split(dec_out, batch_size=batch_size, num_channels=self.out_channels) # (BS, K, *, H, W)
         channels = nn.Sigmoid()(channels)
         alpha_mask = torch.nn.Softmax(dim=1)(alpha_mask) # (BS, <K>, 1, H, W)
         masked_channels = channels*alpha_mask

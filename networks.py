@@ -140,6 +140,74 @@ class NonFlattenEncoder(nn.Module):
 
         return x
 
+class SpritesMOTEncoder(nn.Module):
+    """nn.Module for slot attention encoder
+    
+    Args:
+        `input_size`: size of input
+
+    Inputs:
+            `x`: image of shape [batch_size, 3, 128, 128]
+
+    Outputs:
+            `features`: feature vectors [batch_size, num_inputs, input_size]    
+    """
+    def __init__(self, input_size):
+        super().__init__()
+        self.input_size = input_size
+        self.cnn = nn.Sequential(
+            nn.Conv2d(3, 16, kernel_size=4, stride=2),
+            nn.ELU(),
+            LayerNorm(),
+            nn.Conv2d(16, 32, kernel_size=4, stride=2),
+            nn.ELU(),
+            LayerNorm(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2),
+            nn.ELU(),
+            nn.Conv2d(64, 128, kernel_size=4, stride=2),
+            LayerNorm()
+        )
+        self.pos_emb = SoftPositionEmbed(128, (6, 6))
+        self.mlp = nn.Sequential(
+            nn.Linear(128, 128), # Shape: [batch_size, 6*6, 64]
+            nn.ELU(),
+            nn.Linear(128, self.input_size) # Shape: [batch_size, 6*6, input_size]
+        )
+
+    def forward(self, x):
+        """
+        Inputs:
+            `x`: image of shape [batch_size, 3, 128, 128]
+
+        Returns:
+            `features`: feature vectors [batch_size, num_inputs = 36, input_size]
+        """
+        x = self.cnn(x) # Shape: [batch_size, 64, , ]
+        # x = self.pos_emb(x) # Shape: [batch_size, 64, , ]
+        x = x.permute(0, 2, 3, 1) # Shape: [batch_size, , , 64]
+        x = x.contiguous()
+        x = x.view(x.shape[0], -1, x.shape[-1]) # Shape: [batch_size, 6*6, 64]
+        x = self.mlp(x) # Shape: [batch_size, , input_size]
+
+        return x
+    
+    def output_shape(self, input_size: tuple[int]):
+        out = input_size
+        for cnn_layer in self.cnn:
+            if not isinstance(cnn_layer, nn.Conv2d):
+                continue
+            out_channels, kernel_size, stride, padding, dilation \
+                = cnn_layer.out_channels, cnn_layer.kernel_size, cnn_layer.stride, cnn_layer.padding, cnn_layer.dilation
+            out = conv2d_output_size(
+                out, 
+                out_channels=out_channels,
+                kernel_size=kernel_size,
+                stride=stride,
+                padding=padding,
+                dilation=dilation,
+            )
+        return out
+
 class BallModel(nn.Module):
     def __init__(self, args):
         super().__init__()
@@ -165,14 +233,17 @@ class BallModel(nn.Module):
         self.encoder_type = args.encoder_type
         self.decoder_type = args.decoder_type
 
-        if self.encoder_type == "FLATTEN":
-            self.encoder = BasicEncoder(embedding_size=self.input_size).to(self.args.device) # Shape: [batch_size, num_inputs, input_size]
-            self.num_inputs = 1 # output of BasicFlattenEncoder
-        elif self.encoder_type == "NONFLATTEN":
-            self.encoder = NonFlattenEncoder(self.input_size).to(self.args.device) # Shape: [batch_size, num_inputs, input_size]
-            self.num_inputs = 36 # output of NonFlattenEncoder
+        if self.args.task == 'SPRITESMOT':
+            self.encoder = SpritesMOTEncoder(self.input_size)
         else:
-            raise ValueError("Invalid encoder type")
+            if self.encoder_type == "FLATTEN":
+                self.encoder = BasicEncoder(embedding_size=self.input_size).to(self.args.device) # Shape: [batch_size, num_inputs, input_size]
+                self.num_inputs = 1 # output of BasicFlattenEncoder
+            elif self.encoder_type == "NONFLATTEN":
+                self.encoder = NonFlattenEncoder(self.input_size).to(self.args.device) # Shape: [batch_size, num_inputs, input_size]
+                self.num_inputs = 36 # output of NonFlattenEncoder
+            else:
+                raise ValueError("Invalid encoder type")
 
         self.slot_attention = None
         if self.use_slot_attention:
@@ -187,12 +258,15 @@ class BallModel(nn.Module):
             ).to(self.args.device) # Shape: [batch_size,num_inputs, input_size] -> [batch_size, num_slots, slot_size]
             self.num_inputs = self.num_slots # number of output vectors of SlotAttention
 
-        if args.decoder_type == "CAT_BASIC":
-            self.decoder = BasicDecoder(embedding_size=self.num_hidden*self.hidden_size).to(self.args.device) # Shape: [batch_size, num_units*hidden_size] -> [batch_size, 1, 64, 64]
-        elif args.decoder_type == "SEP_SBD":
-            self.decoder = WrappedDecoder(self.hidden_size, decoder='transconv', mem_efficient=self.args.sbd_mem_efficient).to(self.args.device) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
+        if args.task == 'SPRITESMOT':
+            self.decoder =  WrappedDecoder(self.hidden_size, decoder='sprites', mem_efficient=self.args.sbd_mem_efficient) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
         else:
-            raise NotImplementedError("Not implemented decoder type: {}".format(args.decoder_type))
+            if args.decoder_type == "CAT_BASIC":
+                self.decoder = BasicDecoder(embedding_size=self.num_hidden*self.hidden_size).to(self.args.device) # Shape: [batch_size, num_units*hidden_size] -> [batch_size, 1, 64, 64]
+            elif args.decoder_type == "SEP_SBD":
+                self.decoder = WrappedDecoder(self.hidden_size, decoder='transconv', mem_efficient=self.args.sbd_mem_efficient).to(self.args.device) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
+            else:
+                raise NotImplementedError("Not implemented decoder type: {}".format(args.decoder_type))
 
         if self.core == 'RIM':
             if not self.sparse:
@@ -448,6 +522,31 @@ class TrafficModel(nn.Module):
 
     def forward(self, x):
         pass
+    
+def conv2d_output_size(
+    input_size: tuple[int],
+    out_channels: int,
+    kernel_size: tuple[int],
+    stride: tuple[int],
+    padding: tuple[int],
+    dilation: tuple[int],
+) -> tuple[int]:
+    if isinstance(kernel_size, int):
+        kernel_size = (kernel_size, kernel_size)
+    if isinstance(stride, int):
+        stride = (stride, stride)
+    if isinstance(padding, int):
+        padding = (padding, padding)
+    if isinstance(dilation, int):
+        dilation = (dilation, dilation)
+    
+    n, c_in, h_in, w_in = input_size
+    c_out = out_channels
+    h_out = (h_in + 2*padding[0] - dilation[0]*(kernel_size[0]-1) - 1) // stride[0] + 1
+    w_out = (w_in + 2*padding[1] - dilation[1]*(kernel_size[1]-1) - 1) // stride[1] + 1
+    
+    return (n, c_out, h_out, w_out)
+        
 
 if __name__ == "__main__":
     main()

@@ -54,6 +54,8 @@ def str2task(_str):
         return "BBALL"
     elif _str == "TRAFFIC4CAST":
         return "TRAFFIC4CAST"
+    elif _str == "SPRITESMOT":
+        return 'SPRITESMOT'
     else:
         raise argparse.ArgumentTypeError('Unrecognized task type.')
 
@@ -202,6 +204,8 @@ def argument_parser():
             args.dataset_dir = '/home/nnan/BouncingBall/'
         elif args.task == 'TRAFFIC4CAST':
             args.dataset_dir = '/home/nnan/traffic4cast/'
+        elif args.task == 'SPRITESMOT':
+            args.dataset_dir = '/home/nnan/sprites/train/'
     
     if args.k > args.num_hidden:
         args.k = args.num_hidden

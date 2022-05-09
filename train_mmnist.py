@@ -226,9 +226,7 @@ def setup_model(args):
         args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt")['args'])
     
     # initialize
-    if args.task == 'MMNIST':
-        model = BallModel(args).to(args.device)
-    elif args.task == 'BBALL':
+    if args.task == 'MMNIST' or args.task == 'BBALL' or args.task == 'SPRITESMOT':
         model = BallModel(args).to(args.device)
     elif args.task == 'TRAFFIC4CAST':
         model = TrafficModel(args).to(args.device)
