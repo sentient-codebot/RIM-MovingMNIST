@@ -15,6 +15,8 @@ task="spritesmot"
 batch_size=64
 epochs=300
 
+dataset_dir="/home/nnan/sprites/train"
+
 
 python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --save_frequency $save_freq \
     --batch_size $batch_size --epochs $epochs\
