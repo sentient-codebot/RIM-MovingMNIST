@@ -61,6 +61,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
 
     mse = lambda x, y: ((x - y)**2).mean(dim=(0,1,2)).sum() # x Shape: [batch_size, T, C, H, W]
 
+    rollout_start = 10
     if args.task == 'MMNIST':
         rollout_start = 10
     elif args.task == 'BBALL':

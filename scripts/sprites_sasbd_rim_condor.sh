@@ -8,11 +8,11 @@ cfg_json="configs/rim/rim_slot.json"
 core="RIM"
 should_resume="false"
 save_freq=10
-num_hidden=9
-num_slots=9
+num_hidden=4
+num_slots=4
 k=10
 task="spritesmot"
-batch_size=64
+batch_size=16
 epochs=300
 
 dataset_dir="/home/nnan/sprites/train"
