@@ -61,9 +61,10 @@ class BasicDecoder(nn.Module):
     Outputs:
         `output`: output of the decoder; shape: [N, 1, 64, 64]
     """
-    def __init__(self, embedding_size):
+    def __init__(self, embedding_size, out_channels=1):
         super().__init__()
         self.embedding_size = embedding_size
+        self.out_channels = out_channels
         self.layers = nn.Sequential(
             nn.Sigmoid(),
             LayerNorm(),
@@ -82,13 +83,39 @@ class BasicDecoder(nn.Module):
             nn.ReLU(),
             LayerNorm(),
             Interpolate(scale_factor=2, mode='bilinear'),
-            nn.Conv2d(16, 1, kernel_size=3, stride=1, padding=0),
+            nn.Conv2d(16, self.out_channels, kernel_size=3, stride=1, padding=0),
             nn.Sigmoid() # Shape; [N, 1, 64, 64]
         )
 
     def forward(self, x):
         x = self.layers(x)
         return x
+    
+class SharedBasicDecoder(nn.Module):
+    """Shared Basic decoder for group of latents
+    
+    Inputs:
+        `x`: hidden state of shape [N, M, embedding_size]"""
+    def __init__(self, embedding_size, out_channels):
+        super().__init__()
+        self.embedding_size = embedding_size
+        self.out_channels = out_channels # 1 or 3
+        self.cnn = BasicDecoder(embedding_size, out_channels+1)
+        
+    def forward(self, x):
+        x = x.permute(1, 0, 2) # Shape: [M, N, embedding_size] -> [M, N, embedding_size]
+        out_list = []
+        mask_list = []
+        for component in x: # Shape: [N, embedding_size]
+            out_tensor = self.cnn(component) # [N, C+1, H, W]
+            out_list.append(out_tensor[:, :-1, :, :])
+            mask_list.append(out_tensor[:, -1:, :, :])
+        channels = torch.stack(out_list, dim=1) # Shape: [N, M, C, H, W]
+        mask = torch.stack(mask_list, dim=1) # Shape: [N, M, 1, H, W]
+        mask = mask/torch.sum(mask, dim=1, keepdim=True) # Normalization. Shape: [N, M, 1, H, W]
+        
+        fused = torch.sum(channels*mask, dim=1) # Shape: [N, C, H, W]
+        return fused, channels, mask
 
 class NonFlattenEncoder(nn.Module):
     """nn.Module for slot attention encoder
@@ -325,15 +352,19 @@ class BallModel(nn.Module):
             ).to(self.args.device) # Shape: [batch_size,num_inputs, input_size] -> [batch_size, num_slots, slot_size]
             self.num_inputs = self.num_slots # number of output vectors of SlotAttention
 
+        out_channels = 1
+        _sbd_decoder = 'transconv'
         if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
-            self.decoder =  WrappedDecoder(self.hidden_size, decoder='synmot', mem_efficient=self.args.sbd_mem_efficient) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
+            out_channels = 3
+            _sbd_decoder = 'synmot'
+        if args.decoder_type == "CAT_BASIC":
+            self.decoder = BasicDecoder(embedding_size=self.num_hidden*self.hidden_size) # Shape: [batch_size, num_units*hidden_size] -> [batch_size, 1, 64, 64]
+        elif args.decoder_type == "SEP_BASIC":
+            self.decoder = SharedBasicDecoder(embedding_size=self.hidden_size, out_channels=out_channels)
+        elif args.decoder_type == "SEP_SBD":
+            self.decoder = WrappedDecoder(self.hidden_size, decoder=_sbd_decoder, mem_efficient=self.args.sbd_mem_efficient) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
         else:
-            if args.decoder_type == "CAT_BASIC":
-                self.decoder = BasicDecoder(embedding_size=self.num_hidden*self.hidden_size).to(self.args.device) # Shape: [batch_size, num_units*hidden_size] -> [batch_size, 1, 64, 64]
-            elif args.decoder_type == "SEP_SBD":
-                self.decoder = WrappedDecoder(self.hidden_size, decoder='transconv', mem_efficient=self.args.sbd_mem_efficient).to(self.args.device) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
-            else:
-                raise NotImplementedError("Not implemented decoder type: {}".format(args.decoder_type))
+            raise NotImplementedError("Not implemented decoder type: {}".format(args.decoder_type))
 
         if self.core == 'RIM':
             if not self.sparse:
@@ -504,7 +535,6 @@ class BallModel(nn.Module):
             if self.do_logging:
                 blocked_out_ = channels*alpha_mask
                 self.hidden_features['individual_output'] = blocked_out_
-                
         else:
             dec_out_ = self.decoder(h_new.view(h_new.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
         
