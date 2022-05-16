@@ -82,7 +82,7 @@
                 "--k",
                 "6",
                 "--dataset_dir",
-                "/Users/nanlin/data/tracking-by-animation/data/sprites/train",
+                "/Users/nanlin/Documents/Projecten/object-centric-representation-benchmark/ocrb/data/datasets",
                 "--sbd_mem_efficient",
                 "true",
                 "--batch_size",

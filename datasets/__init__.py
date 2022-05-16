@@ -3,6 +3,7 @@ import torch
 from .BouncingBall import BouncingBall
 from .MovingMNIST import MovingMNIST
 from .SpritesMOT import SpritesMOT
+from .SynMOTs import SyntheticMOTDataset
 
 import os
 DEBUG = os.environ.get('DEBUG', False)
@@ -75,15 +76,52 @@ def setup_dataloader(args):
     elif args.task == 'TRAFFIC4CAST':
         raise NotImplementedError('Traffic4Cast not implemented')
     elif args.task == 'SPRITESMOT':
-        train_set = SpritesMOT(
-            root=args.dataset_dir, # '.../data/sprites/train'
-            train=True,
-            download=False,
+        train_set = SyntheticMOTDataset(
+            root=args.dataset_dir, # '.../data'
+            mode='train',
+            dataset_class='spmot',
         )
-        test_set = SpritesMOT(
-            root=args.dataset_dir, # '.../data/sprites/test'
-            train=False,
-            download=False,
+        val_set = SyntheticMOTDataset(
+            root=args.dataset_dir, # '.../data'
+            mode='val',
+            dataset_class='spmot',
+        )
+        test_set = SyntheticMOTDataset(
+            root=args.dataset_dir, # '.../data'
+            mode='test',
+            dataset_class='spmot',
+        )
+    elif args.task == 'VMDS':
+        train_set = SyntheticMOTDataset(
+            root=args.dataset_dir, # '.../data'
+            mode='train',
+            dataset_class='vmds',
+        )
+        val_set = SyntheticMOTDataset(
+            root=args.dataset_dir, # '.../data'
+            mode='val',
+            dataset_class='vmds',
+        )
+        test_set = SyntheticMOTDataset(
+            root=args.dataset_dir, # '.../data'
+            mode='test',
+            dataset_class='vmds',
+        )
+    elif args.task == 'VOR':
+        train_set = SyntheticMOTDataset(
+            root=args.dataset_dir, # '.../data'
+            mode='train',
+            dataset_class='vor',
+        )
+        val_set = SyntheticMOTDataset(
+            root=args.dataset_dir, # '.../data'
+            mode='val',
+            dataset_class='vor',
+        )
+        test_set = SyntheticMOTDataset(
+            root=args.dataset_dir, # '.../data'
+            mode='test',
+            dataset_class='vor',
         )
     else:
         raise ValueError('Unknown task'+args.task)

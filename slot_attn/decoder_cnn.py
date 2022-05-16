@@ -51,6 +51,28 @@ def make_decoder_transconv(hidden_size):
         nn.ConvTranspose2d(32, 2, 3, 1, padding=1), # 64 + 2 - 2 = 64
     )
     
+def make_synmot_decoder(hidden_size):
+    """make decoder
+    decoder same as slot decoder. 
+        using transposedConv2d 
+        not using interpolate+conv2d
+    
+    `input`: size (BS*num_blocks, C=hidden_size, init_H, init_W)"""
+
+    # H out​ =(H in​−1)×stride[0]−2×padding[0]+dilation[0]×(kernel_size[0]−1)+output_padding[0]+1
+    return nn.Sequential(
+        nn.ConvTranspose2d(hidden_size, 64, 5, 2, padding=2, output_padding=1), # 8*2 + 3 -4+1 = 16
+        nn.ReLU(),
+        LayerNorm(),
+        nn.ConvTranspose2d(64, 64, 5, 2, padding=2, output_padding=1), # 16*2 + 3 -4 + 1 = 32
+        nn.ReLU(),
+        LayerNorm(),
+        nn.ConvTranspose2d(64, 32, 3, 2, padding=1, output_padding=1), # 32*2 +1 -2 +1 = 64
+        nn.ReLU(),
+        LayerNorm(),
+        nn.ConvTranspose2d(32, 4, 3, 1, padding=1), # 64 + 2 - 2 = 64
+    )
+    
 def make_sprites_decoder(hidden_size):
     """
     decoder takes: [N, num_hidden, hidden_size] 
@@ -127,8 +149,8 @@ class WrappedDecoder(nn.Module):
         `hidden`: (BS, K, d_slot) """
     def __init__(self, hidden_size, decoder='interp', mem_efficient=False):
         super().__init__()
-        if decoder == 'sprites':
-            self.decoder = make_sprites_decoder(hidden_size)
+        if decoder == 'synmot':
+            self.decoder = make_synmot_decoder(hidden_size)
             self.out_channels = 3
         elif 'interp' in decoder:
             self.decoder = make_decoder_interp(hidden_size=hidden_size)
