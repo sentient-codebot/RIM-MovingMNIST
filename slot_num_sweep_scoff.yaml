@@ -1,0 +1,27 @@
+program: train_mmnist.py
+method: bayes
+name: num_module_slot_scoff_sweep
+metric:
+  name: Loss.train loss
+  goal: minimize
+parameters:
+  experiment_name:
+    value: "MMNIST_slotscoff_num_sweep"
+  cfg_json: 
+    value: "configs/scoff/scoff_slot.json"
+  core: 
+    value: "SCOFF"
+  epochs:
+    value: 300
+  save_frequency: 
+    value: 50
+  batch_size:
+    value: 64
+  k:
+    value: 10
+  slot_size:
+    values: [16, 32, 48, 64]
+  num_slots:
+    values: [2, 3]
+  hidden_size:
+    values: [25, 50, 75, 100]
