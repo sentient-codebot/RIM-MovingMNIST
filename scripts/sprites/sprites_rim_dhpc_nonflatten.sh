@@ -21,11 +21,10 @@ task="SPRITESMOT"
 dataset_dir="/tudelft.net/staff-umbrella/nanthesis/data"
 batch_size=64
 epochs=400
-version=0
 
 
 DISABLE_ARTIFACT=1 python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --save_frequency $save_freq \
     --batch_size $batch_size --epochs $epochs \
     --use_slot_attention $use_slot_attention --encoder_type $encoder_type --decoder_type $decoder_type \
     --k $k --num_hidden $num_hidden --num_slots $num_slots \
-    --dataset_dir $dataset_dir 
+    --dataset_dir $dataset_dir --task $task
