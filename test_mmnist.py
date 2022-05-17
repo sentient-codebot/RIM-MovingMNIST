@@ -66,6 +66,10 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         rollout_start = 10
     elif args.task == 'BBALL':
         rollout_start = 20
+    elif args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
+        rollout_start = 5
+        rollout = False
+        print("Rollout is turned off for task {}.".format(args.task))
     elif args.task == 'TRAFFIC4CAST':
         raise NotImplementedError('not set yet. ')
 
