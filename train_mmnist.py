@@ -144,8 +144,8 @@ def main():
         )
         loss_dict = {
             "train loss": train_loss.item(),
-            "recon loss": train_recon_loss.item(),
-            "pred loss": train_pred_loss.item(),
+            "train recon loss": train_recon_loss.item(),
+            "train pred loss": train_pred_loss.item(),
         }
         metric_dict = {
         }
