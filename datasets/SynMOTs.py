@@ -1,9 +1,10 @@
 import numpy as np
+import torch
 import os
 from torch.utils.data import Dataset
 
 def uint8_to_unit(x: np.ndarray):
-    return x/255.
+    return torch.tensor(x/255., dtype=torch.float32)
 
 class SyntheticMOTDataset(Dataset):
     def __init__(self, mode='train', n_steps=10, dataset_class='vmds', transform=uint8_to_unit, root=None, T=0):
