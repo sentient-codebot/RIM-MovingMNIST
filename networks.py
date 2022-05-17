@@ -131,9 +131,9 @@ class SharedBroadcastDecoder(nn.Module):
         out_list = []
         mask_list = []
         for component in x: # Shape: [N, embedding_size]
-            out_tensor = self.cnn(component) # [N, C+1, H, W]
-            out_list.append(out_tensor[:, :-1, :, :])
-            mask_list.append(out_tensor[:, -1:, :, :])
+            out_tensor, out_mask = self.cnn(component) # [N, C+1, H, W]
+            out_list.append(out_tensor)
+            mask_list.append(out_mask)
         channels = torch.stack(out_list, dim=1) # Shape: [N, M, C, H, W]
         mask = torch.stack(mask_list, dim=1) # Shape: [N, M, 1, H, W]
         mask = nn.Softmax(dim=1)(mask) # Shape: [N, M, 1, H, W]
