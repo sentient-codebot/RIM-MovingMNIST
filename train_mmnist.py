@@ -42,6 +42,8 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
     model.train()
 
     epoch_loss = torch.tensor(0.).to(args.device)
+    epoch_recon_loss = 0.
+    epoch_pred_loss = 0.
     for batch_idx, data in enumerate(tqdm(train_loader)):
         # data: (labels, frames_in, frames_out)
         if args.task == 'MMNIST':
@@ -56,16 +58,24 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
             memory = model.init_memory(data.shape[0]).to(args.device)
         
         optimizer.zero_grad()
+        recon_loss = 0.
+        pred_loss = 0.
         loss = 0.
         for frame in range(data.shape[1]-1):
             if args.spotlight_bias:
-                output, hidden, memory, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
-                target = data[:, frame+1, :, :, :]
-                loss = loss + loss_fn(output, target) + util.slot_loss(slot_means,slot_variances) + 0.1*torch.sum(attn_param_bias**2)
+                recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
+                curr_target = data[:, frame, :, :, :]
+                next_target = data[:, frame+1, :, :, :]
+                recon_loss = recon_loss + loss_fn(recons, curr_target)
+                pred_loss = pred_loss + loss_fn(preds, next_target)
+                loss = loss + recon_loss + pred_loss + util.slot_loss(slot_means,slot_variances) + 0.1*torch.sum(attn_param_bias**2)
             else:
-                output, hidden, memory = model(data[:, frame, :, :, :], hidden, memory)
-                target = data[:, frame+1, :, :, :]
-                loss = loss + loss_fn(output, target)
+                recons, preds, hidden, memory = model(data[:, frame, :, :, :], hidden, memory)
+                curr_target = data[:, frame, :, :, :]
+                next_target = data[:, frame+1, :, :, :]
+                recon_loss = recon_loss + loss_fn(recons, curr_target)
+                pred_loss = pred_loss + loss_fn(preds, next_target)
+                loss = recon_loss + pred_loss
             
         loss.backward()
         grad_norm = get_grad_norm(model)
@@ -75,10 +85,14 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
 
         train_batch_idx += 1 
         epoch_loss = epoch_loss + loss.detach()
+        epoch_recon_loss += recon_loss.detach()
+        epoch_pred_loss += pred_loss.detach()
 
     epoch_loss = epoch_loss / len(train_loader)
+    epoch_recon_loss /= len(train_loader)
+    epoch_pred_loss /= len(train_loader)
 
-    return train_batch_idx, epoch_loss
+    return train_batch_idx, epoch_loss, epoch_recon_loss, epoch_pred_loss
 
 def main():
     # parse and process args
@@ -118,7 +132,7 @@ def main():
     for epoch in range(start_epoch, args.epochs+1):
         # train 
         writer.add_scalar('Learning Rate', optimizer.param_groups[0]['lr'], epoch)
-        train_batch_idx, train_loss = train(
+        train_batch_idx, train_loss, train_recon_loss, train_pred_loss = train(
             model = model,
             train_loader = train_loader,
             optimizer = optimizer,
@@ -129,7 +143,9 @@ def main():
             writer = writer
         )
         loss_dict = {
-            "train loss": train_loss.item()
+            "train loss": train_loss.item(),
+            "recon loss": train_recon_loss.item(),
+            "pred loss": train_pred_loss.item(),
         }
         metric_dict = {
         }
@@ -139,7 +155,7 @@ def main():
         # test 
         if args.test_frequency > 0 and epoch % args.test_frequency == 0 or epoch <= 15:
             """test model accuracy and log intermediate variables here"""
-            test_loss, prediction, data, metrics, test_table = test(
+            test_loss, test_recon_loss, test_pred_loss, prediction, data, metrics, test_table = test(
                 model = model, 
                 test_loader = test_loader, 
                 args = args, 
@@ -154,7 +170,11 @@ def main():
                 is_train=True,
                 epoch=epoch,
                 train_loss=train_loss,
+                train_recon_loss=train_recon_loss,
+                train_pred_loss=train_pred_loss,
                 test_loss=test_loss,
+                test_recon_loss=test_recon_loss,
+                test_pred_loss=test_pred_loss,
                 ground_truth=data,
                 prediction=prediction,
                 metrics=metrics,

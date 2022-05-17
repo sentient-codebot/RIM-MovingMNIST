@@ -18,6 +18,10 @@ def log_stats(args, is_train, **kwargs):
     # loss
     test_loss = kwargs.get('test_loss')
     train_loss = kwargs.get('train_loss')
+    train_recon_loss = kwargs.get('train_recon_loss')
+    train_pred_loss = kwargs.get('train_pred_loss')
+    test_recon_loss = kwargs.get('test_recon_loss')
+    test_pred_loss = kwargs.get('test_pred_loss')
     # metrics
     metrics = kwargs['metrics']
     mse = metrics.get('mse')
@@ -59,9 +63,15 @@ def log_stats(args, is_train, **kwargs):
     #   wandb
     loss_dict = {
         'test loss': test_loss,
+        'test recon loss': test_recon_loss,
+        'test pred loss': test_pred_loss,
     }
     if train_loss is not None:
-        loss_dict['train loss'] = train_loss
+        loss_dict.update({
+            'train loss': train_loss,
+            'train recon loss': train_recon_loss,
+            'train pred loss': train_pred_loss
+        })
     metric_dict = {
         'MSE': mse,
         'F1 Score': f1,

@@ -375,6 +375,7 @@ class BallModel(nn.Module):
                 spotlight_bias=self.spotlight_bias,
             ).to(self.args.device) # Shape: [batch_size,num_inputs, input_size] -> [batch_size, num_slots, slot_size]
             self.num_inputs = self.num_slots # number of output vectors of SlotAttention
+        self.embedding_size = self.slot_size if self.use_slot_attention else self.input_size
 
         out_channels = 1
         _sbd_decoder = 'transconv'
@@ -382,14 +383,14 @@ class BallModel(nn.Module):
             out_channels = 3
             _sbd_decoder = 'synmot'
         if args.decoder_type == "CAT_BASIC":
-            self.decoder = BasicDecoder(embedding_size=self.num_hidden*self.hidden_size) # Shape: [batch_size, num_units*hidden_size] -> [batch_size, 1, 64, 64]
+            self.decoder = BasicDecoder(embedding_size=self.embedding_size) # Shape: [batch_size, num_units*hidden_size] -> [batch_size, 1, 64, 64]
         elif args.decoder_type == "SEP_BASIC":
-            self.decoder = SharedBasicDecoder(embedding_size=self.hidden_size, out_channels=out_channels)
+            self.decoder = SharedBasicDecoder(embedding_size=self.embedding_size, out_channels=out_channels)
         elif args.decoder_type == "SEP_SBD":
             if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
-                self.decoder = SharedBroadcastDecoder(self.hidden_size, 3)
+                self.decoder = SharedBroadcastDecoder(self.embedding_size, 3)
             else:
-                self.decoder = WrappedDecoder(self.hidden_size, decoder=_sbd_decoder, mem_efficient=self.args.sbd_mem_efficient) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
+                self.decoder = WrappedDecoder(self.embedding_size, decoder=_sbd_decoder, mem_efficient=self.args.sbd_mem_efficient) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
         else:
             raise NotImplementedError("Not implemented decoder type: {}".format(args.decoder_type))
 
@@ -397,7 +398,7 @@ class BallModel(nn.Module):
             if not self.sparse:
                 self.rnn_model = RIMCell(
                                         device=self.args.device,
-                                        input_size=self.slot_size if self.use_slot_attention else self.input_size, # NOTE: non-sensetive to num_inputs
+                                        input_size=self.embedding_size, # NOTE: non-sensetive to num_inputs
                                         num_units=self.num_hidden,
                                         hidden_size=self.args.hidden_size,
                                         k=self.args.k,
@@ -472,6 +473,12 @@ class BallModel(nn.Module):
         else:
             raise ValueError('Illegal RNN Core')
         
+        self.latent_transform = nn.Sequential(
+            nn.Linear(self.hidden_size, 256),
+            nn.ReLU(),
+            nn.Linear(256, self.slot_size if self.use_slot_attention else self.input_size)
+        ) # hidden_state -> slot
+        
         self.do_logging = False
         self.hidden_features = {}
 
@@ -527,7 +534,7 @@ class BallModel(nn.Module):
         with enable_logging(self.rnn_model, self.do_logging) as _:
             if self.core=='RIM':
                 if not self.sparse:
-                    h_new, cs_new, M = self.rnn_model(x=encoded_input, hs=h_prev, cs=None, M=M_prev) 
+                    h_new, cs_new, M = self.rnn_model(x=encoded_input, hs=h_prev, cs=None, M=M_prev) # one-step prediciton
                 else:
                     raise NotImplementedError('Sparse RIM not configured for slot input yet')
             elif self.core=='GRU':
@@ -555,21 +562,25 @@ class BallModel(nn.Module):
                     self.rnn_model.hidden_features['rule_attn_probs'] = temp_attention
             else:
                 raise RuntimeError('Illegal RNN Core')
+            
+        # newly added, transform h_new back to slots
+        pred_latent = self.latent_transform(h_new) # Shape: [N, K, hidden_size] -> [N, K, slot/input_size]
         
         self.hidden_features['individual_output'] = torch.zeros((1,1,1)).to(x.device)
         if "SEP" in self.decoder_type:
-            dec_out_, channels, alpha_mask = self.decoder(h_new)
+            curr_dec_out_, curr_channels, curr_alpha_mask = self.decoder(encoded_input)
+            next_dec_out_, next_channels, next_alpha_mask = self.decoder(pred_latent)
             if self.do_logging:
-                blocked_out_ = channels*alpha_mask
+                blocked_out_ = next_channels*next_alpha_mask
                 self.hidden_features['individual_output'] = blocked_out_
         else:
-            dec_out_ = self.decoder(h_new.view(h_new.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
+            curr_dec_out_ = self.decoder(encoded_input.view(encoded_input.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
+            next_dec_out_ = self.decoder(pred_latent.view(pred_latent.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
         
         if self.spotlight_bias:
             raise NotImplementedError('Cristian says he"s gonna take care of this.')
-            return dec_out_, h_new, M, slot_means, slot_variances, attn_param_bias
         else:
-            return dec_out_, h_new, M
+            return curr_dec_out_, next_dec_out_, h_new, M
 
     
 
