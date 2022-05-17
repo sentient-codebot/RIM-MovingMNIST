@@ -2,7 +2,8 @@ import numpy as np
 import os
 from torch.utils.data import Dataset
 
-to_float = lambda x: x.astype(np.float32)
+def to_float(x: np.ndarray):
+    return x.astype(np.float32)
 
 class SyntheticMOTDataset(Dataset):
     def __init__(self, mode='train', n_steps=10, dataset_class='vmds', transform=to_float, root=None, T=0):
