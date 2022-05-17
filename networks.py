@@ -7,7 +7,7 @@ from rnn_models import RIMCell, RIM, SparseRIMCell, LayerNorm, Flatten, UnFlatte
 from group_operations import GroupDropout
 from collections import namedtuple
 import numpy as np
-from slot_attn.decoder_cnn import WrappedDecoder
+from slot_attn.decoder_cnn import WrappedDecoder, BroadcastConvDecoder
 from slot_attn.slot_attn import SlotAttention
 from slot_attn.pos_embed import SoftPositionEmbed
 from utils import util
@@ -113,6 +113,30 @@ class SharedBasicDecoder(nn.Module):
         channels = torch.stack(out_list, dim=1) # Shape: [N, M, C, H, W]
         mask = torch.stack(mask_list, dim=1) # Shape: [N, M, 1, H, W]
         mask = mask/torch.sum(mask, dim=1, keepdim=True) # Normalization. Shape: [N, M, 1, H, W]
+        
+        fused = torch.sum(channels*mask, dim=1) # Shape: [N, C, H, W]
+        return fused, channels, mask
+    
+class SharedBroadcastDecoder(nn.Module):
+    """
+    """
+    def __init__(self, embedding_size, out_channels):
+        super().__init__()
+        self.embedding_size = embedding_size
+        self.out_channels = out_channels # 1 or 3
+        self.cnn = BroadcastConvDecoder(embedding_size,) # fixed output dimension (3, 64, 64)
+        
+    def forward(self, x):
+        x = x.permute(1, 0, 2) # Shape: [M, N, embedding_size] -> [M, N, embedding_size]
+        out_list = []
+        mask_list = []
+        for component in x: # Shape: [N, embedding_size]
+            out_tensor = self.cnn(component) # [N, C+1, H, W]
+            out_list.append(out_tensor[:, :-1, :, :])
+            mask_list.append(out_tensor[:, -1:, :, :])
+        channels = torch.stack(out_list, dim=1) # Shape: [N, M, C, H, W]
+        mask = torch.stack(mask_list, dim=1) # Shape: [N, M, 1, H, W]
+        mask = nn.Softmax(dim=1)(mask) # Shape: [N, M, 1, H, W]
         
         fused = torch.sum(channels*mask, dim=1) # Shape: [N, C, H, W]
         return fused, channels, mask
@@ -362,7 +386,10 @@ class BallModel(nn.Module):
         elif args.decoder_type == "SEP_BASIC":
             self.decoder = SharedBasicDecoder(embedding_size=self.hidden_size, out_channels=out_channels)
         elif args.decoder_type == "SEP_SBD":
-            self.decoder = WrappedDecoder(self.hidden_size, decoder=_sbd_decoder, mem_efficient=self.args.sbd_mem_efficient) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
+            if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
+                self.decoder = SharedBroadcastDecoder(self.hidden_size, 3)
+            else:
+                self.decoder = WrappedDecoder(self.hidden_size, decoder=_sbd_decoder, mem_efficient=self.args.sbd_mem_efficient) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
         else:
             raise NotImplementedError("Not implemented decoder type: {}".format(args.decoder_type))
 
