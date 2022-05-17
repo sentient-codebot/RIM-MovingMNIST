@@ -2,11 +2,11 @@ import numpy as np
 import os
 from torch.utils.data import Dataset
 
-def to_float(x: np.ndarray):
-    return x.astype(np.float32)
+def uint8_to_unit(x: np.ndarray):
+    return x/255.
 
 class SyntheticMOTDataset(Dataset):
-    def __init__(self, mode='train', n_steps=10, dataset_class='vmds', transform=to_float, root=None, T=0):
+    def __init__(self, mode='train', n_steps=10, dataset_class='vmds', transform=uint8_to_unit, root=None, T=0):
         assert dataset_class in ['vmds', 'vor', 'spmot']
         self.transform = transform
         if self.transform is not None:
