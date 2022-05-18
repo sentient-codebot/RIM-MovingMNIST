@@ -4,7 +4,7 @@ source ~/.bashrc
 conda activate ~/.conda/envs/pytorch
 
 
-experiment_name="SPRITES_SASBD"
+experiment_name="SPRITES_SASBD_BS16"
 cfg_json="configs/rim/rim_slot.json"
 core="RIM"
 should_resume="false"
