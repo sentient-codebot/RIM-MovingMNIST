@@ -254,7 +254,8 @@ def setup_model(args):
     else:
         raise ValueError('not recognized task')
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, min_lr=0.01*args.lr, verbose=True)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 20, T_mult=2, eta_min=0.01*args.lr, last_epoch=- 1, verbose=True)
     start_epoch = 1
     train_batch_idx = 0
 
@@ -275,7 +276,7 @@ def setup_model(args):
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         if 'scheduler' in checkpoint:
-            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            scheduler.load_state_dict(checkpoint['scheduler_state_dict']) # self.__dict__.update(...) could cause unexpected probs
         train_batch_idx = checkpoint['train_batch_idx'] + 1 if 'train_batch_idx' in checkpoint else 0
         print(f"Checkpoint resumed.")
         

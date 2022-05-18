@@ -6,7 +6,7 @@ conda activate pytorch
 experiment_name="MMNIST_SLOTPRED"
 cfg_json="configs/rim/rim_slot.json"
 core="RIM"
-should_resume="false"
+should_resume="true"
 save_freq=25
 num_hidden=6
 num_slots=6
