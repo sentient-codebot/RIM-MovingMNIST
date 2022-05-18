@@ -240,10 +240,9 @@ def setup_model(args):
         )
         args.path_to_load_model = f"{model_dir}/{latest_model_idx}.pt"
         args.checkpoint = {"epoch": latest_model_idx}
-    
-    if args.path_to_load_model != "":
-        print(f"Loading args from "+f"{args.folder_save}/args/args.pt")
-        args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt")['args'])
+    # if args.path_to_load_model != "":
+    #     print(f"Loading args from "+f"{args.folder_save}/args/args.pt")
+    #     args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt")['args']) # NOTE this will overwrite args.path_.... to skip model resume!
     
     # initialize
     if args.task == 'MMNIST' or args.task == 'BBALL' or args.task == 'SPRITESMOT':
