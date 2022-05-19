@@ -21,14 +21,15 @@ class BasicEncoder(nn.Module):
         `embedding_size`: size of the embedding
     
     Inputs:
-        `x`: image of shape [N, 1, 64, 64]
+        `x`: image of shape [N, in_channels=1|3, 64, 64]
     Output:
         `output`: output of the encoder; shape: [N, embedding_size]"""
-    def __init__(self, embedding_size):
+    def __init__(self, embedding_size, in_channels=1):
         super().__init__()
         self.embedding_size = embedding_size
+        self.in_channels = in_channels
         self.conv_layer = nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=4, stride=2),
+            nn.Conv2d(self.in_channels, 16, kernel_size=4, stride=2),
             nn.ELU(),
             LayerNorm(),
             nn.Conv2d(16, 32, kernel_size=4, stride=2),
@@ -148,16 +149,17 @@ class NonFlattenEncoder(nn.Module):
         `input_size`: size of input
 
     Inputs:
-            `x`: image of shape [batch_size, 1, 64, 64]
+            `x`: image of shape [batch_size, in_channels=1|3, 64, 64]
 
     Outputs:
             `features`: feature vectors [batch_size, num_inputs, input_size]    
     """
-    def __init__(self, input_size):
+    def __init__(self, input_size, in_channels=1):
         super().__init__()
         self.input_size = input_size
+        self.in_channels = in_channels
         self.cnn = nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=4, stride=2),
+            nn.Conv2d(self.in_channels, 16, kernel_size=4, stride=2),
             nn.ELU(),
             LayerNorm(),
             nn.Conv2d(16, 32, kernel_size=4, stride=2),
@@ -207,21 +209,21 @@ class SynMOTEncoder(nn.Module):
         super().__init__()
         self.input_size = input_size
         self.cnn = nn.Sequential(
-            nn.Conv2d(3, 16, kernel_size=4, stride=2),
-            nn.ELU(),
-            LayerNorm(),
-            nn.Conv2d(16, 32, kernel_size=4, stride=2),
+            nn.Conv2d(3, 32, kernel_size=4, stride=2),
             nn.ELU(),
             LayerNorm(),
             nn.Conv2d(32, 64, kernel_size=4, stride=2),
             nn.ELU(),
+            LayerNorm(),
+            nn.Conv2d(64, 128, kernel_size=4, stride=2),
+            nn.ELU(),
             LayerNorm()
         )
-        self.pos_emb = SoftPositionEmbed(64, (6, 6))
+        self.pos_emb = SoftPositionEmbed(128, (6, 6))
         self.mlp = nn.Sequential(
-            nn.Linear(64, 64), # Shape: [batch_size, 6*6, 64]
+            nn.Linear(128, 256), # Shape: [batch_size, 6*6, 64]
             nn.ELU(),
-            nn.Linear(64, self.input_size) # Shape: [batch_size, 6*6, input_size]
+            nn.Linear(256, self.input_size) # Shape: [batch_size, 6*6, input_size]
         )
 
     def forward(self, x):

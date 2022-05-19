@@ -66,6 +66,10 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         rollout_start = 10
     elif args.task == 'BBALL':
         rollout_start = 20
+    elif args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
+        rollout_start = 5
+        rollout = False
+        print("Rollout is turned off for task {}.".format(args.task))
     elif args.task == 'TRAFFIC4CAST':
         raise NotImplementedError('not set yet. ')
 
@@ -190,7 +194,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         if not rollout:
             ssim += pt_ssim.ssim(data[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
                         prediction[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
-            mseloss += mse(data[:,1:,:,:,:], prediction[:,10:,:,:,:]) # Shape: [N, T, C, H, W]
+            mseloss += mse(data[:,1:,:,:,:], prediction[:,1:,:,:,:]) # Shape: [N, T, C, H, W]
         else:
             ssim += pt_ssim.ssim(data[:,10:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
                         prediction[:,10:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))

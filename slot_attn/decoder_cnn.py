@@ -197,15 +197,16 @@ class BroadcastConvDecoder(nn.Module):
         self.latent_dim = latent_dim
         self.init_grid()
 
+        in_place = False
         self.g = nn.Sequential(
                     nn.Conv2d(self.latent_dim+2, 32, 3, 1, 0),
-                    nn.ReLU(True),
+                    nn.ReLU(in_place),
                     nn.Conv2d(32, 32, 3, 1, 0),
-                    nn.ReLU(True),
+                    nn.ReLU(in_place),
                     nn.Conv2d(32, 32, 3, 1, 0),
-                    nn.ReLU(True),
+                    nn.ReLU(in_place),
                     nn.Conv2d(32, 32, 3, 1, 0),
-                    nn.ReLU(True),
+                    nn.ReLU(in_place),
                     nn.Conv2d(32, 4, 1, 1, 0)
                     )
 

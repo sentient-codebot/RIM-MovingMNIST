@@ -84,9 +84,9 @@
                 "--encoder_type",
                 "NONFLATTEN",
                 "--decoder_type",
-                "SEP_SBD",
+                "SEP_BASIC",
                 "--dataset_dir",
-                "data/",
+                "/home/nnan/",
                 "--hidden_size",
                 "200",
                 "--batch_size",
@@ -94,7 +94,7 @@
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "0",
-                "DEBUG": "0"
+                "DEBUG": "1"
             }
         },
         {
