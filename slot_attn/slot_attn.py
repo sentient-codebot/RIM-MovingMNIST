@@ -14,7 +14,7 @@ from .decoder_cnn import LayerNorm
 class SlotAttention(nn.Module):
     """Slot Attention module"""
     def __init__(self, 
-        num_iterations, num_slots, slot_size, mlp_hidden_size, epsilon, input_size,
+        num_iterations, num_slots, slot_size, mlp_hidden_size, epsilon, num_input, input_size,
     spotlight_bias=False):
         """Build Slot Attention module.
         
@@ -24,6 +24,7 @@ class SlotAttention(nn.Module):
             slot_size (int): size of each slot,
             mlp_hidden_size (int): size of hidden layer in MLP,
             epsilon (float): epsilon for softmax,
+            num_input (int): number of input,
             input_size (int): size of input,
             spotlight_bias (boolean): to decide whether you want to use spotlight or not 
 
@@ -42,6 +43,7 @@ class SlotAttention(nn.Module):
         self.mlp_hidden_size = mlp_hidden_size
         self.epsilon = epsilon
         self.input_size = input_size
+        self.num_input= num_input
         self.spotlight_bias_loss=spotlight_bias
         self.norm_inputs = LayerNorm()
         self.norm_slots = LayerNorm()
@@ -57,12 +59,14 @@ class SlotAttention(nn.Module):
         
         # Linear maps for attention module
         self.project_q = torch.nn.Linear(self.slot_size, self.slot_size, bias=False)
-        self.project_k = torch.nn.Linear(input_size, self.slot_size, bias=False)
-        self.project_v = torch.nn.Linear(input_size, self.slot_size, bias=False)
-
 
         if self.spotlight_bias_loss:
-            self.attn_param_bias = nn.Parameter(torch.randn(1, self.num_slots, self.slot_size))
+            self.project_k = torch.nn.Linear(input_size, self.slot_size, bias=False)
+            self.project_v = torch.nn.Linear(input_size, self.slot_size, bias=False)
+            self.attn_param_bias = nn.Parameter(torch.randn(1, self.num_input, self.num_slots))
+        else: 
+            self.project_k = torch.nn.Linear(input_size, self.slot_size, bias=False)
+            self.project_v = torch.nn.Linear(input_size, self.slot_size, bias=False)
         # Slot update functions
         self.gru = nn.GRU(input_size=self.slot_size, 
                             hidden_size=self.slot_size,
@@ -99,9 +103,9 @@ class SlotAttention(nn.Module):
 
             # Compute attention scores.
             q = self.project_q(slots) # Shape: (batch_size, num_slots, slot_size).     
-            if self.spotlight_bias_loss:
-                q = q + self.attn_param_bias
             attn_logits = torch.matmul(k, q.transpose(1, 2)) / math.sqrt(self.slot_size) # Shape: (batch_size, num_inputs, num_slots).
+            if self.spotlight_bias_loss:
+                attn_logits = attn_logits + self.attn_param_bias
             attn = torch.softmax(attn_logits, dim=-1) # Shape: (batch_size, num_inputs, num_slots).
 
             # Weighted mean.
@@ -125,12 +129,14 @@ class SlotAttention(nn.Module):
 def main():
     cudable = torch.cuda.is_available() 
     device = torch.device("cuda" if cudable else "cpu")
-    slot_attn = SlotAttention(3, 4, 10, 20, 1e-8, 20, False).to(device)
+    slot_attn = SlotAttention(3, 4, 10, 20, 1e-8, 20, True).to(device)
 
     inputs = torch.randn(2, 5, 20)
-    output = slot_attn(inputs)
+    output, attn, param_bias = slot_attn(inputs)
 
     print(output.data)
+    print(attn)
+    print(param_bias)
     pass
 
 if __name__ == "__main__":

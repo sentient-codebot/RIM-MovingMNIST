@@ -286,7 +286,6 @@ class BallModel(nn.Module):
         self.num_iterations_slot = args.num_iterations_slot
         self.num_slots = args.num_slots
         self.bs=args.batch_size
-        self.resolution = [256,256]
         self.core = args.core.upper()
         self.use_sw = args.use_sw
         self.memory_size = args.memory_size
@@ -311,7 +310,7 @@ class BallModel(nn.Module):
                 self.num_inputs = 36 # output of NonFlattenEncoder
             else:
                 raise ValueError("Invalid encoder type")
-
+        self.resolution = [int(np.sqrt(self.num_inputs)),int(np.sqrt(self.num_inputs))]
         self.slot_attention = None
         if self.use_slot_attention:
             self.slot_attention = SlotAttention(
@@ -320,6 +319,7 @@ class BallModel(nn.Module):
                 slot_size=self.slot_size,
                 mlp_hidden_size=128,
                 epsilon=1e-8,
+                num_input=self.num_inputs,
                 input_size=self.input_size,
                 spotlight_bias=self.spotlight_bias,
             ).to(self.args.device) # Shape: [batch_size,num_inputs, input_size] -> [batch_size, num_slots, slot_size]
@@ -444,11 +444,10 @@ class BallModel(nn.Module):
                 if self.spotlight_bias:
                     #__u = lambda x: util.unpack_seqdim(x, self.bs)
                     encoded_input, attn, attn_param_bias = self.slot_attention(encoded_input) # Shape: [batch_size, num_slots, slot_size]
-                    grid_val = util.build_grid2D(self.resolution).repeat(encoded_input.shape[0]*self.slot_attention.num_iterations,1,1,1).reshape([encoded_input.shape[0]*self.slot_attention.num_iterations,-1,2]).to(h_prev.device)
-                    raise RuntimeError("What's this supposed to mean?")
-                    slot_means = torch.matmul(attn,grid_val)
-                    slot_means_ = slot_means.unsqueeze(2)
-                    grid_val_ = grid_val.unsqueeze(1)
+                    grid_val = util.build_grid2D(self.resolution).repeat(encoded_input.shape[0],1,1,1).reshape([encoded_input.shape[0],-1,2]).to(h_prev.device)
+                    slot_means = torch.matmul(attn.permute(0,2,1),grid_val)
+                    slot_means_ = slot_means.unsqueeze(1)
+                    grid_val_ = grid_val.unsqueeze(2)
                     slot_variances_ = ((slot_means_ - grid_val_)**2).sum(-1)
                     slot_variances_ = slot_variances_ * attn
                     slot_variances = slot_variances_.sum(-1)
@@ -509,7 +508,6 @@ class BallModel(nn.Module):
             dec_out_ = self.decoder(h_new.view(h_new.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
         
         if self.spotlight_bias:
-            raise NotImplementedError('Cristian says he"s gonna take care of this.')
             return dec_out_, h_new, M, slot_means, slot_variances, attn_param_bias
         else:
             return dec_out_, h_new, M

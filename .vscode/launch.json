@@ -9,27 +9,24 @@
             "justMyCode": true,
             "args": [
                 "--experiment_name",
-                "BBALL_slotrim_3_6_678ball",
+                "MMNIST_slotrim_3_6_spotlight_trial",
                 "--cfg_json",
                 "configs/rim/rim_slot.json",
                 "--core",
                 "RIM",
                 "--should_resume",
-                "true",
+                "false",
                 "--k",
                 "6",
                 "--num_hidden",
                 "6",
                 "--num_slots",
-                "9",
-                "--task",
-                "bball",
-                "--ball_options",
-                "transfer",
-                "--ball_trainset",
-                "678ball",
-                "--ball_testset",
-                "4ball"
+                "6",
+                "--spotlight_bias",
+                "true",
+                "--dataset_dir",
+                "~/datasets"
+
             ]
         },
         {

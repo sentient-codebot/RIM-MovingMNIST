@@ -66,7 +66,7 @@ def variance_loss(dist):
     return coef    
 
 def build_grid2D(resolution):
-    ranges = [np.linspace(0., 1., num=res) for res in resolution]
+    ranges = [np.linspace(0., res-1, num=res) for res in resolution]
     grid = np.meshgrid(*ranges, sparse=False, indexing="ij")
     grid = np.stack(grid, axis=-1)
     grid = np.reshape(grid, [resolution[0], resolution[1], -1])

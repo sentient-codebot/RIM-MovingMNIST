@@ -132,7 +132,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                         output, hidden, memory = model(data[:, frame, :, :, :], hidden, memory)
                 target = data[:, frame+1, :, :, :]
                 if args.spotlight_bias:
-                    loss = loss + loss_fn(output, target) + util.slot_loss(slot_means,slot_variances) + 0.1*torch.sum(attn_param_bias**2)
+                    loss = loss + loss_fn(output, target) + torch.sum(util.slot_loss(slot_means,slot_variances)) + 0.1*torch.sum(attn_param_bias**2)
                 else:
                     loss += loss_fn(output, target) 
                 
