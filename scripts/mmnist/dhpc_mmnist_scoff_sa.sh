@@ -3,7 +3,14 @@ echo Running on $HOSTNAME
 source ~/.bashrc
 conda activate pytorch
 
-dataset_dir='/scratch/cristianmeo/data'
+proj_dir="/tudelft.net/staff-umbrella/nanthesis/data"
+scratch_dir='/scratch/cristianmeo/data'
+if [ -d $proj_dir ] 
+then 
+    dataset_dir=$proj_dir
+else
+    dataset_dir=$scratch_dir
+fi
 
 experiment_name="MMNIST_SACATBASIC"
 cfg_json="configs/scoff/scoff_slot.json"
