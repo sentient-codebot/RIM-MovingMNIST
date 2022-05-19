@@ -96,7 +96,7 @@ def main():
     args = argument_parser()
     print(args)
     cudable = torch.cuda.is_available()
-    args.device = torch.device("cuda:1" if cudable else "cpu")
+    args.device = torch.device("cuda" if cudable else "cpu")
     if not args.should_resume:
         make_dir(f"{args.folder_save}/checkpoints")
         make_dir(f"{args.folder_save}/best_model")
@@ -194,6 +194,7 @@ def main():
                         'train_batch_idx': train_batch_idx,
                         'loss': test_loss,
                         'mse': metrics['mse'],
+                        'best_mse': best_mse,
                     }, f"{args.folder_save}/best_model/best.pt")
 
         else:
@@ -219,6 +220,7 @@ def main():
                 'scheduler_state_dict': scheduler.state_dict(),
                 'train_batch_idx': train_batch_idx,
                 'loss': train_loss,
+                'best_mse': best_mse,
             }, f"{args.folder_save}/checkpoints/{epoch}.pt")
             checkpoint_dir = f"{args.folder_save}/checkpoints"
             for f in os.listdir(checkpoint_dir):
