@@ -134,6 +134,7 @@ def argument_parser():
                                 'resumd. If this flag is set, the last saved model '
                                 '(corresponding to the given id is fetched)',)
     parser.add_argument('--loss_fn', type=str2loss_fn, default='BCE')
+    parser.add_argument('--recon_loss_weight', type=float, default=0.1)
     parser.add_argument('--sbd_mem_efficient', type=str2bool, default=False)
 
     # Model settings

@@ -72,7 +72,7 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
                 next_target = data[:, frame+1, :, :, :]
                 recon_loss = recon_loss + loss_fn(recons, curr_target)
                 pred_loss = pred_loss + loss_fn(preds, next_target)
-                loss = recon_loss + pred_loss
+                loss = args.recon_loss_weight*recon_loss + (1.-args.recon_loss_weight)*pred_loss
             
         loss.backward()
         grad_norm = get_grad_norm(model)
@@ -147,7 +147,7 @@ def main():
         metric_dict = {
         }
         # scheduler.step(...)
-        scheduler.step(train_loss)
+        # scheduler.step(epoch) # NOTE disable for now
 
         # test 
         if args.test_frequency > 0 and epoch % args.test_frequency == 0 or epoch <= 15:
