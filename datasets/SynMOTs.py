@@ -28,3 +28,11 @@ class SyntheticMOTDataset(Dataset):
     def __len__(self):
         return self.num_samples
     
+def main():
+    trainset = SyntheticMOTDataset(root='../data')
+    print(len(trainset))
+    sample = next(iter(trainset))
+    print(sample)
+
+if __name__ == "__main__":
+    main()
