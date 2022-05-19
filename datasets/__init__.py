@@ -33,6 +33,9 @@ if DEBUG:
     class SpritesMOT(SpritesMOT):
         pass
 
+    @mini_dataset(nfold=20)
+    class SyntheticMOTDataset(SyntheticMOTDataset): ...
+
 def setup_dataloader(args):
     """function to setup dataset and dataloaders
     

@@ -1,11 +1,13 @@
 import numpy as np
+import torch
 import os
 from torch.utils.data import Dataset
 
-to_float = lambda x: x.astype(np.float32)
+def uint8_to_unit(x: np.ndarray):
+    return torch.tensor(x/255., dtype=torch.float32)
 
 class SyntheticMOTDataset(Dataset):
-    def __init__(self, mode='train', n_steps=10, dataset_class='vmds', transform=to_float, root=None, T=0):
+    def __init__(self, mode='train', n_steps=10, dataset_class='vmds', transform=uint8_to_unit, root=None, T=0):
         assert dataset_class in ['vmds', 'vor', 'spmot']
         self.transform = transform
         if self.transform is not None:
@@ -26,3 +28,11 @@ class SyntheticMOTDataset(Dataset):
     def __len__(self):
         return self.num_samples
     
+def main():
+    trainset = SyntheticMOTDataset(root='../data')
+    print(len(trainset))
+    sample = next(iter(trainset))
+    print(sample)
+
+if __name__ == "__main__":
+    main()

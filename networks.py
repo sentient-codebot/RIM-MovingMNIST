@@ -7,7 +7,7 @@ from rnn_models import RIMCell, RIM, SparseRIMCell, LayerNorm, Flatten, UnFlatte
 from group_operations import GroupDropout
 from collections import namedtuple
 import numpy as np
-from slot_attn.decoder_cnn import WrappedDecoder
+from slot_attn.decoder_cnn import WrappedDecoder, BroadcastConvDecoder
 from slot_attn.slot_attn import SlotAttention
 from slot_attn.pos_embed import SoftPositionEmbed
 from utils import util
@@ -21,14 +21,15 @@ class BasicEncoder(nn.Module):
         `embedding_size`: size of the embedding
     
     Inputs:
-        `x`: image of shape [N, 1, 64, 64]
+        `x`: image of shape [N, in_channels=1|3, 64, 64]
     Output:
         `output`: output of the encoder; shape: [N, embedding_size]"""
-    def __init__(self, embedding_size):
+    def __init__(self, embedding_size, in_channels=1):
         super().__init__()
         self.embedding_size = embedding_size
+        self.in_channels = in_channels
         self.conv_layer = nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=4, stride=2),
+            nn.Conv2d(self.in_channels, 16, kernel_size=4, stride=2),
             nn.ELU(),
             LayerNorm(),
             nn.Conv2d(16, 32, kernel_size=4, stride=2),
@@ -61,9 +62,10 @@ class BasicDecoder(nn.Module):
     Outputs:
         `output`: output of the decoder; shape: [N, 1, 64, 64]
     """
-    def __init__(self, embedding_size):
+    def __init__(self, embedding_size, out_channels=1):
         super().__init__()
         self.embedding_size = embedding_size
+        self.out_channels = out_channels
         self.layers = nn.Sequential(
             nn.Sigmoid(),
             LayerNorm(),
@@ -82,13 +84,63 @@ class BasicDecoder(nn.Module):
             nn.ReLU(),
             LayerNorm(),
             Interpolate(scale_factor=2, mode='bilinear'),
-            nn.Conv2d(16, 1, kernel_size=3, stride=1, padding=0),
+            nn.Conv2d(16, self.out_channels, kernel_size=3, stride=1, padding=0),
             nn.Sigmoid() # Shape; [N, 1, 64, 64]
         )
 
     def forward(self, x):
         x = self.layers(x)
         return x
+    
+class SharedBasicDecoder(nn.Module):
+    """Shared Basic decoder for group of latents
+    
+    Inputs:
+        `x`: hidden state of shape [N, M, embedding_size]"""
+    def __init__(self, embedding_size, out_channels):
+        super().__init__()
+        self.embedding_size = embedding_size
+        self.out_channels = out_channels # 1 or 3
+        self.cnn = BasicDecoder(embedding_size, out_channels+1)
+        
+    def forward(self, x):
+        x = x.permute(1, 0, 2) # Shape: [M, N, embedding_size] -> [M, N, embedding_size]
+        out_list = []
+        mask_list = []
+        for component in x: # Shape: [N, embedding_size]
+            out_tensor = self.cnn(component) # [N, C+1, H, W]
+            out_list.append(out_tensor[:, :-1, :, :])
+            mask_list.append(out_tensor[:, -1:, :, :])
+        channels = torch.stack(out_list, dim=1) # Shape: [N, M, C, H, W]
+        mask = torch.stack(mask_list, dim=1) # Shape: [N, M, 1, H, W]
+        mask = mask/torch.sum(mask, dim=1, keepdim=True) # Normalization. Shape: [N, M, 1, H, W]
+        
+        fused = torch.sum(channels*mask, dim=1) # Shape: [N, C, H, W]
+        return fused, channels, mask
+    
+class SharedBroadcastDecoder(nn.Module):
+    """
+    """
+    def __init__(self, embedding_size, out_channels):
+        super().__init__()
+        self.embedding_size = embedding_size
+        self.out_channels = out_channels # 1 or 3
+        self.cnn = BroadcastConvDecoder(embedding_size,) # fixed output dimension (3, 64, 64)
+        
+    def forward(self, x):
+        x = x.permute(1, 0, 2) # Shape: [M, N, embedding_size] -> [M, N, embedding_size]
+        out_list = []
+        mask_list = []
+        for component in x: # Shape: [N, embedding_size]
+            out_tensor, out_mask = self.cnn(component) # [N, C+1, H, W]
+            out_list.append(out_tensor)
+            mask_list.append(out_mask)
+        channels = torch.stack(out_list, dim=1) # Shape: [N, M, C, H, W]
+        mask = torch.stack(mask_list, dim=1) # Shape: [N, M, 1, H, W]
+        mask = nn.Softmax(dim=1)(mask) # Shape: [N, M, 1, H, W]
+        
+        fused = torch.sum(channels*mask, dim=1) # Shape: [N, C, H, W]
+        return fused, channels, mask
 
 class NonFlattenEncoder(nn.Module):
     """nn.Module for slot attention encoder
@@ -97,16 +149,17 @@ class NonFlattenEncoder(nn.Module):
         `input_size`: size of input
 
     Inputs:
-            `x`: image of shape [batch_size, 1, 64, 64]
+            `x`: image of shape [batch_size, in_channels=1|3, 64, 64]
 
     Outputs:
             `features`: feature vectors [batch_size, num_inputs, input_size]    
     """
-    def __init__(self, input_size):
+    def __init__(self, input_size, in_channels=1):
         super().__init__()
         self.input_size = input_size
+        self.in_channels = in_channels
         self.cnn = nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=4, stride=2),
+            nn.Conv2d(self.in_channels, 16, kernel_size=4, stride=2),
             nn.ELU(),
             LayerNorm(),
             nn.Conv2d(16, 32, kernel_size=4, stride=2),
@@ -156,21 +209,21 @@ class SynMOTEncoder(nn.Module):
         super().__init__()
         self.input_size = input_size
         self.cnn = nn.Sequential(
-            nn.Conv2d(3, 16, kernel_size=4, stride=2),
-            nn.ELU(),
-            LayerNorm(),
-            nn.Conv2d(16, 32, kernel_size=4, stride=2),
+            nn.Conv2d(3, 32, kernel_size=4, stride=2),
             nn.ELU(),
             LayerNorm(),
             nn.Conv2d(32, 64, kernel_size=4, stride=2),
             nn.ELU(),
+            LayerNorm(),
+            nn.Conv2d(64, 128, kernel_size=4, stride=2),
+            nn.ELU(),
             LayerNorm()
         )
-        self.pos_emb = SoftPositionEmbed(64, (6, 6))
+        self.pos_emb = SoftPositionEmbed(128, (6, 6))
         self.mlp = nn.Sequential(
-            nn.Linear(64, 64), # Shape: [batch_size, 6*6, 64]
+            nn.Linear(128, 256), # Shape: [batch_size, 6*6, 64]
             nn.ELU(),
-            nn.Linear(64, self.input_size) # Shape: [batch_size, 6*6, input_size]
+            nn.Linear(256, self.input_size) # Shape: [batch_size, 6*6, input_size]
         )
 
     def forward(self, x):
@@ -324,22 +377,30 @@ class BallModel(nn.Module):
                 spotlight_bias=self.spotlight_bias,
             ).to(self.args.device) # Shape: [batch_size,num_inputs, input_size] -> [batch_size, num_slots, slot_size]
             self.num_inputs = self.num_slots # number of output vectors of SlotAttention
+        self.embedding_size = self.slot_size if self.use_slot_attention else self.input_size
 
+        out_channels = 1
+        _sbd_decoder = 'transconv'
         if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
-            self.decoder =  WrappedDecoder(self.hidden_size, decoder='synmot', mem_efficient=self.args.sbd_mem_efficient) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
-        else:
-            if args.decoder_type == "CAT_BASIC":
-                self.decoder = BasicDecoder(embedding_size=self.num_hidden*self.hidden_size).to(self.args.device) # Shape: [batch_size, num_units*hidden_size] -> [batch_size, 1, 64, 64]
-            elif args.decoder_type == "SEP_SBD":
-                self.decoder = WrappedDecoder(self.hidden_size, decoder='transconv', mem_efficient=self.args.sbd_mem_efficient).to(self.args.device) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
+            out_channels = 3
+            _sbd_decoder = 'synmot'
+        if args.decoder_type == "CAT_BASIC":
+            self.decoder = BasicDecoder(embedding_size=self.embedding_size) # Shape: [batch_size, num_units*hidden_size] -> [batch_size, 1, 64, 64]
+        elif args.decoder_type == "SEP_BASIC":
+            self.decoder = SharedBasicDecoder(embedding_size=self.embedding_size, out_channels=out_channels)
+        elif args.decoder_type == "SEP_SBD":
+            if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
+                self.decoder = SharedBroadcastDecoder(self.embedding_size, 3)
             else:
-                raise NotImplementedError("Not implemented decoder type: {}".format(args.decoder_type))
+                self.decoder = WrappedDecoder(self.embedding_size, decoder=_sbd_decoder, mem_efficient=self.args.sbd_mem_efficient) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
+        else:
+            raise NotImplementedError("Not implemented decoder type: {}".format(args.decoder_type))
 
         if self.core == 'RIM':
             if not self.sparse:
                 self.rnn_model = RIMCell(
                                         device=self.args.device,
-                                        input_size=self.slot_size if self.use_slot_attention else self.input_size, # NOTE: non-sensetive to num_inputs
+                                        input_size=self.embedding_size, # NOTE: non-sensetive to num_inputs
                                         num_units=self.num_hidden,
                                         hidden_size=self.args.hidden_size,
                                         k=self.args.k,
@@ -414,6 +475,12 @@ class BallModel(nn.Module):
         else:
             raise ValueError('Illegal RNN Core')
         
+        self.latent_transform = nn.Sequential(
+            nn.Linear(self.hidden_size, 256),
+            nn.ReLU(),
+            nn.Linear(256, self.slot_size if self.use_slot_attention else self.input_size)
+        ) # hidden_state -> slot
+        
         self.do_logging = False
         self.hidden_features = {}
 
@@ -468,7 +535,7 @@ class BallModel(nn.Module):
         with enable_logging(self.rnn_model, self.do_logging) as _:
             if self.core=='RIM':
                 if not self.sparse:
-                    h_new, cs_new, M = self.rnn_model(x=encoded_input, hs=h_prev, cs=None, M=M_prev) 
+                    h_new, cs_new, M = self.rnn_model(x=encoded_input, hs=h_prev, cs=None, M=M_prev) # one-step prediciton
                 else:
                     raise NotImplementedError('Sparse RIM not configured for slot input yet')
             elif self.core=='GRU':
@@ -496,21 +563,25 @@ class BallModel(nn.Module):
                     self.rnn_model.hidden_features['rule_attn_probs'] = temp_attention
             else:
                 raise RuntimeError('Illegal RNN Core')
+            
+        # newly added, transform h_new back to slots
+        pred_latent = self.latent_transform(h_new) # Shape: [N, K, hidden_size] -> [N, K, slot/input_size]
         
         self.hidden_features['individual_output'] = torch.zeros((1,1,1)).to(x.device)
         if "SEP" in self.decoder_type:
-            dec_out_, channels, alpha_mask = self.decoder(h_new)
+            curr_dec_out_, curr_channels, curr_alpha_mask = self.decoder(encoded_input)
+            next_dec_out_, next_channels, next_alpha_mask = self.decoder(pred_latent)
             if self.do_logging:
-                blocked_out_ = channels*alpha_mask
+                blocked_out_ = next_channels*next_alpha_mask
                 self.hidden_features['individual_output'] = blocked_out_
-                
         else:
-            dec_out_ = self.decoder(h_new.view(h_new.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
+            curr_dec_out_ = self.decoder(encoded_input.view(encoded_input.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
+            next_dec_out_ = self.decoder(pred_latent.view(pred_latent.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
         
         if self.spotlight_bias:
             return dec_out_, h_new, M, slot_means, slot_variances, attn_param_bias
         else:
-            return dec_out_, h_new, M
+            return curr_dec_out_, next_dec_out_, h_new, M
 
     
 

@@ -183,6 +183,53 @@ class WrappedDecoder(nn.Module):
 
         return fused, channels, alpha_mask
 
+class BroadcastConvDecoder(nn.Module):
+    """
+    Inputs:
+        `z`: [N, latent_dim]
+    Outputs:
+        `slot`: [N, 3, image_size, image_size] unnormalized
+        `mask`: [N, 1, image_size, image_size] unnormalized
+        """
+    def __init__(self, latent_dim, image_size=64):
+        super().__init__()
+        self.im_size = image_size + 8
+        self.latent_dim = latent_dim
+        self.init_grid()
+
+        in_place = False
+        self.g = nn.Sequential(
+                    nn.Conv2d(self.latent_dim+2, 32, 3, 1, 0),
+                    nn.ReLU(in_place),
+                    nn.Conv2d(32, 32, 3, 1, 0),
+                    nn.ReLU(in_place),
+                    nn.Conv2d(32, 32, 3, 1, 0),
+                    nn.ReLU(in_place),
+                    nn.Conv2d(32, 32, 3, 1, 0),
+                    nn.ReLU(in_place),
+                    nn.Conv2d(32, 4, 1, 1, 0)
+                    )
+
+    def init_grid(self):
+        x = torch.linspace(-1, 1, self.im_size)
+        y = torch.linspace(-1, 1, self.im_size)
+        self.x_grid, self.y_grid = torch.meshgrid(x, y)
+        
+        
+    def broadcast(self, z):
+        b = z.size(0)
+        x_grid = self.x_grid.expand(b, 1, -1, -1).to(z.device)
+        y_grid = self.y_grid.expand(b, 1, -1, -1).to(z.device)
+        z = z.view((b, -1, 1, 1)).expand(-1, -1, self.im_size, self.im_size)
+        z = torch.cat((z, x_grid, y_grid), dim=1)
+        return z
+
+    def forward(self, z):
+        z = self.broadcast(z)
+        x = self.g(z)
+        slot = x[:, :3]
+        mask = x[:, 3:]        
+        return slot, mask
 
 if __name__ == '__main__':
     decoder = WrappedDecoder(100)

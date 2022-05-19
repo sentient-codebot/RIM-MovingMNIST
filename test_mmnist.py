@@ -66,6 +66,10 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         rollout_start = 10
     elif args.task == 'BBALL':
         rollout_start = 20
+    elif args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
+        rollout_start = 5
+        rollout = False
+        print("Rollout is turned off for task {}.".format(args.task))
     elif args.task == 'TRAFFIC4CAST':
         raise NotImplementedError('not set yet. ')
 
@@ -73,6 +77,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     model.eval()
 
     epoch_loss = torch.tensor(0.).to(args.device)
+    epoch_recon_loss = 0.
+    epoch_pred_loss = 0.
     epoch_mseloss = torch.tensor(0.).to(args.device)
     f1 = 0.
     ssim = 0.
@@ -98,6 +104,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         if data.dim()==4:
             data = data.unsqueeze(2).float() # Shape: [batch_size, T, 1, H, W]
         hidden = hidden.detach()
+        recon_loss = 0.
+        pred_loss = 0.
         loss = 0.
         mseloss = 0.
         prediction = torch.zeros_like(data)
@@ -118,31 +126,35 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             with torch.no_grad(), enable_logging(model, do_logging):
                 if args.spotlight_bias:
                     if not rollout:
-                        output, hidden, memory, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
+                        recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
                     elif frame >= rollout_start :
-                        output, hidden, memory, slot_means, slot_variances, attn_param_bias = model(output, hidden, memory)
+                        recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias = model(preds, hidden, memory)
                     else:
-                        output, hidden, memory, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
+                        recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
                 else:
                     if not rollout:
-                        output, hidden, memory = model(data[:, frame, :, :, :], hidden, memory)
+                        inputs = data[:, frame, :, :, :]
                     elif frame >= rollout_start :
-                        output, hidden, memory = model(output, hidden, memory)
+                        inputs = preds
                     else:
-                        output, hidden, memory = model(data[:, frame, :, :, :], hidden, memory)
-                target = data[:, frame+1, :, :, :]
+                        inputs = data[:, frame, :, :, :]
+                    recons, preds, hidden, memory = model(inputs, hidden, memory)
+                curr_target = inputs
+                next_target = data[:, frame+1, :, :, :]
+                recon_loss = recon_loss + loss_fn(recons, curr_target)
+                pred_loss = pred_loss + loss_fn(preds, next_target)
                 if args.spotlight_bias:
                     loss = loss + loss_fn(output, target) + torch.sum(util.slot_loss(slot_means,slot_variances)) + 0.1*torch.sum(attn_param_bias**2)
                 else:
-                    loss += loss_fn(output, target) 
+                    loss = recon_loss + pred_loss
                 
             # frame-wise metrics
-            f1_frame = f1_score(target, output)
+            f1_frame = f1_score(next_target, preds)
             f1 += f1_frame
 
-            prediction[:, frame+1, :, :, :] = output
+            prediction[:, frame+1, :, :, :] = preds
             if do_logging:
-                blocked_prediction[:, 0, frame+1, :, :, :] = output # dim == 6
+                blocked_prediction[:, 0, frame+1, :, :, :] = preds # dim == 6
                 blocked_prediction[:, 1:, frame+1, :, :, :] = model.hidden_features['individual_output']
 
                 # wandb logging for table
@@ -150,8 +162,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                     table_row = {
                         'sample_id': str(batch_idx)+'_'+str(sample_idx),
                         'frame_id': frame+1,
-                        'prediction': wandb.Image(output[sample_idx].detach().cpu()*255),
-                        'ground_truth': wandb.Image(target[sample_idx].detach().cpu()*255),
+                        'prediction': wandb.Image(preds[sample_idx].detach().cpu()*255),
+                        'ground_truth': wandb.Image(next_target[sample_idx].detach().cpu()*255),
                         'individual_prediction': wandb.Image(make_grid(model.hidden_features['individual_output'][sample_idx]*255, pad_value=255)), # N K C H W -> K C H W -> C *H **W
                     }
                     if args.core == 'SCOFF':
@@ -182,13 +194,15 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         if not rollout:
             ssim += pt_ssim.ssim(data[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
                         prediction[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
-            mseloss += mse(data[:,1:,:,:,:], prediction[:,10:,:,:,:]) # Shape: [N, T, C, H, W]
+            mseloss += mse(data[:,1:,:,:,:], prediction[:,1:,:,:,:]) # Shape: [N, T, C, H, W]
         else:
             ssim += pt_ssim.ssim(data[:,10:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
                         prediction[:,10:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
             mseloss += mse(data[:,10:,:,:,:], prediction[:,10:,:,:,:]) # Shape: [N, T, C, H, W]
             
         epoch_loss += loss.detach()
+        epoch_recon_loss += recon_loss.detach()
+        epoch_pred_loss += pred_loss.detach()
         epoch_mseloss += mseloss.detach()
         # if args.device == torch.device("cpu"):
         #     break
@@ -196,6 +210,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     prediction = prediction[:, 1:, :, :, :] # last batch of prediction, starting from frame 1
     blocked_prediction = blocked_prediction[:, :, 1:, :, :, :]
     epoch_loss = epoch_loss / (batch_idx+1)
+    epoch_recon_loss /= len(test_loader)
+    epoch_pred_loss /= len(test_loader)
     epoch_mseloss = epoch_mseloss / (batch_idx+1)
     ssim = ssim / (batch_idx+1)
     f1_avg = f1 / (batch_idx+1) / (data.shape[1]-1)
@@ -233,7 +249,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         }
 
     print('test runtime:', time() - start_time)
-    return epoch_loss, prediction, data, metrics, test_table
+    return epoch_loss, epoch_recon_loss, epoch_pred_loss, prediction, data, metrics, test_table
 
 @torch.no_grad()
 def dec_rim_util(model, h):
@@ -303,7 +319,7 @@ def main():
     writer = SummaryWriter(log_dir='./runs/'+args.id+'_test')
 
     # call test function
-    test_loss, prediction, data, metrics, test_table = test(
+    test_loss, recon_loss, pred_loss, prediction, data, metrics, test_table = test(
         model = model,
         test_loader = test_loader,
         args = args,
@@ -318,6 +334,8 @@ def main():
         is_train=False,
         epoch=epoch,
         test_loss=test_loss,
+        test_recon_loss=recon_loss,
+        test_pred_loss=pred_loss,
         ground_truth=data,
         prediction=prediction,
         metrics=metrics,
