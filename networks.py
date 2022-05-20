@@ -575,7 +575,10 @@ class BallModel(nn.Module):
                 raise RuntimeError('Illegal RNN Core')
             
         # newly added, transform h_new back to slots
-        pred_latent = self.latent_transform(h_new) # Shape: [N, K, hidden_size] -> [N, K, slot/input_size]
+        if 'CAT' in self.decoder_type:
+            pred_latent = self.latent_transform(h_new.view(h_new.shape[0],-1)) # Shape: [N, K*hidden_size] -> [N, embedding_size]
+        else:
+            pred_latent = self.latent_transform(h_new) # Shape: [N, K, hidden_size] -> [N, K, slot/input_size]
         
         self.hidden_features['individual_output'] = torch.zeros((1,1,1)).to(x.device)
         if "SEP" in self.decoder_type:
