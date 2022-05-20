@@ -164,8 +164,9 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                         'frame_id': frame+1,
                         'prediction': wandb.Image(preds[sample_idx].detach().cpu()*255),
                         'ground_truth': wandb.Image(next_target[sample_idx].detach().cpu()*255),
-                        'individual_prediction': wandb.Image(make_grid(model.hidden_features['individual_output'][sample_idx]*255, pad_value=255)), # N K C H W -> K C H W -> C *H **W
                     }
+                    if 'SEP' in args.decoder_type:
+                        table_row['individual_prediction'] = wandb.Image(make_grid(model.hidden_features['individual_output'][sample_idx]*255, pad_value=255)), # N K C H W -> K C H W -> C *H **W
                     if args.core == 'SCOFF':
                         rule_attn_probs = model.rnn_model.hidden_features['rule_attn_probs'][sample_idx] # [num_hidden, num_rules]
                         for of_idx in range(args.num_hidden):
