@@ -580,7 +580,7 @@ class BallModel(nn.Module):
         else:
             pred_latent = self.latent_transform(h_new) # Shape: [N, K, hidden_size] -> [N, K, slot/input_size]
         
-        self.hidden_features['individual_output'] = torch.zeros((h_new.shape[0],1,1)).to(x.device)
+        self.hidden_features['individual_output'] = torch.empty((h_new.shape[0],self.num_hidden,1,64,64)).to(x.device)
         if "SEP" in self.decoder_type:
             curr_dec_out_, curr_channels, curr_alpha_mask = self.decoder(encoded_input)
             next_dec_out_, next_channels, next_alpha_mask = self.decoder(pred_latent)
