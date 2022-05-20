@@ -110,7 +110,9 @@ def main():
     project, name = args.id.split('_',1)
     wandb.init(project=project, name=name, config=vars(args), entity='nan-team')
     
-    columns = ['sample_id', 'frame_id', 'ground_truth', 'prediction', 'individual_prediction']
+    columns = ['sample_id', 'frame_id', 'ground_truth', 'prediction']
+    if 'SEP' in args.decoder_type:
+        columns.append('individual_prediction')
     if args.core == 'SCOFF':
         for idx in range(args.num_hidden):
             columns.append('rule_OF_'+str(idx))
