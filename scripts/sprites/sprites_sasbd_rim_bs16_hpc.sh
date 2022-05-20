@@ -15,7 +15,7 @@ k=10
 task="spritesmot"
 batch_size=16
 epochs=400
-decode_hidden="true"
+decode_hidden="false"
 
 dataset_dir="/tudelft.net/staff-umbrella/nanthesis/data"
 
