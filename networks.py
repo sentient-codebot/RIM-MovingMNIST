@@ -388,7 +388,7 @@ class BallModel(nn.Module):
             out_channels = 3
             _sbd_decoder = 'synmot'
         if args.decoder_type == "CAT_BASIC":
-            self.decoder = BasicDecoder(embedding_size=self.embedding_size*self.num_hidden) # Shape: [batch_size, num_units*hidden_size] -> [batch_size, 1, 64, 64]
+            self.decoder = BasicDecoder(embedding_size=self.embedding_size) # Shape: [batch_size, num_units*hidden_size] -> [batch_size, 1, 64, 64]
         elif args.decoder_type == "SEP_BASIC":
             self.decoder = SharedBasicDecoder(embedding_size=self.embedding_size, out_channels=out_channels)
         elif args.decoder_type == "SEP_SBD":
