@@ -377,7 +377,7 @@ class BallModel(nn.Module):
                 spotlight_bias=self.spotlight_bias,
             ).to(self.args.device) # Shape: [batch_size,num_inputs, input_size] -> [batch_size, num_slots, slot_size]
             self.num_inputs = self.num_slots # number of output vectors of SlotAttention
-        self.embedding_size = self.slot_size if self.use_slot_attention else self.input_size
+        self.embedding_size = self.slot_size if self.use_slot_attention else self.input_size # decoing slots: = slot_size
 
         out_channels = 1
         _sbd_decoder = 'transconv'
@@ -385,7 +385,7 @@ class BallModel(nn.Module):
             out_channels = 3
             _sbd_decoder = 'synmot'
         if args.decoder_type == "CAT_BASIC":
-            self.decoder = BasicDecoder(embedding_size=self.embedding_size) # Shape: [batch_size, num_units*hidden_size] -> [batch_size, 1, 64, 64]
+            self.decoder = BasicDecoder(embedding_size=self.embedding_size*self.num_hidden) # Shape: [batch_size, num_units*hidden_size] -> [batch_size, 1, 64, 64]
         elif args.decoder_type == "SEP_BASIC":
             self.decoder = SharedBasicDecoder(embedding_size=self.embedding_size, out_channels=out_channels)
         elif args.decoder_type == "SEP_SBD":
@@ -579,7 +579,7 @@ class BallModel(nn.Module):
             next_dec_out_ = self.decoder(pred_latent.view(pred_latent.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
         
         if self.spotlight_bias:
-            return dec_out_, h_new, M, slot_means, slot_variances, attn_param_bias
+            return next_dec_out_, h_new, M, slot_means, slot_variances, attn_param_bias
         else:
             return curr_dec_out_, next_dec_out_, h_new, M
 
