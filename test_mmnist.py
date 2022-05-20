@@ -141,7 +141,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                     recons, preds, hidden, memory = model(inputs, hidden, memory)
                 curr_target = inputs
                 next_target = data[:, frame+1, :, :, :]
-                recon_loss = recon_loss + loss_fn(recons, curr_target)
+                if recons is not None:
+                    recon_loss = recon_loss + loss_fn(recons, curr_target)
                 pred_loss = pred_loss + loss_fn(preds, next_target)
                 if args.spotlight_bias:
                     loss = loss + loss_fn(output, target) + torch.sum(util.slot_loss(slot_means,slot_variances)) + 0.1*torch.sum(attn_param_bias**2)
@@ -202,7 +203,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             mseloss += mse(data[:,10:,:,:,:], prediction[:,10:,:,:,:]) # Shape: [N, T, C, H, W]
             
         epoch_loss += loss.detach()
-        epoch_recon_loss += recon_loss.detach()
+        epoch_recon_loss += recon_loss.detach() if isinstance(recon_loss, torch.Tensor) else recon_loss
         epoch_pred_loss += pred_loss.detach()
         epoch_mseloss += mseloss.detach()
         # if args.device == torch.device("cpu"):

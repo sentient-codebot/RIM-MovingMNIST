@@ -146,6 +146,7 @@ def argument_parser():
     parser.add_argument('--encoder_type', type=str2encoder, default='FLATTEN',
                         help="Type of encoder to use. 'FLATTEN' or 'NONFLATTEN'")
     #   decoder Settings
+    parser.add_argument('--decode_hidden', type=str2bool, default=True)
     parser.add_argument('--decoder_type', type=str2decoder, default='CAT_BASIC')
     #   SlotAttention settings
     parser.add_argument('--use_slot_attention', type=str2bool, default=False)
@@ -207,6 +208,10 @@ def argument_parser():
             args.dataset_dir = '/home/nnan/traffic4cast/'
         elif args.task == 'SPRITESMOT':
             args.dataset_dir = '/home/nnan/sprites/train/'
+            
+    if args.decode_hidden:
+        args.recon_loss_weight = 0.0
+        print('Decoding hidden state directly, so the reconstruction loss is set to 0.0')
     
     if args.k > args.num_hidden:
         args.k = args.num_hidden

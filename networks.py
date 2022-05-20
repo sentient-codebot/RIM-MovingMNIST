@@ -377,10 +377,16 @@ class BallModel(nn.Module):
                 spotlight_bias=self.spotlight_bias,
             ).to(self.args.device) # Shape: [batch_size,num_inputs, input_size] -> [batch_size, num_slots, slot_size]
             self.num_inputs = self.num_slots # number of output vectors of SlotAttention
-        self.embedding_size = self.slot_size if self.use_slot_attention else self.input_size # embedding size for the decoder
-        if self.encoder_type == 'NONFALTTEN' and 'CAT' in self.decoder_type:
-            print("Warning: NONFLATTEN + CAT: weird setting. avoid. ")
-            self.embedding_size = self.input_size * self.num_inputs
+        self.decode_hidden = args.decode_hidden
+        if self.decode_hidden:
+            self.embedding_size = self.slot_size if self.use_slot_attention else self.input_size # embedding size for the decoder
+            if self.encoder_type == 'NONFALTTEN' and 'CAT' in self.decoder_type:
+                print("Warning: NONFLATTEN + CAT: weird setting. avoid. ")
+                self.embedding_size = self.input_size * self.num_inputs
+        else:
+            self.embedding_size = self.hidden_size
+            if 'CAT' in self.decoder_type:
+                self.embedding_size = self.hidden_size * self.num_hidden
 
         out_channels = 1
         _sbd_decoder = 'transconv'
@@ -478,18 +484,20 @@ class BallModel(nn.Module):
         else:
             raise ValueError('Illegal RNN Core')
         
-        if 'CAT' in args.decoder_type:
-            self.latent_transform = nn.Sequential(
-                nn.Linear(self.num_hidden*self.hidden_size, 256),
-                nn.ReLU(),
-                nn.Linear(256, self.embedding_size)
-            ) # hidden_state -> image embedding
-        else:
-            self.latent_transform = nn.Sequential(
-                nn.Linear(self.hidden_size, 256),
-                nn.ReLU(),
-                nn.Linear(256, self.embedding_size)
-            )
+        self.latent_transform = None
+        if not self.decode_hidden:
+            if 'CAT' in args.decoder_type:
+                self.latent_transform = nn.Sequential(
+                    nn.Linear(self.num_hidden*self.hidden_size, 256),
+                    nn.ReLU(),
+                    nn.Linear(256, self.embedding_size)
+                ) # hidden_state -> image embedding
+            else:
+                self.latent_transform = nn.Sequential(
+                    nn.Linear(self.hidden_size, 256),
+                    nn.ReLU(),
+                    nn.Linear(256, self.embedding_size)
+                )
         
         self.do_logging = False
         self.hidden_features = {}
@@ -575,21 +583,31 @@ class BallModel(nn.Module):
                 raise RuntimeError('Illegal RNN Core')
             
         # newly added, transform h_new back to slots
-        if 'CAT' in self.decoder_type:
-            pred_latent = self.latent_transform(h_new.view(h_new.shape[0],-1)) # Shape: [N, K*hidden_size] -> [N, embedding_size]
-        else:
-            pred_latent = self.latent_transform(h_new) # Shape: [N, K, hidden_size] -> [N, K, slot/input_size]
-        
         self.hidden_features['individual_output'] = torch.empty((h_new.shape[0],self.num_hidden,1,64,64)).to(x.device)
-        if "SEP" in self.decoder_type:
-            curr_dec_out_, curr_channels, curr_alpha_mask = self.decoder(encoded_input)
-            next_dec_out_, next_channels, next_alpha_mask = self.decoder(pred_latent)
-            if self.do_logging:
-                blocked_out_ = next_channels*next_alpha_mask
-                self.hidden_features['individual_output'] = blocked_out_
+        curr_dec_out_ = None
+        if not self.decode_hidden:
+            if 'CAT' in self.decoder_type:
+                pred_latent = self.latent_transform(h_new.view(h_new.shape[0],-1)) # Shape: [N, K*hidden_size] -> [N, embedding_size]
+            else:
+                pred_latent = self.latent_transform(h_new) # Shape: [N, K, hidden_size] -> [N, K, slot/input_size]
+            
+            if "SEP" in self.decoder_type:
+                curr_dec_out_, curr_channels, curr_alpha_mask = self.decoder(encoded_input)
+                next_dec_out_, next_channels, next_alpha_mask = self.decoder(pred_latent)
+                if self.do_logging:
+                    blocked_out_ = next_channels*next_alpha_mask
+                    self.hidden_features['individual_output'] = blocked_out_
+            else:
+                curr_dec_out_ = self.decoder(encoded_input.view(encoded_input.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
+                next_dec_out_ = self.decoder(pred_latent.view(pred_latent.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
         else:
-            curr_dec_out_ = self.decoder(encoded_input.view(encoded_input.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
-            next_dec_out_ = self.decoder(pred_latent.view(pred_latent.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
+            if "SEP" in self.decoder_type:
+                next_dec_out_, next_channels, next_alpha_mask = self.decoder(h_new)
+                if self.do_logging:
+                    blocked_out_ = next_channels*next_alpha_mask
+                    self.hidden_features['individual_output'] = blocked_out_
+            else:
+                next_dec_out_ = self.decoder(h_new.view(h_new.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
         
         if self.spotlight_bias:
             return next_dec_out_, h_new, M, slot_means, slot_variances, attn_param_bias
