@@ -68,9 +68,10 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
                 loss = loss + loss_fn(output, target) + 0.1*torch.sum(util.slot_loss(slot_means,slot_variances)) + 0.01*torch.sum(attn_param_bias**2)
             else:
                 recons, preds, hidden, memory = model(data[:, frame, :, :, :], hidden, memory)
-                curr_target = data[:, frame, :, :, :]
+                if recons is not None:
+                    curr_target = data[:, frame, :, :, :]
+                    recon_loss = recon_loss + loss_fn(recons, curr_target)
                 next_target = data[:, frame+1, :, :, :]
-                recon_loss = recon_loss + loss_fn(recons, curr_target)
                 pred_loss = pred_loss + loss_fn(preds, next_target)
                 loss = args.recon_loss_weight*recon_loss + (1.-args.recon_loss_weight)*pred_loss
             
@@ -82,7 +83,7 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
 
         train_batch_idx += 1 
         epoch_loss = epoch_loss + loss.detach()
-        epoch_recon_loss += recon_loss.detach()
+        epoch_recon_loss += recon_loss.detach() if isinstance(recon_loss, torch.Tensor) else recon_loss
         epoch_pred_loss += pred_loss.detach()
 
     epoch_loss = epoch_loss / len(train_loader)
