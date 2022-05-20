@@ -377,7 +377,10 @@ class BallModel(nn.Module):
                 spotlight_bias=self.spotlight_bias,
             ).to(self.args.device) # Shape: [batch_size,num_inputs, input_size] -> [batch_size, num_slots, slot_size]
             self.num_inputs = self.num_slots # number of output vectors of SlotAttention
-        self.embedding_size = self.slot_size if self.use_slot_attention else self.input_size # decoing slots: = slot_size
+        self.embedding_size = self.slot_size if self.use_slot_attention else self.input_size # embedding size for the decoder
+        if self.encoder_type == 'NONFALTTEN' and 'CAT' in self.decoder_type:
+            print("Warning: NONFLATTEN + CAT: weird setting. avoid. ")
+            self.embedding_size = self.input_size * self.num_inputs
 
         out_channels = 1
         _sbd_decoder = 'transconv'
@@ -475,11 +478,18 @@ class BallModel(nn.Module):
         else:
             raise ValueError('Illegal RNN Core')
         
-        self.latent_transform = nn.Sequential(
-            nn.Linear(self.hidden_size, 256),
-            nn.ReLU(),
-            nn.Linear(256, self.slot_size if self.use_slot_attention else self.input_size)
-        ) # hidden_state -> slot
+        if 'CAT' in args.decoder_type:
+            self.latent_transform = nn.Sequential(
+                nn.Linear(self.num_hidden*self.hidden_size, 256),
+                nn.ReLU(),
+                nn.Linear(256, self.embedding_size)
+            ) # hidden_state -> image embedding
+        else:
+            self.latent_transform = nn.Sequential(
+                nn.Linear(self.hidden_size, 256),
+                nn.ReLU(),
+                nn.Linear(256, self.embedding_size)
+            )
         
         self.do_logging = False
         self.hidden_features = {}
