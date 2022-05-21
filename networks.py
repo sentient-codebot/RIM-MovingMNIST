@@ -378,7 +378,7 @@ class BallModel(nn.Module):
             ).to(self.args.device) # Shape: [batch_size,num_inputs, input_size] -> [batch_size, num_slots, slot_size]
             self.num_inputs = self.num_slots # number of output vectors of SlotAttention
         self.decode_hidden = args.decode_hidden
-        if self.decode_hidden:
+        if not self.decode_hidden:
             self.embedding_size = self.slot_size if self.use_slot_attention else self.input_size # embedding size for the decoder
             if self.encoder_type == 'NONFALTTEN' and 'CAT' in self.decoder_type:
                 print("Warning: NONFLATTEN + CAT: weird setting. avoid. ")
@@ -409,7 +409,7 @@ class BallModel(nn.Module):
             if not self.sparse:
                 self.rnn_model = RIMCell(
                                         device=self.args.device,
-                                        input_size=self.embedding_size, # NOTE: non-sensetive to num_inputs
+                                        input_size=self.slot_size if self.use_slot_attention else self.input_size, # NOTE: non-sensetive to num_inputs
                                         num_units=self.num_hidden,
                                         hidden_size=self.args.hidden_size,
                                         k=self.args.k,
@@ -610,7 +610,7 @@ class BallModel(nn.Module):
                 next_dec_out_ = self.decoder(h_new.view(h_new.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
         
         if self.spotlight_bias:
-            return next_dec_out_, h_new, M, slot_means, slot_variances, attn_param_bias
+            return curr_dec_out_, next_dec_out_, h_new, M, slot_means, slot_variances, attn_param_bias
         else:
             return curr_dec_out_, next_dec_out_, h_new, M
 

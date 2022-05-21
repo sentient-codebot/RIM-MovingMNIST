@@ -20,7 +20,7 @@ num_slots=5
 k=5
 task="SPRITESMOT"
 dataset_dir="data"
-batch_size=64
+batch_size=16
 epochs=400
 
 

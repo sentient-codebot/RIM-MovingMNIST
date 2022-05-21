@@ -63,9 +63,9 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
         loss = 0.
         for frame in range(data.shape[1]-1):
             if args.spotlight_bias:
-                output, hidden, memory, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
+                recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
                 target = data[:, frame+1, :, :, :]
-                loss = loss + loss_fn(output, target) + 0.1*torch.sum(util.slot_loss(slot_means,slot_variances)) + 0.01*torch.sum(attn_param_bias**2)
+                loss = loss + loss_fn(preds, target) + 0.1*torch.sum(util.slot_loss(slot_means,slot_variances)) + 0.01*torch.sum(attn_param_bias**2)
             else:
                 recons, preds, hidden, memory = model(data[:, frame, :, :, :], hidden, memory)
                 if recons is not None:
@@ -84,7 +84,7 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
         train_batch_idx += 1 
         epoch_loss = epoch_loss + loss.detach()
         epoch_recon_loss += recon_loss.detach() if isinstance(recon_loss, torch.Tensor) else recon_loss
-        epoch_pred_loss += pred_loss.detach()
+        epoch_pred_loss += pred_loss.detach() if isinstance(pred_loss, torch.Tensor) else pred_loss
 
     epoch_loss = epoch_loss / len(train_loader)
     epoch_recon_loss /= len(train_loader)
@@ -144,8 +144,8 @@ def main():
         )
         loss_dict = {
             "train loss": train_loss.item(),
-            "train recon loss": train_recon_loss.item(),
-            "train pred loss": train_pred_loss.item(),
+            "train recon loss": train_recon_loss.item() if isinstance(train_recon_loss, torch.Tensor) else train_recon_loss,
+            "train pred loss": train_pred_loss.item() if isinstance(train_pred_loss, torch.Tensor) else train_pred_loss,
         }
         metric_dict = {
         }
