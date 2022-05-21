@@ -124,28 +124,23 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
 
         for frame in range(data.shape[1]-1):
             with torch.no_grad(), enable_logging(model, do_logging):
-                if args.spotlight_bias:
-                    if not rollout:
-                        recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
-                    elif frame >= rollout_start :
-                        recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias = model(preds, hidden, memory)
-                    else:
-                        recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias = model(data[:, frame, :, :, :], hidden, memory)
+                if not rollout:
+                    inputs = data[:, frame, :, :, :]
+                elif frame >= rollout_start :
+                    inputs = preds
                 else:
-                    if not rollout:
-                        inputs = data[:, frame, :, :, :]
-                    elif frame >= rollout_start :
-                        inputs = preds
-                    else:
-                        inputs = data[:, frame, :, :, :]
+                    inputs = data[:, frame, :, :, :]
+                if not args.spotlight_bias:
                     recons, preds, hidden, memory = model(inputs, hidden, memory)
+                else:
+                    recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias = model(inputs, hidden, memory)
                 curr_target = inputs
                 next_target = data[:, frame+1, :, :, :]
                 if recons is not None:
                     recon_loss = recon_loss + loss_fn(recons, curr_target)
                 pred_loss = pred_loss + loss_fn(preds, next_target)
                 if args.spotlight_bias:
-                    loss = loss + loss_fn(output, target) + torch.sum(util.slot_loss(slot_means,slot_variances)) + 0.1*torch.sum(attn_param_bias**2)
+                    loss = loss + loss_fn(preds, next_target) + torch.sum(util.slot_loss(slot_means,slot_variances)) + 0.1*torch.sum(attn_param_bias**2)
                 else:
                     loss = recon_loss + pred_loss
                 
