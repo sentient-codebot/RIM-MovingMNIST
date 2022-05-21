@@ -17,7 +17,7 @@ batch_size=64
 epochs=400
 decode_hidden="false"
 dataset_dir="/home/cristianmeo/Datasets"
-spotlight_bias="True"
+spotlight_bias="False"
 
 
 python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --save_frequency $save_freq \
