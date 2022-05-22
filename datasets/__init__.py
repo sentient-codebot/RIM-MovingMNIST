@@ -21,19 +21,19 @@ def mini_dataset(nfold=10):
     return mini_dataset_dec
 
 if DEBUG:
-    @mini_dataset(nfold=10)
+    @mini_dataset(nfold=40)
     class BouncingBall(BouncingBall):
         pass
 
-    @mini_dataset(nfold=10)
+    @mini_dataset(nfold=40)
     class MovingMNIST(MovingMNIST):
         pass
     
-    @mini_dataset(nfold=10)
+    @mini_dataset(nfold=40)
     class SpritesMOT(SpritesMOT):
         pass
 
-    @mini_dataset(nfold=20)
+    @mini_dataset(nfold=40)
     class SyntheticMOTDataset(SyntheticMOTDataset): ...
 
 def setup_dataloader(args):
