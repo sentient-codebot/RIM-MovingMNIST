@@ -1,4 +1,7 @@
+from pkg_resources import working_set
 import torch
+import numpy
+import random
 
 from .BouncingBall import BouncingBall
 from .MovingMNIST import MovingMNIST
@@ -7,6 +10,9 @@ from .SynMOTs import SyntheticMOTDataset
 
 import os
 DEBUG = os.environ.get('DEBUG', False)
+
+g = torch.Generator()
+g.manual_seed(0)
 
 def mini_dataset(nfold=10):
     """
@@ -134,12 +140,16 @@ def setup_dataloader(args):
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=4 if not DEBUG else 0,
+        worker_init_fn=seed_worker,
+        generator=g,
     )
     test_loader = torch.utils.data.DataLoader(
         dataset=test_set,
         batch_size=args.batch_size,
-        shuffle=True,
+        shuffle=False,
         num_workers=4 if not DEBUG else 0,
+        worker_init_fn=seed_worker,
+        generator=g,
     )
     if val_set is not None:
         val_loader = torch.utils.data.DataLoader(
@@ -147,9 +157,16 @@ def setup_dataloader(args):
             batch_size=args.batch_size,
             shuffle=True,
             num_workers=4 if not DEBUG else 0,
+            worker_init_fn=seed_worker,
+            generator=g,
         )
 
     return train_loader, val_loader, test_loader
+
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    numpy.random.seed(worker_seed)
+    random.seed(worker_seed)
 
 def main():
     train_set = BouncingBall(root='./data', train=True, length=20, filename='balls4mass64.h5')

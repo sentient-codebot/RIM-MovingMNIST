@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 
-def set_seed(seed):
+def set_seed(seed, strict=False):
     """Set seed"""
     random.seed(seed)
     np.random.seed(seed)
@@ -16,6 +16,10 @@ def set_seed(seed):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
+    if strict:
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+        os.environ['CUBLAS_WORKSPACE_CONFIG']=':4096:8' # or ":16:2"
 
 
 def flatten_dict(d, parent_key='', sep='#'):

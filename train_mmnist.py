@@ -25,7 +25,7 @@ from os.path import isfile, join
 
 print("Python Process PID: ", os.getpid())
 
-set_seed(1997)
+set_seed(1997, strict=True)
 
 PRETRAINED_MODEL_PATH = './saves/PRETRAIN_MMNIST_SLOT_SA_3_100_3_RIM_6_100_ver_0/pretrain/checkpoints/encoder_sa.pt'
 
