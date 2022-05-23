@@ -25,7 +25,7 @@ from os.path import isfile, join
 
 print("Python Process PID: ", os.getpid())
 
-set_seed(1997)
+set_seed(1997, strict=True)
 
 PRETRAINED_MODEL_PATH = './saves/PRETRAIN_MMNIST_SLOT_SA_3_100_3_RIM_6_100_ver_0/pretrain/checkpoints/encoder_sa.pt'
 
@@ -97,7 +97,14 @@ def main():
     args = argument_parser()
     print(args)
     cudable = torch.cuda.is_available()
-    args.device = torch.device("cuda" if cudable else "cpu")
+    if cudable:
+        args.device = torch.device("cuda")
+    else:
+        try:
+            import torch.backends.mps as mps
+            args.device = torch.device("mps" if mps.is_available() else "cpu")
+        except ModuleNotFoundError:
+            args.device = torch.device("cpu")
     if not args.should_resume:
         make_dir(f"{args.folder_save}/checkpoints")
         make_dir(f"{args.folder_save}/best_model")

@@ -2,13 +2,23 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import torch
+import seaborn as sns
 from torch import Tensor
 from torchvision.utils import make_grid
 from .util import make_dir
 import argparse
 from typing import List, Sequence, Union, Any, Optional
+from numpy import ndarray
 
 torch.manual_seed(2022)
+
+ArrayLike = Union[ndarray, Tensor, list[list]]
+FigSize = Union[
+    int,
+    float,
+    tuple[int],
+    tuple[float],
+]
 
 def plot_frames(batch_of_pred, batch_of_target, start_frame, end_frame, sample):
     '''
@@ -365,6 +375,56 @@ def plot_saliency(
     plt.savefig(filename, dpi=120)
     plt.close()
 
+
+
+def array_handler(data: ArrayLike):
+    if isinstance(data, Tensor):
+        data = data.detach().to('cpu')
+        return data
+    elif isinstance(data, ArrayLike):
+        return data
+    else:
+        raise RuntimeError('unrecognized data type: {}'.format(type(data)))
+
+def plot_heatmap(data: ArrayLike, 
+                 x_label: str,
+                 y_label: str,
+                 figsize: Union[FigSize, str]='auto', cbar: bool=True, annot: Union[bool, str]='auto', fmt: str='.2f', square: bool=True) -> plt.Figure:
+    """
+    data: 2D array-like
+    cbar: bool
+    annot: bool or str
+    """
+    data = array_handler(data)
+    if isinstance(annot, bool):
+        ...
+    else:
+        assert isinstance(annot, str)
+        if annot == 'auto':
+            H, W = data.shape
+            if H < 6 and W < 6:
+                annot = True
+            else:
+                annot = False
+        else:
+            raise RuntimeError("'annot': {} unrecognized. ".format(annot))
+    if isinstance(figsize, str):
+        if figsize == 'auto':
+            figsize = (1+2.5*W/H, 2.5)
+        else:
+            raise RuntimeError("'figsize': {} unrecognized. ".format(figsize))
+    fig, ax = plt.subplots(figsize=figsize)
+    sns.heatmap(data, 
+                annot=annot, 
+                cbar=cbar,
+                fmt=fmt, 
+                linewidths=.5, 
+                ax=ax, 
+                square=square)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    plt.close()
+    return fig
 class VecStack():
     '''stack T D-dim vectors to T-by-N image
     shapes:
