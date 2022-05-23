@@ -19,9 +19,11 @@ core="RIM"
 should_resume="false"
 save_freq=25
 k=6
+bs=16
 
-DISABLE_ARTIFACT=1 python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --save_frequency $save_freq \
+python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --save_frequency $save_freq \
     --k $k \
     --dataset_dir $dataset_dir \
     --use_past_slots $use_past_slots \
-    --task "spritesmot"
+    --task "spritesmot" \
+    --batch_size $bs
