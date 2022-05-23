@@ -4,7 +4,7 @@ source ~/.bashrc
 conda activate pytorch
 
 
-experiment_name="SPRITES_SASBD_SPOT_4_4"
+experiment_name="SPRITES_SASBD_4_4"
 cfg_json="configs/rim/rim_slot.json"
 core="RIM"
 should_resume="false"
@@ -17,8 +17,7 @@ batch_size=64
 epochs=400
 decode_hidden="false"
 dataset_dir="/scratch/cristianmeo/Datasets"
-spotlight_bias="true"
-
+spotlight_bias="false"
 
 
 DISABLE_ARTIFACT=1 python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --save_frequency $save_freq \
@@ -27,5 +26,4 @@ DISABLE_ARTIFACT=1 python3 train_mmnist.py --experiment_name $experiment_name --
     --task $task \
     --dataset_dir $dataset_dir \
     --decode_hidden $decode_hidden \
-    --spotlight_bias $spotlight_bias \
-   
+    --spotlight_bias $spotlight_bias
