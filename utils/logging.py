@@ -48,12 +48,12 @@ def log_stats(args, is_train, **kwargs):
         num_vids = 4
     else:
         num_vids = 1
-    grided_ind_pred = make_grid_video(
+    grided_ind_pred = (make_grid_video(
         target = individual_output[0],
         return_dim = 5,
-    )
-    cat_video = make_grid_video(ground_truth[0:num_vids, 1:, :, :, :],
-                                prediction[0:num_vids], return_dim=5)
+    )*255).to(torch.uint8)
+    cat_video = (make_grid_video(ground_truth[0:num_vids, 1:, :, :, :],
+                                prediction[0:num_vids], return_dim=5)*255).to(torch.uint8)
 
     # scalars
     #   tensorboard
