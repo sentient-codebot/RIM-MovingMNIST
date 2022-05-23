@@ -96,6 +96,9 @@ class InputAttention(Attention):
         # For each rim, give them normalized summation weights (for each rim, the weights all sum to 1) NOTE is this necessary? 
         attention_probs = attention_probs + self.epsilon # in case of unstability
         attention_probs = attention_probs / torch.sum(attention_probs, dim=2, keepdim=True)
+        attention_probs_mask = (ArgMax.apply(attention_probs)).detach()
+        attention_probs = attention_probs*attention_probs_mask
+
 
         mask_ = torch.zeros((x.size(0), self.num_hidden), device=x.device)
         not_null_probs = 1. - attention_probs[:, :, -1] # Shape: [batch_size, num_blocks, ] NOTE how much focus is NOT on the null input
