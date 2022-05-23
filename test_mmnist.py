@@ -345,7 +345,8 @@ def main():
         prediction=prediction,
         metrics=metrics,
         test_table=test_table,
-        writer=writer
+        writer=writer,
+        manual_init_scale=0. if not args.use_past_slots else torch.sigmoid(model.slot_attention.manual_init_scale_digit).detach()
     )
 
     writer.close()

@@ -15,7 +15,10 @@ class SlotAttention(nn.Module):
     """Slot Attention module"""
     def __init__(self, 
         num_iterations, num_slots, slot_size, mlp_hidden_size, epsilon, num_input, input_size,
-    spotlight_bias=False):
+        spotlight_bias=False,
+        manual_init=False,
+        manual_init_scale=None,
+        ):
         """Build Slot Attention module.
         
         Args:
@@ -27,6 +30,9 @@ class SlotAttention(nn.Module):
             num_input (int): number of input,
             input_size (int): size of input,
             spotlight_bias (boolean): to decide whether you want to use spotlight or not 
+            
+            `manual_init`: whether you want to manually initialize slots
+            `manual_init_scale`: [0, 1] or None, the scale of the manual initialization of slots. init_slots = scale*manual_init + (1-scale)*rand_init. If set to `None`, it will be learnable. 
 
         Inputs:
             `inputs`: (batch_size, num_inputs, input_size)
@@ -48,6 +54,14 @@ class SlotAttention(nn.Module):
         self.norm_inputs = LayerNorm()
         self.norm_slots = LayerNorm()
         self.norm_mlp = LayerNorm()
+        
+        self.manual_init = manual_init
+        self.manual_init_scale = manual_init_scale
+        if self.manual_init:
+            if self.manual_init_scale is not None:
+                assert self.manual_init_scale >= 0 and self.manual_init_scale <= 1
+            else:
+                self.manual_init_scale_digit = nn.Parameter(torch.Tensor([0.])) # learnable, range [-inf, inf], need to be normalized
 
         # Parameters for init (shared by all slots)
         self.slots_mu = torch.nn.parameter.Parameter(
@@ -78,8 +92,25 @@ class SlotAttention(nn.Module):
             nn.ReLU(),
             nn.Linear(self.mlp_hidden_size, self.slot_size),
         )
+        
+    def manual_init_slots(self, manual_slots) -> torch.Tensor:
+        """manually initialize slots
+        
+        Inputs:
+            `slots`: past slots used for initialization. Shape [batch_size, num_slots, slot_size] **detached** tensor
+            
+        Returns:
+            `initialized_slots`: initialized slots
+        """
+        rand_slots = self.slots_mu + torch.exp(self.slots_log_sigma).to(manual_slots.device) * torch.randn(
+            manual_slots.shape[0], self.num_slots, self.slot_size).to(manual_slots.device)
+        if manual_slots.requires_grad:
+            print("Warning: slots are not detached. detaching now. ")
+            manual_slots = manual_slots.detach()
+        manual_init_scale = torch.sigmoid(self.manual_init_scale_digit)
+        return manual_init_scale * manual_slots + (1.-manual_init_scale) * rand_slots
 
-    def forward(self, inputs):
+    def forward(self, inputs, init_slots=None):
         """
         Inputs:
             `inputs`: (batch_size, num_inputs, input_size)
@@ -93,8 +124,11 @@ class SlotAttention(nn.Module):
         v = self.project_v(inputs) # Shape: (batch_size, num_inputs, slot_size).
 
         # Initialize slots. Shape: (batch_size, num_slots, slot_size).
-        slots = self.slots_mu + torch.exp(self.slots_log_sigma).to(inputs.device) * torch.randn(
-            inputs.shape[0], self.num_slots, self.slot_size).to(inputs.device)
+        if not self.manual_init or init_slots is None:
+            slots = self.slots_mu + torch.exp(self.slots_log_sigma).to(inputs.device) * torch.randn(
+                inputs.shape[0], self.num_slots, self.slot_size).to(inputs.device)
+        else:
+            slots = self.manual_init_slots(init_slots)
 
         # Multiple rounds of attention.
         for _ in range(self.num_iterations):
