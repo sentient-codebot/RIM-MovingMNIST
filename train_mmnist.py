@@ -14,7 +14,7 @@ from argument_parser import argument_parser
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
 from utils.visualize import make_grid_video
-from utils.logging import log_stats
+from utils.logging import log_stats, setup_wandb_columns
 from datasets import setup_dataloader
 from tqdm import tqdm
 from test_mmnist import dec_rim_util, test
@@ -102,7 +102,7 @@ def main():
     else:
         try:
             import torch.backends.mps as mps
-            args.device = torch.device("mps" if mps.is_available() else "cpu")
+            args.device = torch.device("cpu" if mps.is_available() else "cpu")
         except ModuleNotFoundError:
             args.device = torch.device("cpu")
     if not args.should_resume:
@@ -117,13 +117,7 @@ def main():
     # wandb setup
     project, name = args.id.split('_',1)
     wandb.init(project=project, name=name, config=vars(args), entity='nan-team')
-    
-    columns = ['sample_id', 'frame_id', 'ground_truth', 'prediction']
-    if 'SEP' in args.decoder_type:
-        columns.append('individual_prediction')
-    if args.core == 'SCOFF':
-        for idx in range(args.num_hidden):
-            columns.append('rule_OF_'+str(idx))
+    columns = setup_wandb_columns(args) # artifact columns
 
     # data setup
     train_loader, _, test_loader = setup_dataloader(args=args)

@@ -12,8 +12,8 @@ from argument_parser import argument_parser
 from datasets import setup_dataloader
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
-from utils.visualize import VecStack, make_grid_video
-from utils.logging import log_stats, enable_logging
+from utils.visualize import VecStack, make_grid_video, plot_heatmap, mplfig_to_video
+from utils.logging import log_stats, enable_logging, setup_wandb_columns
 from utils.metric import f1_score
 from tqdm import tqdm
 import wandb
@@ -163,6 +163,17 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                     }
                     if 'SEP' in args.decoder_type:
                         table_row['individual_prediction'] = wandb.Image(make_grid(model.hidden_features['individual_output'][sample_idx]*255, pad_value=255)), # N K C H W -> K C H W -> C *H **W
+                    if args.core == 'RIM' or args.core == 'SCOFF':
+                        table_row['input attention probs'] = wandb.Image(
+                            plot_heatmap(
+                                model.rnn_model.hidden_features['input_attention_probs'][sample_idx],  # [num_hidden, num_inputs]
+                                x_label = 'Slots' if args.use_slot_attention else 'Features',
+                                y_label = 'RIMs' if args.core == 'RIM' else 'OFs',
+                                vmin=0.,
+                                vmax=1.,
+                                title=f'Frame {frame+1}', 
+                            )
+                        )
                     if args.core == 'SCOFF':
                         rule_attn_probs = model.rnn_model.hidden_features['rule_attn_probs'][sample_idx] # [num_hidden, num_rules]
                         for of_idx in range(args.num_hidden):
@@ -183,7 +194,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                     if 'rule_attn_probs' in model.rnn_model.hidden_features:
                         rule_attn_probs_list.append(model.rnn_model.hidden_features['rule_attn_probs'].unsqueeze(1)) # NOTE [N, 1, num_hidden, num_rules]
                 elif args.core == 'SCOFF':
-                    rule_attn_argmax.append(model.rnn_model.hidden_features['rule_attn_argmax']) # TODO to delete
+                    rule_attn_argmax.append(model.rnn_model.hidden_features['rule_attn_argmax']) # [N, num_hidden] -> [N, num_hidden, T]
                     rule_attn_probs_list.append(model.rnn_model.hidden_features['rule_attn_probs'].unsqueeze(1)) # NOTE [N, 1, num_hidden, num_rules]
                     if 'input_attention_probs' in model.rnn_model.hidden_features:
                         input_attn_probs.append(model.rnn_model.hidden_features['input_attention_probs'].unsqueeze(1)) # Shape: [N, 1, num_hidden, num_inputs]
@@ -293,10 +304,7 @@ def main():
     project, name = args.id.split('_',1)
     wandb.init(project=project, name=name+'_test', config=vars(args), entity='nan-team')
     print(args)
-    columns = ['sample_id', 'frame_id', 'ground_truth', 'prediction', 'individual_prediction']
-    if args.core == 'SCOFF':
-        for idx in range(args.num_hidden):
-            columns.append('rule_OF_'+str(idx))
+    columns = setup_wandb_columns(args)
 
     # data setup
     train_loader, val_loader, test_loader = setup_dataloader(args=args)

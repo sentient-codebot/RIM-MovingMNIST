@@ -1,16 +1,21 @@
+from multiprocessing.dummy import Array
 import matplotlib.pyplot as plt
+from matplotlib.colors import Colormap
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import torch
 import seaborn as sns
 from torch import Tensor
 from torchvision.utils import make_grid
+from wandb import Video
 from .util import make_dir
 import argparse
 from typing import List, Sequence, Union, Any, Optional
 from numpy import ndarray
-
-torch.manual_seed(2022)
+import numpy as np
+import wandb
+from moviepy.editor import VideoClip
+from moviepy.video.io.bindings import mplfig_to_npimage
 
 ArrayLike = Union[ndarray, Tensor, list[list]]
 FigSize = Union[
@@ -377,7 +382,7 @@ def plot_saliency(
 
 
 
-def array_handler(data: ArrayLike):
+def array_handler(data: ArrayLike) -> ArrayLike:
     if isinstance(data, Tensor):
         data = data.detach().to('cpu')
         return data
@@ -389,6 +394,10 @@ def array_handler(data: ArrayLike):
 def plot_heatmap(data: ArrayLike, 
                  x_label: str,
                  y_label: str,
+                 vmin: float=0.,
+                 vmax: float=1.,
+                 cmap: Optional[Colormap]=None,
+                 title: Optional[str]=None,
                  figsize: Union[FigSize, str]='auto', cbar: bool=True, annot: Union[bool, str]='auto', fmt: str='.2f', square: bool=True) -> plt.Figure:
     """
     data: 2D array-like
@@ -396,12 +405,12 @@ def plot_heatmap(data: ArrayLike,
     annot: bool or str
     """
     data = array_handler(data)
+    H, W = data.shape
     if isinstance(annot, bool):
         ...
     else:
         assert isinstance(annot, str)
         if annot == 'auto':
-            H, W = data.shape
             if H < 6 and W < 6:
                 annot = True
             else:
@@ -410,19 +419,26 @@ def plot_heatmap(data: ArrayLike,
             raise RuntimeError("'annot': {} unrecognized. ".format(annot))
     if isinstance(figsize, str):
         if figsize == 'auto':
-            figsize = (1+2.5*W/H, 2.5)
+            figsize = (2+2.5*W/H, 4.5) # W, H
         else:
             raise RuntimeError("'figsize': {} unrecognized. ".format(figsize))
     fig, ax = plt.subplots(figsize=figsize)
+    if cmap is None:
+        cmap = sns.diverging_palette(220, 20, as_cmap=True)
     sns.heatmap(data, 
                 annot=annot, 
                 cbar=cbar,
                 fmt=fmt, 
                 linewidths=.5, 
                 ax=ax, 
+                cmap=cmap,
+                vmin=vmin,
+                vmax=vmax,
                 square=square)
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
+    if title is not None:
+        ax.set_title(title)
     plt.close()
     return fig
 class VecStack():
@@ -471,6 +487,37 @@ def make_grid_video(target, prediction=None, return_dim=4):
     else:
         return torch.stack(frames, dim=0).unsqueeze(0) # [N, T, C, H, W]
 
+def mplfig_to_video(figs: list[plt.figure], filename: str, fps: int=3) -> VideoClip:
+    make_frame = lambda t: mplfig_to_npimage(figs[t])
+    animation = VideoClip(make_frame,)
+    
+    animation.write_videofile(filename, fps=fps)
+    return animation
+
+def mplfig_to_npvideo(figs: list[plt.figure]) -> np.ndarray:
+    """
+        `figs`: list of matplotlib figures
+    """
+    make_frame = lambda t: mplfig_to_npimage(figs[t]).transpose(2,0,1) # (C, H, W)
+    frames = [make_frame(t) for t in range(len(figs))]
+    video = np.stack(frames, axis=0) # (T, C, H, W)
+    
+    return video
+
+def heatmap_to_video(data: Tensor, *args, **kwargs) -> np.ndarray:
+    """
+        `data`: Shape [T, 1, H, W] or [T, H, W]
+        
+    """
+    if data.dim() == 4:
+        data = data.squeeze(1)
+    elif data.dim() != 3:
+        raise RuntimeError('expected data.dim() == 4, got {}'.format(data.dim()))
+
+    figs = []
+    for frame_idx, frame in enumerate(data):
+        figs.append(plot_heatmap(frame, *args, title=f'Frame {frame_idx:d}', **kwargs))
+    return mplfig_to_npvideo(figs)
 
 def main():
     # data = torch.rand((64,51,1,64,64))
