@@ -1,5 +1,5 @@
 import wandb
-from .visualize import make_grid_video
+from .visualize import make_grid_video, heatmap_to_video
 import torch
 import os
 
@@ -112,9 +112,10 @@ def log_stats(args, is_train, **kwargs):
         writer.add_video('Individual Predictions', grided_ind_pred) # N num_blocks T 1 H W
     #   wandb
     video_dict = {
-        'Input Attention Probs': wandb.Video((input_attn_probs[:1].cpu()*255).to(torch.uint8)), # [1, T, 1, H, W]
+        # 'Input Attention Probs': wandb.Video((input_attn_probs[:1].cpu()*255).to(torch.uint8)), # [1, T, 1, H, W]
+        'Input Attention Probs': wandb.Video(heatmap_to_video(input_attn_probs[:1], fps=3)), # [T, 3, H, W]
         'Predicted Videos': wandb.Video((cat_video.cpu()*255).to(torch.uint8), fps=3),
-        'Individual Predictions': wandb.Video((grided_ind_pred.cpu()*255).to(torch.uint8), fps=4),
+        'Individual Predictions': wandb.Video((grided_ind_pred.cpu()*255).to(torch.uint8), fps=3),
     }
     if args.core == 'SCOFF' or args.use_rule_sharing:
         video_dict.update({

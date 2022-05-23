@@ -12,7 +12,7 @@ from argument_parser import argument_parser
 from datasets import setup_dataloader
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
-from utils.visualize import VecStack, make_grid_video
+from utils.visualize import VecStack, make_grid_video, plot_heatmap, mplfig_to_video
 from utils.logging import log_stats, enable_logging
 from utils.metric import f1_score
 from tqdm import tqdm

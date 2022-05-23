@@ -5,12 +5,15 @@ import torch
 import seaborn as sns
 from torch import Tensor
 from torchvision.utils import make_grid
+from wandb import Video
 from .util import make_dir
 import argparse
 from typing import List, Sequence, Union, Any, Optional
 from numpy import ndarray
-
-torch.manual_seed(2022)
+import numpy as np
+import wandb
+from moviepy.editor import VideoClip
+from moviepy.video.io.bindings import mplfig_to_npimage
 
 ArrayLike = Union[ndarray, Tensor, list[list]]
 FigSize = Union[
@@ -471,6 +474,34 @@ def make_grid_video(target, prediction=None, return_dim=4):
     else:
         return torch.stack(frames, dim=0).unsqueeze(0) # [N, T, C, H, W]
 
+def mplfig_to_video(figs: list[plt.figure], filename: str, fps: int=3) -> VideoClip:
+    make_frame = lambda t: mplfig_to_npimage(figs[t])
+    animation = VideoClip(make_frame,)
+    
+    animation.write_videofile(filename, fps=fps)
+    return animation
+
+def mplfig_to_npvideo(figs: list[plt.figure]) -> np.ndarray:
+    """
+        `figs`: list of matplotlib figures
+    """
+    make_frame = lambda t: mplfig_to_npimage(figs[t]).transpose(2,0,1) # (C, H, W)
+    frames = [make_frame(t) for t in range(len(figs))]
+    video = np.stack(frames, axis=0) # (T, C, H, W)
+    
+    return video
+
+def heatmap_to_video(data: Tensor, *args, fps: int=3, **kwargs) -> np.ndarray:
+    """
+        `data`: Shape [T, 1, H, W]
+        
+    """
+    if data.dim() == 4:
+        data = data.squeeze(1)
+    figs = []
+    for frame in data:
+        figs.append(plot_heatmap(frame, *args, **kwargs))
+    return mplfig_to_npvideo(figs)
 
 def main():
     # data = torch.rand((64,51,1,64,64))
