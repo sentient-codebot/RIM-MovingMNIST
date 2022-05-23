@@ -77,7 +77,7 @@
                 "--num_slots",
                 "2",
                 "--task",
-                "spritesmot",
+                "movingmnist",
                 "--encoder_type",
                 "NONFLATTEN",
                 "--decoder_type",

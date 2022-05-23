@@ -1,5 +1,7 @@
+from matplotlib.pyplot import xlabel
+from argparse import Namespace
 import wandb
-from .visualize import make_grid_video, heatmap_to_video
+from .visualize import make_grid_video, heatmap_to_video, plot_heatmap
 import torch
 import os
 
@@ -36,7 +38,7 @@ def log_stats(args, is_train, **kwargs):
             rule_attn_probs = metrics['rule_attn_probs']
     elif args.core == 'SCOFF':
         input_attn_probs = metrics['input_attn_probs']
-        rule_attn_argmax = metrics['rule_attn_argmax']
+        rule_attn_argmax = metrics['rule_attn_argmax'] # LongTensor
         rule_attn_probs = metrics.get('rule_attn_probs') 
     # videos patching
     individual_output = metrics['individual_output'] # dim == 6
@@ -99,7 +101,17 @@ def log_stats(args, is_train, **kwargs):
     elif args.core == 'SCOFF':
         stat_dict.update({
             # 'SCOFF Input Attention Probs': wandb.Image(input_attn_probs[0].cpu()*255),
-            'Rules Selected': wandb.Image(rule_attn_argmax[0].cpu()*255/9), # 0 to 9 classes
+            'Rules Selected': wandb.Image(
+                plot_heatmap(
+                    rule_attn_argmax[0], # LongTensor, full shape [N, num_hidden, T]
+                    x_label='Frames',
+                    y_label='OFs',
+                    vmin=0,
+                    vmax=args.num_rules-1,
+                    fmt='d',
+                    annot=True,
+                ),
+                rule_attn_argmax[0].cpu()*255/9), # 0 to 9 classes
         })
 
     # videos
@@ -112,14 +124,41 @@ def log_stats(args, is_train, **kwargs):
         writer.add_video('Individual Predictions', grided_ind_pred) # N num_blocks T 1 H W
     #   wandb
     video_dict = {
-        # 'Input Attention Probs': wandb.Video((input_attn_probs[:1].cpu()*255).to(torch.uint8)), # [1, T, 1, H, W]
-        'Input Attention Probs': wandb.Video(heatmap_to_video(input_attn_probs[:1], fps=3)), # [T, 3, H, W]
         'Predicted Videos': wandb.Video((cat_video.cpu()*255).to(torch.uint8), fps=3),
-        'Individual Predictions': wandb.Video((grided_ind_pred.cpu()*255).to(torch.uint8), fps=3),
+        
     }
+    if 'SEP' in args.decoder_type:
+        video_dict.update(
+            {
+                'Individual Predictions': wandb.Video((grided_ind_pred.cpu()*255).to(torch.uint8), fps=3),
+            }
+        )
+    if args.core == 'RIM' or args.core == 'SCOFF':
+        video_dict.update({
+            # 'Input Attention Probs': wandb.Video((input_attn_probs[:1].cpu()*255).to(torch.uint8)), # [1, T, 1, H, W]
+            'Input Attention Probs': wandb.Video(
+                heatmap_to_video(
+                    input_attn_probs[0], 
+                    x_label='Slots' if args.use_slot_attention else 'Features',
+                    y_label='RIMs' if args.core=='RIM' else 'OFs',
+                    vmin=0.,
+                    vmax=1.,
+                ),
+                fps=1,
+            ), # [T, 3, H, W]
+        })
     if args.core == 'SCOFF' or args.use_rule_sharing:
         video_dict.update({
-            'Rule Attention Probs': wandb.Video((rule_attn_probs[:1].cpu()*255).to(torch.uint8)), # [1, T, 1, H, W]
+            'Rule Attention Probs': wandb.Video(
+                heatmap_to_video(
+                    rule_attn_probs[0],
+                    x_label='Rules/Schemata',
+                    y_label='OFs',
+                    vmin=0.,
+                    vmax=1.,
+                ),
+                fps=1,
+            ), # [T, 3, H, W]
         })
     
     # histograms
@@ -131,11 +170,14 @@ def log_stats(args, is_train, **kwargs):
     # wandb log
     project, name = args.id.split('_',1)
     if not os.environ.get('DISABLE_ARTIFACT', False):
+        metadata = vars(args)
+        metadata['epoch'] = epoch
         if is_train:
-            wandb_artf = wandb.Artifact(project+'_'+name, type='predictions', metadata=vars(args).update({'epoch': epoch}))
+            wandb_artf = wandb.Artifact(project+'_'+name, type='predictions', metadata=metadata)
         else:
-            wandb_artf = wandb.Artifact(project+'_'+name+'_test', type='predictions', metadata=vars(args).update({'epoch': epoch}))
+            wandb_artf = wandb.Artifact(project+'_'+name+'_test', type='predictions', metadata=metadata)
         wandb_artf.add(test_table, "predictions")
+        print('logging artifact')
         wandb.run.log_artifact(wandb_artf)
     wandb.log({
         'Loss': loss_dict,
@@ -172,3 +214,15 @@ class enable_logging():
 
     def __exit__(self, type, value, traceback):
         self.model.do_logging = self.prev
+
+def setup_wandb_columns(args: Namespace) -> list[str]:
+    """
+    setup wandb artifact columns"""
+    columns = ['sample_id', 'frame_id', 'ground_truth', 'prediction', 'individual_prediction']
+    if args.core =='RIM' or args.core == 'SCOFF':
+        columns.append('input attention probs')
+    if args.core == 'SCOFF':
+        for idx in range(args.num_hidden):
+            columns.append('rule_OF_'+str(idx))
+            
+    return columns
