@@ -111,7 +111,8 @@ class InputAttention(Attention):
         attention_probs = attention_probs / \
             torch.sum(attention_probs, dim=2, keepdim=True)
         attention_probs_mask = (ArgMax.apply(attention_probs)).detach()
-        attention_probs = attention_probs*attention_probs_mask
+        attention_selected_probs = (attention_probs*attention_probs_mask).detach
+        attention_probs = attention_probs*attention_probs_mask/(attention_selected_probs + 0.000001)
 
         mask_ = torch.zeros((x.size(0), self.num_hidden), device=x.device)
         # Shape: [batch_size, num_blocks, ] NOTE how much focus is NOT on the null input
