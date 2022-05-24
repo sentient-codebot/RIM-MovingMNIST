@@ -122,7 +122,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             data.shape[3],
             data.shape[4])
         ) # (BS, num_blocks, T, C, H, W)
-        soft_masks = []
+        soft_masks = [] # list of batches of masks
 
         do_logging = batch_idx==len(test_loader)-1
 
@@ -211,6 +211,13 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                     rule_attn_probs_list.append(model.rnn_model.hidden_features['rule_attn_probs'].unsqueeze(1)) # NOTE [N, 1, num_hidden, num_rules]
                     if 'input_attention_probs' in model.rnn_model.hidden_features:
                         input_attn_probs.append(model.rnn_model.hidden_features['input_attention_probs'].unsqueeze(1)) # Shape: [N, 1, num_hidden, num_inputs]
+        
+        # for MOT tasks, do one more step
+        if args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
+            inputs = data[:, frame, :, :, :]
+            with torch.no_grad():
+                recons, preds, hidden, memory, curr_alpha_mask = model(inputs, hidden, memory)
+            soft_masks.append(curr_alpha_mask) # [BS, K, 1, H, W]
         
         pred_list = gen_masks(
             batch_size=data.shape[0],

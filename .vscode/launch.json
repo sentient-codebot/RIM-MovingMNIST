@@ -95,7 +95,7 @@
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "0",
-                "DEBUG": "1"
+                // "DEBUG": "1"
             }
         },
         {
