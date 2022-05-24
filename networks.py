@@ -1,6 +1,6 @@
 from base64 import encode
 from multiprocessing.sharedctypes import Value
-from turtle import st
+from turtle import forward, st
 import torch
 import torch.nn as nn
 from rnn_models import RIMCell, RIM, SparseRIMCell, LayerNorm, Flatten, UnFlatten, Interpolate, SCOFFCell
@@ -91,7 +91,29 @@ class BasicDecoder(nn.Module):
     def forward(self, x):
         x = self.layers(x)
         return x
+
+class BasicMLP(nn.Module):
+    """Shared Basic MLP for compositional MLP
     
+    Inputs:
+        'x': hidden state portion of shape [N, hidden_size/factors_of_variations]  """
+    def _init_(self, hidden_size, fov):
+        super()._init_()
+        self.hidden_size = hidden_size
+        self.fov = fov
+        self.mlp =  nn.Sequential(
+                            nn.Linear(int(self.hidden_size/self.fov), 64),
+                            nn.Tanh(),
+                            nn.Linear(64, 64),
+                            nn.Tanh(),
+                            nn.Linear(64, self.hidden_size),
+                        )
+    def forward(self, x):
+        x = self.mlp(x)
+        return x
+    
+
+
 class SharedBasicDecoder(nn.Module):
     """Shared Basic decoder for group of latents
     
@@ -117,6 +139,40 @@ class SharedBasicDecoder(nn.Module):
         
         fused = torch.sum(channels*mask, dim=1) # Shape: [N, C, H, W]
         return fused, channels, mask
+
+
+class Compositional_MLP(nn.Module):
+    """Shared Basic MLP for hidden variables
+    
+    Inputs:
+        `x`: hidden state of shape [N, M, embedding_size]"""
+    def __init__(self, embedding_size, fov):
+        super().__init__()
+        self.fov = fov
+        self.embedding_size = embedding_size
+        self.mlp = BasicMLP(embedding_size, fov)
+        
+    def forward(self, x):
+
+        x = x.permute(1, 0, 2) # Shape: [N, M, embedding_size] -> [M, N, embedding_size]
+        out_list = []
+        mask_list = []
+        slots_list = []
+        for component in x: # Shape: [N, embedding_size]
+            chuncks = torch.chunck(component, self.fov, dim=1) # Shape: [fov, N, embedding_size/fov]
+            for fov in range(self.fov):
+                out_latent = self.mlp(chuncks[fov]) # [N, embedding_size]
+                mask_latent = self.mlp(chuncks[fov])  # [N, embedding_size]
+                out_list.append(out_latent)
+                mask_list.append(mask_latent)
+            channels = torch.stack(out_list, dim=1) # Shape: [N, fov, embedding_size]
+            mask = torch.stack(mask_list, dim=1) # Shape: [N, fov, embedding_size]
+            mask = mask/torch.sum(mask, dim=1, keepdim=True) # Normalization.  Shape: [N, fov, embedding_size]
+            fused = torch.sum(channels*mask, dim=1) # Shape: [N, embedding_size]
+            slots_list.append(fused)
+        latent_variables = torch.stack(slots_list, dim=1)
+
+        return latent_variables
     
 class SharedBroadcastDecoder(nn.Module):
     """
