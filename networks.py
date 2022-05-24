@@ -490,6 +490,8 @@ class BallModel(nn.Module):
                                         use_rule_sharing=self.args.use_rule_sharing,
                                         use_rule_embedding=self.args.use_rule_embedding,
                                         num_rules=self.args.num_rules,
+                                        hard_input_attention=self.args.hard_input_attention,
+                                        null_input_type=self.args.null_input_type,
                 )
             else:
                 raise NotImplementedError('Sparse RIM not updated with new args yet')
@@ -584,6 +586,8 @@ class BallModel(nn.Module):
                 share_inp_attn=True,
                 share_comm_attn=True,
                 straight_through_input=self.args.slot_straight_input,
+                hard_input_attention=self.args.hard_input_attention,
+                null_input_type=self.args.null_input_type,
             )
         else:
             raise ValueError('Illegal RNN Core')

@@ -42,6 +42,8 @@ class RIMCell(nn.Module):
         device, input_size, hidden_size, num_units, k, rnn_cell, input_key_size = 64, input_value_size = 400,
         num_input_heads = 1, input_dropout = 0.1, use_sw = False, comm_key_size = 32, comm_value_size = 100, num_comm_heads = 4, comm_dropout = 0.1, 
         memory_size = None, use_rule_sharing = False, use_rule_embedding = False, num_rules = None,
+        hard_input_attention = False, 
+        null_input_type = 'zero',
     ):
         super().__init__()
         if comm_value_size != hidden_size:
@@ -82,7 +84,8 @@ class RIMCell(nn.Module):
             num_input_heads, 
             num_units, 
             k,
-            input_dropout
+            input_dropout,
+            hard_argmax=hard_input_attention,
         )
 
         self.use_sw = use_sw
@@ -100,6 +103,17 @@ class RIMCell(nn.Module):
                 write_dropout=comm_dropout/2,
                 read_dropout=comm_dropout/2,
             )
+
+        self.null_input_type = null_input_type    
+        if self.null_input_type == 'zero':   
+            self.gen_null_input = torch.zeros
+        elif self.null_input_type == 'rand':
+            self.gen_null_input = torch.randn
+        else:
+            print('unrecognized null input type:', self.null_input_type)
+            print('using zero null input')
+            self.null_input_type = 'zero'
+            self.gen_null_input = torch.zeros
 
         self.do_logging = False
         self.hidden_features = {}
@@ -119,10 +133,10 @@ class RIMCell(nn.Module):
         """
         size = x.size()
         if x.dim() == 2: # Shape: (batch_size, input_size)
-            null_input = torch.randn(size[0], 1, size[1]).float().to(self.device)
+            null_input = self.gen_null_input(size[0], 1, size[1]).float().to(self.device)
             x = torch.cat((x.unsqueeze(1), null_input), dim = 1) # Shape: [batch_size, 1+1, input_size]
         elif x.dim() == 3: # Shape: [batch_size, num_inputs, input_size]
-            null_input =  torch.randn(size[0], 1, size[2]).float().to(self.device)
+            null_input =  self.gen_null_input(size[0], 1, size[2]).float().to(self.device)
             x = torch.cat((x, null_input), dim = 1) # Shape: [batch_size, num_inputs+1, input_size]
         else:
             raise RuntimeError("Invalid input size")
@@ -547,6 +561,8 @@ class SCOFFCell(nn.Module):
                 version=1, # always 1
                 straight_through_input=False,
                 device=None, # used if do_rel
+                hard_input_attention=False,
+                null_input_type = 'zero',
     ):
         super(SCOFFCell, self).__init__()
 
@@ -610,6 +626,7 @@ class SCOFFCell(nn.Module):
                 dropout=0.1,
                 share_query_proj=True,
                 num_shared_query_proj=1,
+                hard_argmax=hard_input_attention
             )
             print('competition among OFs happening in inp attention')
 
@@ -626,6 +643,17 @@ class SCOFFCell(nn.Module):
 
         if self.do_rel:
             raise ValueError("I don't care about using Relational Memory. ")
+        
+        self.null_input_type = null_input_type    
+        if self.null_input_type == 'zero':   
+            self.gen_null_input = torch.zeros_like
+        elif self.null_input_type == 'rand':
+            self.gen_null_input = torch.randn_like
+        else:
+            print('unrecognized null input type:', self.null_input_type)
+            print('using zero null input')
+            self.null_input_type = 'zero'
+            self.gen_null_input = torch.zeros
 
         self.memory=None
         self.do_logging = False
@@ -642,7 +670,7 @@ class SCOFFCell(nn.Module):
     def forward(self, inp, hx, cx):
         """
         Inputs:
-            if self.direct_input:
+            if not self.direct_input:
                 if not self.share_inp:
                     `inp`: [batch_size, d_in] -> num_hidden x [batch_size, d_in//num_hidden], split for each block
                 else:
@@ -680,7 +708,7 @@ class SCOFFCell(nn.Module):
             else:
                 # `inp_use` Shape: [bs, num_inputs, input_size]
                 input_to_attention = torch.cat(
-                    [inp_use, torch.zeros_like(inp_use[:, 0:1, :])], dim=1
+                    [inp_use, self.gen_null_input(inp_use[:, 0:1, :])], dim=1
                 ) # Shape [bs, num_inputs+1, input_size]
 
             split_hx = [chunk.unsqueeze(1) for chunk in

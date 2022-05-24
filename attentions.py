@@ -68,6 +68,7 @@ class InputAttention(Attention):
                  epsilon=1e-8,
                  share_query_proj=False,
                  num_shared_query_proj=1,
+                 hard_argmax=False,
                  ):
         super().__init__(dropout)
         self.num_heads = num_heads
@@ -89,6 +90,8 @@ class InputAttention(Attention):
             # all query share the same projection *proj*
         self.dropout = nn.Dropout(p=dropout)
         self.epsilon = epsilon
+        
+        self.hard_argmax = hard_argmax
 
     def forward(self, x, h):
         key = self.key(x)  # Shape: [batch_size, num_heads, kdim]
@@ -110,9 +113,10 @@ class InputAttention(Attention):
         attention_probs = attention_probs + self.epsilon  # in case of unstability
         attention_probs = attention_probs / \
             torch.sum(attention_probs, dim=2, keepdim=True)
-        attention_probs_mask = (ArgMax.apply(attention_probs)).detach()
-        attention_selected_probs = (attention_probs*attention_probs_mask).detach()
-        attention_probs = attention_probs*attention_probs_mask/(attention_selected_probs + 0.000001)
+        if self.hard_argmax:
+            attention_probs_mask = (ArgMax.apply(attention_probs)).detach()
+            attention_selected_probs = (attention_probs*attention_probs_mask).detach()
+            attention_probs = attention_probs*attention_probs_mask/(attention_selected_probs + 0.000001)
 
         mask_ = torch.zeros((x.size(0), self.num_hidden), device=x.device)
         # Shape: [batch_size, num_blocks, ] NOTE how much focus is NOT on the null input
@@ -123,10 +127,6 @@ class InputAttention(Attention):
         row_to_activate = batch_indices.repeat((1, self.k))
         mask_[row_to_activate.view(-1), topk1.indices.view(-1)] = 1
 
-        hard_argmax = False
-        if hard_argmax:
-            # Shape: (batch_size, num_slots, num_inputs)
-            attention_probs = ArgMax.apply(attention_probs).float()
         # inputs = (bs, num_blocks, vdim), all value vectors are just scaled version of each other.
         inputs = torch.matmul(self.dropout(
             attention_probs), value) * mask_.unsqueeze(2)
