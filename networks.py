@@ -671,8 +671,8 @@ class BallModel(nn.Module):
                     raise NotImplementedError('Sparse RIM not configured for slot input yet')
             elif self.core=='GRU':
                 h_shape = h_prev.shape # Shape: [batch_size, num_units, hidden_size]
-                h_prev = h_prev.reshape((h_shape[0],-1)) # flatten, Shape: [batch_size, num_units*hidden_size]
-                h_new, cs_new, M = self.rnn_model(x=encoded_input, hs=h_prev, cs=None, M=None) # one-step prediciton
+                h_prev = h_prev.reshape((h_shape[0],1,-1)) # flatten, Shape: [batch_size, 1, num_units*hidden_size]
+                h_new, cs_new, M = self.rnn_model(x=encoded_input.view(encoded_input.shape[0], 1, -1), hs=h_prev, cs=None, M=None) # one-step prediciton
                 h_new = h_new.reshape(h_shape)
             elif self.core=='LSTM':
                 raise NotImplementedError('LSTM core not implemented yet!')
