@@ -240,12 +240,15 @@ def setup_model(args):
     """setup model, optimizer, (scheduler), loss_fn, start_epoch, train_batch_idx"""
     # find latest checkpoint    
     if args.should_resume:
+        print(f"Loading args from "+f"{args.folder_save}/args/args.pt")
+        args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt")['args'])
         model_dir = f"{args.folder_save}/checkpoints"
         latest_model_idx = max(
             [int(f.split('.')[0]) for f in os.listdir(model_dir) if f.endswith('.pt')]
         )
         args.path_to_load_model = f"{model_dir}/{latest_model_idx}.pt"
         args.checkpoint = {"epoch": latest_model_idx}
+        args.should_resume = True
     # if args.path_to_load_model != "":
     #     print(f"Loading args from "+f"{args.folder_save}/args/args.pt")
     #     args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt")['args']) # NOTE this will overwrite args.path_.... to skip model resume!
@@ -276,6 +279,7 @@ def setup_model(args):
 
     # resume model state dict
     if args.path_to_load_model != "":
+        print('Resuming model from '+args.path_to_load_model)
         checkpoint = torch.load(args.path_to_load_model.strip())
         start_epoch = checkpoint['epoch'] + 1
         print(f"Resuming experiment id: {args.id}, from epoch: {start_epoch-1}")
