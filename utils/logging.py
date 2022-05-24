@@ -81,6 +81,8 @@ def log_stats(args, is_train, **kwargs):
         'F1 Score': f1,
         'SSIM': ssim
     }
+    if 'mot_metrics' in metrics:
+        metric_dict.update(metrics['mot_metrics'])
     stat_dict = {
         'Learning Rate': lr,
     }

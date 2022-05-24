@@ -1,6 +1,7 @@
 """Script to parse all the command-line arguments"""
 import argparse
 import json
+import os
 from xmlrpc.client import Boolean
 
 
@@ -211,7 +212,15 @@ def argument_parser():
         elif args.task == 'TRAFFIC4CAST':
             args.dataset_dir = '/home/nnan/traffic4cast/'
         elif args.task == 'SPRITESMOT':
-            args.dataset_dir = '/home/nnan/sprites/train/'
+            args.dataset_dir = '/home/nnan/'
+            
+    if args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
+        if 'SEP' not in args.decoder_type:
+            print('Warning: Component-wise decoder has to be used in MOT tasks. Using SEP_BASIC instead.')
+            args.decoder_type = str2decoder('SEP_BASIC')
+        if args.decode_hidden:
+            print('Warning: Reconstruction has to be made for MOT tasks. Setting decode_hidden to False.')
+            args.decode_hidden = False
             
     if args.decode_hidden:
         args.recon_loss_weight = 0.0
@@ -250,6 +259,16 @@ def argument_parser():
     args.id = args.id + f"_ver_{args.version}"
     args.folder_save = f"./saves/{args.id}"
     args.folder_log = f"./logs/{args.id}"
+    
+    args.mot_pred_file = args.folder_log+'/mot_json.json'
+    if args.task == 'SPRITESMOT':
+        args.mot_gt_file = os.path.join(args.dataset_dir, 'gt_jsons', 'spmot_test.json')
+    elif args.task == 'VMDS':
+        args.mot_gt_file = os.path.join(args.dataset_dir, 'gt_jsons', 'vmds_test.json')
+    elif args.task == 'VOR':
+        args.mot_gt_file = os.path.join(args.dataset_dir, 'gt_jsons', 'vor_test.json')
+        
+
 
     return args
 
