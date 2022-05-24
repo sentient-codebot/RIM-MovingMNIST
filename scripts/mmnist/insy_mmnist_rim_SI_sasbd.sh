@@ -20,10 +20,12 @@ should_resume="false"
 save_freq=25
 k=6
 bs=16
+decode_hidden="false"
 
 python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --save_frequency $save_freq \
     --k $k \
     --dataset_dir $dataset_dir \
     --use_past_slots $use_past_slots \
     --task 'movingmnist' \
-    --batch_size $bs
+    --batch_size $bs \
+    --decode_hidden $decode_hidden
