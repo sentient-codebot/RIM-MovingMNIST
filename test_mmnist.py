@@ -4,6 +4,7 @@ from time import time
 import matplotlib.pyplot as plt
 import numpy as np
 import torch 
+import json
 from torch import autograd
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import make_grid
@@ -14,7 +15,7 @@ from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
 from utils.visualize import VecStack, make_grid_video, plot_heatmap, mplfig_to_video
 from utils.logging import log_stats, enable_logging, setup_wandb_columns
-from utils.metric import f1_score
+from utils.metric import f1_score, gen_masks, get_mot_metrics
 from tqdm import tqdm
 import wandb
 from utils import util
@@ -83,6 +84,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     f1 = 0.
     ssim = 0.
     most_used_units = []
+    pred_list = []
+    id_counter = 0
     for batch_idx, data in enumerate(tqdm(test_loader) if __name__ == "__main__" else test_loader): # tqdm doesn't work here?
         if args.task == 'MMNIST':
             # data: (labels, frames_in, frames_out)
@@ -119,6 +122,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             data.shape[3],
             data.shape[4])
         ) # (BS, num_blocks, T, C, H, W)
+        soft_masks = []
 
         do_logging = batch_idx==len(test_loader)-1
 
@@ -130,10 +134,18 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                     inputs = preds
                 else:
                     inputs = data[:, frame, :, :, :]
-                if not args.spotlight_bias:
-                    recons, preds, hidden, memory = model(inputs, hidden, memory)
+                if args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
+                    model.mot_eval = True
+                    if not args.spotlight_bias:
+                        recons, preds, hidden, memory, curr_alpha_mask = model(inputs, hidden, memory)
+                    else:
+                        recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias, curr_alpha_mask = model(inputs, hidden, memory)
+                    soft_masks.append(curr_alpha_mask) # [BS, K, 1, H, W]
                 else:
-                    recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias = model(inputs, hidden, memory)
+                    if not args.spotlight_bias:
+                        recons, preds, hidden, memory = model(inputs, hidden, memory)
+                    else:
+                        recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias = model(inputs, hidden, memory)
                 curr_target = inputs
                 next_target = data[:, frame+1, :, :, :]
                 if recons is not None:
@@ -200,6 +212,15 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                     if 'input_attention_probs' in model.rnn_model.hidden_features:
                         input_attn_probs.append(model.rnn_model.hidden_features['input_attention_probs'].unsqueeze(1)) # Shape: [N, 1, num_hidden, num_inputs]
         
+        pred_list = gen_masks(
+            batch_size=data.shape[0],
+            n_steps=len(soft_masks),
+            n_slots=args.num_hidden,
+            id_counter=id_counter,
+            pred_list=pred_list,
+            soft_masks=torch.stack(soft_masks, dim=1),
+        )
+        
         if not rollout:
             ssim += pt_ssim.ssim(data[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
                         prediction[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
@@ -224,6 +245,12 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     epoch_mseloss = epoch_mseloss / (batch_idx+1)
     ssim = ssim / (batch_idx+1)
     f1_avg = f1 / (batch_idx+1) / (data.shape[1]-1)
+    
+    mot_metrics = None
+    if args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
+        with open(args.mot_pred_file, 'w') as outfile:
+            json.dump(pred_list, outfile) # args.folder_log+'/mot_json.json'
+        mot_metrics = get_mot_metrics(args.mot_pred_file, args.mot_gt_file)
 
     if args.core == 'RIM':
         metrics = {
@@ -256,6 +283,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             'f1': f1_avg,
             'individual_output': blocked_prediction
         }
+    if mot_metrics is not None:
+        metrics['mot_metrics'] = mot_metrics
 
     print('test runtime:', time() - start_time)
     return epoch_loss, epoch_recon_loss, epoch_pred_loss, prediction, data, metrics, test_table

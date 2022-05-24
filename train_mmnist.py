@@ -95,7 +95,7 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
 def main():
     # parse and process args
     args = argument_parser()
-    print(args)
+    # print(args)
     cudable = torch.cuda.is_available()
     if cudable:
         args.device = torch.device("cuda")
@@ -105,6 +105,7 @@ def main():
             args.device = torch.device("cpu" if mps.is_available() else "cpu")
         except ModuleNotFoundError:
             args.device = torch.device("cpu")
+    make_dir(args.folder_log)
     if not args.should_resume:
         make_dir(f"{args.folder_save}/checkpoints")
         make_dir(f"{args.folder_save}/best_model")

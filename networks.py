@@ -1,5 +1,6 @@
 from base64 import encode
 from multiprocessing.sharedctypes import Value
+from tempfile import gettempdir
 from turtle import forward, st
 import torch
 import torch.nn as nn
@@ -726,6 +727,13 @@ class BallModel(nn.Module):
                     self.hidden_features['individual_output'] = blocked_out_
             else:
                 next_dec_out_ = self.decoder(h_new.view(h_new.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
+        
+        if getattr(self, 'mot_eval', False):
+            """output evaluation stats for MOT"""
+            if self.spotlight_bias:
+                return curr_dec_out_, next_dec_out_, h_new, M, slot_means, slot_variances, attn_param_bias, curr_alpha_mask
+            else:
+                return curr_dec_out_, next_dec_out_, h_new, M, curr_alpha_mask # # (BS, <K>, 1, H, W)
         
         if self.spotlight_bias:
             return curr_dec_out_, next_dec_out_, h_new, M, slot_means, slot_variances, attn_param_bias
