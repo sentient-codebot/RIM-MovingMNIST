@@ -4,7 +4,7 @@ from turtle import forward, st
 import torch
 import torch.nn as nn
 from rnn_models import RIMCell, RIM, SparseRIMCell, LayerNorm, Flatten, UnFlatten, Interpolate, SCOFFCell
-from group_operations import GroupDropout
+from group_operations import GroupDropout, SharedGRUCell
 from collections import namedtuple
 import numpy as np
 from slot_attn.decoder_cnn import WrappedDecoder, BroadcastConvDecoder
@@ -484,7 +484,7 @@ class BallModel(nn.Module):
                                         use_rule_sharing=self.args.use_rule_sharing,
                                         use_rule_embedding=self.args.use_rule_embedding,
                                         num_rules=self.args.num_rules,
-                ).to(self.args.device)
+                )
             else:
                 raise NotImplementedError('Sparse RIM not updated with new args yet')
                 self.rnn_model = SparseRIMCell(
@@ -509,14 +509,55 @@ class BallModel(nn.Module):
                                         N = self.args.batch_size
                 ).to(self.args.device)
         elif self.core == 'GRU':
-            self.rnn_model = nn.GRU(
-                                    input_size=self.slot_size*self.num_slots if self.use_slot_attention else self.input_size*self.num_inputs, # NOTE: sensetive to num_inputs
-                                    hidden_size=self.args.hidden_size * self.args.num_units,
-                                    num_layers=1,
-                                    batch_first=True,
-            ).to(self.args.device)
+            self.rnn_model = RIMCell(
+                device=self.args.device,
+                input_size=self.slot_size*self.num_slots if self.use_slot_attention else self.input_size*self.num_inputs, # NOTE: sensetive to num_inputs
+                num_units=1, # NOTE one bulky GRU
+                hidden_size=self.hidden_size * self.num_hidden,
+                k=1,
+                rnn_cell='GRU', # defalt GRU
+                input_key_size=self.args.input_key_size,
+                input_value_size=self.args.input_value_size,
+                num_input_heads = self.args.num_input_heads,
+                input_dropout = 0.,
+                use_sw = False,
+                comm_key_size = self.args.comm_key_size,
+                comm_value_size = self.args.comm_value_size, 
+                num_comm_heads = self.args.num_comm_heads, 
+                comm_dropout = 0.,
+                memory_size = self.args.memory_size,
+                use_rule_sharing=self.args.use_rule_sharing,
+                use_rule_embedding=self.args.use_rule_embedding,
+                num_rules=self.args.num_rules,
+            )
+            # self.rnn_model = nn.GRU(
+            #                         input_size=self.slot_size*self.num_slots if self.use_slot_attention else self.input_size*self.num_inputs, # NOTE: sensetive to num_inputs
+            #                         hidden_size=self.args.hidden_size * self.args.num_units,
+            #                         num_layers=1,
+            #                         batch_first=True,
+            # ).to(self.args.device)
         elif self.core == 'LSTM':
-            raise ValueError('LSTM Baseline Not Implemented Yet. ')
+            self.rnn_model = RIMCell(
+                device=self.args.device,
+                input_size=self.slot_size*self.num_slots if self.use_slot_attention else self.input_size*self.num_inputs, # NOTE: sensetive to num_inputs
+                num_units=1, # NOTE one bulky GRU
+                hidden_size=self.hidden_size * self.num_hidden,
+                k=1,
+                rnn_cell='LSTM', # defalt GRU
+                input_key_size=self.args.input_key_size,
+                input_value_size=self.args.input_value_size,
+                num_input_heads = self.args.num_input_heads,
+                input_dropout = 0.,
+                use_sw = False,
+                comm_key_size = self.args.comm_key_size,
+                comm_value_size = self.args.comm_value_size, 
+                num_comm_heads = self.args.num_comm_heads, 
+                comm_dropout = 0.,
+                memory_size = self.args.memory_size,
+                use_rule_sharing=self.args.use_rule_sharing,
+                use_rule_embedding=self.args.use_rule_embedding,
+                num_rules=self.args.num_rules,
+            )
         elif self.core == "SCOFF":
             self.scoff_share_inp = True
             self.rnn_model = SCOFFCell(
@@ -610,6 +651,7 @@ class BallModel(nn.Module):
                 
 
         reg_loss = 0.
+        # UPDATE
         # pass through self.rnn_model (RNN core)
         with enable_logging(self.rnn_model, self.do_logging) as _:
             if self.core=='RIM':
@@ -620,8 +662,7 @@ class BallModel(nn.Module):
             elif self.core=='GRU':
                 h_shape = h_prev.shape # Shape: [batch_size, num_units, hidden_size]
                 h_prev = h_prev.reshape((h_shape[0],-1)) # flatten, Shape: [batch_size, num_units*hidden_size]
-                _, h_new = self.rnn_model(encoded_input.flatten(start_dim=1).unsqueeze(1), # input shape: [N, 1, num_inputs*input_size|slot_size]
-                                            h_prev.unsqueeze(0)) # h shape: [1, N, num_units*hidden_size]
+                h_new, cs_new, M = self.rnn_model(x=encoded_input, hs=h_prev, cs=None, M=None) # one-step prediciton
                 h_new = h_new.reshape(h_shape)
             elif self.core=='LSTM':
                 raise NotImplementedError('LSTM core not implemented yet!')
@@ -642,7 +683,9 @@ class BallModel(nn.Module):
                     self.rnn_model.hidden_features['rule_attn_probs'] = temp_attention
             else:
                 raise RuntimeError('Illegal RNN Core')
-            
+        
+        
+        # DECODING
         # newly added, transform h_new back to slots
         self.hidden_features['individual_output'] = torch.empty((h_new.shape[0],self.num_hidden,1,64,64)).to(x.device)
         curr_dec_out_ = None
