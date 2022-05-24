@@ -111,7 +111,7 @@ class InputAttention(Attention):
         attention_probs = attention_probs / \
             torch.sum(attention_probs, dim=2, keepdim=True)
         attention_probs_mask = (ArgMax.apply(attention_probs)).detach()
-        attention_selected_probs = (attention_probs*attention_probs_mask).detach
+        attention_selected_probs = (attention_probs*attention_probs_mask).detach()
         attention_probs = attention_probs*attention_probs_mask/(attention_selected_probs + 0.000001)
 
         mask_ = torch.zeros((x.size(0), self.num_hidden), device=x.device)
@@ -355,7 +355,7 @@ class ArgMax(torch.autograd.Function):
         `x`: a tensor of shape `[batch_size, num_slots, num_inputs]`
 
     Outputs:
-        `y`: a one-hot tensor of shape `[batch_size, num_slots]` 
+        `y`: a one-hot tensor of shape `[batch_size, num_slots, num_inputs]` 
     """
     @staticmethod
     def forward(ctx: Any, x: torch.Tensor) -> torch.Tensor:

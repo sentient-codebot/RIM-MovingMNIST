@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 import math
+from functools import wraps
+from typing import Optional
+from torch import Tensor
 
 
 class GroupLinearLayer(nn.Module):
@@ -571,3 +574,23 @@ class SharedBlockLSTM(nn.Module):
         #print('shapes', hnext.shape, cnext.shape)
 
         return hnext, cnext, att.data.reshape(bs,self.num_hidden,self.n_templates)
+
+class SharedGRUCell(nn.GRUCell):
+    """passing multile (h, x) in paralell to one shared GRU
+    """
+    @wraps(nn.GRUCell.__init__)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+    def forward(self, input: Tensor, hx: Optional[Tensor] = None):
+        """
+        input: [N, num_hidden, single_input_size]
+        hx: [N, num_hidden, single_hidden_size]
+        """
+        h_new = super().forward(
+            input.view(input.shape[0]*input.shape[1], input.shape[2]),
+            hx.view(hx.shape[0]*hx.shape[1], hx.shape[2])
+        )
+        h_new = h_new.view(hx.shape[0], hx.shape[1], hx.shape[2])
+        return h_new
+    
