@@ -184,8 +184,9 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                         test_table.add_data(
                             *[table_row[col] for col in log_columns],
                         )
+                if args.core == 'RIM' or args.core == 'SCOFF':
                 # wandb/tb logging for concatenated image
-                dec_util.append(model.rnn_model.hidden_features.get("decoder_utilization", torch.zeros(1, 1)))
+                    dec_util.append(model.rnn_model.hidden_features.get("decoder_utilization", torch.zeros(1, 1)))
                 most_used_units.append(0)
                 if args.core == 'RIM':
                     rim_actv.append(model.rnn_model.hidden_features['input_attention_probs']) # shape (batchsize, num_units, 1) -> (BS, NU, T)

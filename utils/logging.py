@@ -121,7 +121,8 @@ def log_stats(args, is_train, **kwargs):
     # videos
     #   tensorboard
     if writer is not None:
-        writer.add_video('Input Attention Probs', input_attn_probs[:1], epoch)
+        if args.core == 'RIM' or args.core == 'SCOFF':
+            writer.add_video('Input Attention Probs', input_attn_probs[:1], epoch)
         if args.core == 'SCOFF' or args.use_rule_sharing:
             writer.add_video('Rule Attention Probs', rule_attn_probs[:1], epoch)
         writer.add_video('Predicted Videos', cat_video, epoch)

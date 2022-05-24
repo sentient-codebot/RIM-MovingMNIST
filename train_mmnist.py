@@ -181,7 +181,7 @@ def main():
                 test_table=test_table,
                 writer=writer,
                 lr=optimizer.param_groups[0]['lr'],
-                manual_init_scale=0. if not args.use_past_slots else torch.sigmoid(model.slot_attention.manual_init_scale_digit).detach()
+                manual_init_scale=0. if not args.use_past_slots else torch.sigmoid(model.slot_attention.manual_init_scale_digit.detach())
             )
             # save if better than bese
             loss_dict['test loss'] = test_loss
