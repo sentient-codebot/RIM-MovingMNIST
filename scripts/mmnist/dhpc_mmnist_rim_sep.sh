@@ -22,7 +22,7 @@ num_slots=3
 k=6
 decoder_type="SEP_BASIC"
 
-DEBUG=1 python3 test_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --save_frequency $save_freq \
+python3 train_mmnist.py --experiment_name $experiment_name --cfg_json $cfg_json --core $core --should_resume $should_resume --save_frequency $save_freq \
     --k $k --num_hidden $num_hidden --num_slots $num_slots \
     --decoder_type $decoder_type \
     --dataset_dir $dataset_dir

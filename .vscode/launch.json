@@ -89,7 +89,9 @@
                 "--batch_size",
                 "3",
                 "--spotlight_bias",
-                "false"
+                "false",
+                "--use_past_slots",
+                "false",
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "0",

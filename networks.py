@@ -431,6 +431,7 @@ class BallModel(nn.Module):
                 num_input=self.num_inputs,
                 input_size=self.input_size,
                 spotlight_bias=self.spotlight_bias,
+                manual_init=self.args.use_past_slots,
             ).to(self.args.device) # Shape: [batch_size,num_inputs, input_size] -> [batch_size, num_slots, slot_size]
             self.num_inputs = self.num_slots # number of output vectors of SlotAttention
         self.decode_hidden = args.decode_hidden
@@ -555,6 +556,8 @@ class BallModel(nn.Module):
                     nn.Linear(256, self.embedding_size)
                 )
         
+        self.past_slots = None
+        
         self.do_logging = False
         self.hidden_features = {}
 
@@ -584,7 +587,7 @@ class BallModel(nn.Module):
             with torch.no_grad() if self.args.load_trained_slot_attention else torch.enable_grad():
                 if self.spotlight_bias:
                     #__u = lambda x: util.unpack_seqdim(x, self.bs)
-                    encoded_input, attn, attn_param_bias = self.slot_attention(encoded_input) # Shape: [batch_size, num_slots, slot_size]
+                    encoded_input, attn, attn_param_bias = self.slot_attention(encoded_input, self.past_slots) # Shape: [batch_size, num_slots, slot_size]
                     grid_val = util.build_grid2D(self.resolution).repeat(encoded_input.shape[0],1,1,1).reshape([encoded_input.shape[0],-1,2]).to(h_prev.device)
                     slot_means = torch.matmul(attn.permute(0,2,1),grid_val)
                     slot_means_ = slot_means.unsqueeze(1)
@@ -592,14 +595,16 @@ class BallModel(nn.Module):
                     slot_variances_ = ((slot_means_ - grid_val_)**2).sum(-1)
                     slot_variances_ = slot_variances_ * attn
                     slot_variances = slot_variances_.sum(-1)
-
-                    #slot_variances_ = __u(slot_variances)
-                    #slot_means_ = __u(slot_means)
                 
-                else: 
-                    encoded_input = self.slot_attention(encoded_input) # Shape: [batch_size, num_slots, slot_size]
+                else:
+                    encoded_input = self.slot_attention(encoded_input, self.past_slots) # Shape: [batch_size, num_slots, slot_size]
                     if self.do_logging:
                         self.hidden_features['slots'] = encoded_input # for logging. [N, num_slots, slot_size]
+            
+            if self.slot_attention.manual_init:
+                self.past_slots = encoded_input.detach()
+            else:
+                self.past_slots = None
 
                 
                 
@@ -673,6 +678,9 @@ class BallModel(nn.Module):
     
 
     def init_hidden(self, batch_size): 
+        """init hidden states, also clear out past slots"""
+        if self.past_slots is not None:
+            self.past_slots = None
         return torch.randn((batch_size, 
             self.args.num_hidden, 
             self.args.hidden_size), 

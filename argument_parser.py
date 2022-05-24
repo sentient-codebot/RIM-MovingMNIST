@@ -154,6 +154,7 @@ def argument_parser():
     parser.add_argument("--slot_size", type=int, default=None)
     parser.add_argument("--num_iterations_slot", type=int, default=None)
     parser.add_argument("--load_trained_slot_attention", type=str2bool, default=False)
+    parser.add_argument("--use_past_slots", type=str2bool, default=False, help='use past slots as initialization.')
     #   RNN common settings
     parser.add_argument('--rnn_cell', type=str, default='GRU',
                         metavar='dynamics of RIMCell/SCOFFCell', help='one of LSTM or GRU')              

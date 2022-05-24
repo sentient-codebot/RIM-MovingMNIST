@@ -162,7 +162,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                         'ground_truth': wandb.Image(next_target[sample_idx].detach().cpu()*255),
                     }
                     if 'SEP' in args.decoder_type:
-                        table_row['individual_prediction'] = wandb.Image(make_grid(model.hidden_features['individual_output'][sample_idx]*255, pad_value=255)), # N K C H W -> K C H W -> C *H **W
+                        table_row['individual_prediction'] = wandb.Image(make_grid(model.hidden_features['individual_output'][sample_idx]*255, pad_value=255).to(torch.uint8)), # N K C H W -> K C H W -> C *H **W
                     if args.core == 'RIM' or args.core == 'SCOFF':
                         table_row['input attention probs'] = wandb.Image(
                             plot_heatmap(
@@ -345,7 +345,8 @@ def main():
         prediction=prediction,
         metrics=metrics,
         test_table=test_table,
-        writer=writer
+        writer=writer,
+        manual_init_scale=0. if not args.use_past_slots else torch.sigmoid(model.slot_attention.manual_init_scale_digit).detach()
     )
 
     writer.close()

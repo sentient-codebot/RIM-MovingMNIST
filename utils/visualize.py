@@ -469,7 +469,7 @@ class VecStack():
         return self.img
 
 
-def make_grid_video(target, prediction=None, return_dim=4):
+def make_grid_video(target, prediction=None, return_dim=4) -> torch.Tensor:
     assert target.dim() == 5 # N T C H W
     frames = []
     for frame_idx in range(target.shape[1]):

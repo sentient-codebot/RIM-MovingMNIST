@@ -24,6 +24,8 @@ def log_stats(args, is_train, **kwargs):
     train_pred_loss = kwargs.get('train_pred_loss')
     test_recon_loss = kwargs.get('test_recon_loss')
     test_pred_loss = kwargs.get('test_pred_loss')
+    # model parameters
+    manual_init_scale = kwargs.get('manual_init_scale', None)
     # metrics
     metrics = kwargs['metrics']
     mse = metrics.get('mse')
@@ -46,12 +48,12 @@ def log_stats(args, is_train, **kwargs):
         num_vids = 4
     else:
         num_vids = 1
-    grided_ind_pred = make_grid_video(
+    grided_ind_pred = (make_grid_video(
         target = individual_output[0],
         return_dim = 5,
-    )
-    cat_video = make_grid_video(ground_truth[0:num_vids, 1:, :, :, :],
-                                prediction[0:num_vids], return_dim=5)
+    )*255).to(torch.uint8)
+    cat_video = (make_grid_video(ground_truth[0:num_vids, 1:, :, :, :],
+                                prediction[0:num_vids], return_dim=5)*255).to(torch.uint8)
 
     # scalars
     #   tensorboard
@@ -82,6 +84,8 @@ def log_stats(args, is_train, **kwargs):
     stat_dict = {
         'Learning Rate': lr,
     }
+    if manual_init_scale is not None:
+        stat_dict['Past Slot Init Scale'] = manual_init_scale
 
     # images
     #   tensorboard
