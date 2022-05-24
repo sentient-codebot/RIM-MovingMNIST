@@ -189,6 +189,7 @@ def argument_parser():
     parser.add_argument('--input_value_size', type=int)
     parser.add_argument('--comm_key_size', type=int)
     parser.add_argument('--comm_value_size', type=int)
+    parser.add_argument('--use_compositional_MLP', type=bool, default=False)
 
     args, left_argv = config_parser.parse_known_args() # if passed args BESIDES defined in cfg_parser, store in left_argv
 

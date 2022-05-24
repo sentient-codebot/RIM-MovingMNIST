@@ -406,11 +406,15 @@ class BallModel(nn.Module):
         self.use_slot_attention = args.use_slot_attention
         self.encoder_type = args.encoder_type
         self.decoder_type = args.decoder_type
+        self.use_compositional_MLP = args.use_compositional_MLP
+        
 
         if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
             self.encoder = SynMOTEncoder(self.input_size)
             self.num_inputs=36
+            self.fov = 2 # factor of variations
         else:
+            self.fov=2
             if self.encoder_type == "FLATTEN":
                 self.encoder = BasicEncoder(embedding_size=self.input_size).to(self.args.device) # Shape: [batch_size, num_inputs, input_size]
                 self.num_inputs = 1 # output of BasicFlattenEncoder
@@ -434,6 +438,8 @@ class BallModel(nn.Module):
                 manual_init=self.args.use_past_slots,
             ).to(self.args.device) # Shape: [batch_size,num_inputs, input_size] -> [batch_size, num_slots, slot_size]
             self.num_inputs = self.num_slots # number of output vectors of SlotAttention
+        if self.use_compositional_MLP:
+            self.compositional_MLP = Compositional_MLP(self.slot_size, self.fov)
         self.decode_hidden = args.decode_hidden
         if not self.decode_hidden:
             self.embedding_size = self.slot_size if self.use_slot_attention else self.input_size # embedding size for the decoder
@@ -601,10 +607,14 @@ class BallModel(nn.Module):
                     if self.do_logging:
                         self.hidden_features['slots'] = encoded_input # for logging. [N, num_slots, slot_size]
             
+
             if self.slot_attention.manual_init:
                 self.past_slots = encoded_input.detach()
             else:
                 self.past_slots = None
+
+        if self.use_compositional_MLP:
+            encoded_input = self.compositional_MLP(encoded_input)
 
                 
                 
