@@ -222,7 +222,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         pred_list = gen_masks(
             batch_size=data.shape[0],
             n_steps=len(soft_masks),
-            n_slots=args.num_hidden,
+            n_slots=args.num_slots,
             id_counter=id_counter,
             pred_list=pred_list,
             soft_masks=torch.stack(soft_masks, dim=1).cpu(),
