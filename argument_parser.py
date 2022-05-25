@@ -199,7 +199,12 @@ def argument_parser():
     if args.cfg_json is not None:
         with open(args.cfg_json) as f:
             json_dict = json.load(f)
-        args.__dict__.update(json_dict)
+        # args.__dict__.update(json_dict) # does not guarantee arg format is correct
+        json_argv = []
+        for key, value in json_dict.items():
+            json_argv.append('--' + key)
+            json_argv.append(str(value))
+        parser.parse_known_args(json_argv, args)
 
     parser.parse_args(left_argv, args) # override JSON values with command-line values
 
