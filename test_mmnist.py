@@ -76,6 +76,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
 
 
     model.eval()
+    model.mot_eval = True
 
     epoch_loss = torch.tensor(0.).to(args.device)
     epoch_recon_loss = 0.
@@ -135,7 +136,6 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                 else:
                     inputs = data[:, frame, :, :, :]
                 if args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
-                    model.mot_eval = True
                     if not args.spotlight_bias:
                         recons, preds, hidden, memory, curr_alpha_mask = model(inputs, hidden, memory)
                     else:
@@ -293,6 +293,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     if mot_metrics is not None:
         metrics['mot_metrics'] = mot_metrics
 
+    model.mot_eval = False
     print('test runtime:', time() - start_time)
     return epoch_loss, epoch_recon_loss, epoch_pred_loss, prediction, data, metrics, test_table
 

@@ -99,7 +99,7 @@ def argument_parser():
     # Experiment Settings
     parser.add_argument('--id', type=str, default='default',
                         metavar='id of the experiment', help='id of the experiment')
-    parser.add_argument('--version', type=int, default=1)
+    parser.add_argument('--version', type=int, default=0)
     parser.add_argument('--task', type=str2task, default='MMNIST')
     parser.add_argument('--ball_options', type=str2balltask, default=None, help='options for ball task. transfer or ...')
     parser.add_argument('--ball_trainset', type=str2ballset, default=None, help='train set for ball task')
