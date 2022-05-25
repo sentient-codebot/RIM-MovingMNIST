@@ -1,0 +1,44 @@
+{
+    "version"                   : 0,
+    "task"                      : "SPRITESMOT",
+    "core"                      : "SCOFF",
+    
+    "batch_size"                : 64,
+    "epochs"                    : 400,
+    "should_resume"             : false,
+    "save_frequency"            : 20,
+    "test_frequency"            : 10,
+    "lr"                        : 0.0007,
+    "loss_fn"                   : "MSE",
+
+    "input_size"                : 64,
+    "hidden_size"               : 100,
+    "num_hidden"                : 6,
+    "num_input_heads"           : 1,
+    "input_key_size"            : 64,
+    "input_value_size"          : 200,
+    "rnn_cell"                  : "GRU",
+    "comm_key_size"             : 32,
+    "comm_value_size"           : 32,
+    "num_comm_heads"            : 2,
+    "input_dropout"             : 0.1,
+    "comm_dropout"              : 0.1,
+
+    "k"                         : 10,
+    
+    "encoder_type"              : "FLATTEN",
+    "decoder_type"              : "CAT_BASIC",
+    "decode_hidden"             : true,
+
+    "use_slot_attention"        : false,
+
+    "hard_input_attention"      : false,
+    "null_input_type"           : "zero",
+
+    "use_sw"                    : false,
+
+    "use_rule_sharing"          : false,
+    "num_rules"                 : 3,
+
+    "use_composiitonal_MLP"     : false
+}
