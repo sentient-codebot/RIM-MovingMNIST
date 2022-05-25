@@ -3,7 +3,7 @@
     "task"                      : "BBALL",
     "core"                      : "RIM",
     
-    "batch_size"                : 64,
+    "batch_size"                : 32,
     "epochs"                    : 400,
     "should_resume"             : false,
     "save_frequency"            : 20,

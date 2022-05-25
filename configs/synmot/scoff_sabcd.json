@@ -11,7 +11,7 @@
     "lr"                        : 0.0007,
     "loss_fn"                   : "MSE",
 
-    "input_size"                : 64,
+    "input_size"                : 32,
     "hidden_size"               : 100,
     "num_hidden"                : 4,
     "num_input_heads"           : 1,
