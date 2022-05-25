@@ -28,6 +28,8 @@ from os.path import isfile, join
 
 set_seed(1997)
 
+MOT_TASKS = ['SPRITESMOT', 'VMDS', 'VOR']
+
 # loss_fn = torch.nn.BCELoss()
 
 def nan_hook(_tensor):
@@ -76,7 +78,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
 
 
     model.eval()
-    model.mot_eval = True
+    if args.task in MOT_TASKS:
+        model.mot_eval = True
 
     epoch_loss = torch.tensor(0.).to(args.device)
     epoch_recon_loss = 0.
