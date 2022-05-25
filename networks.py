@@ -704,6 +704,7 @@ class BallModel(nn.Module):
         # newly added, transform h_new back to slots
         self.hidden_features['individual_output'] = torch.empty((h_new.shape[0],self.num_hidden,1,64,64)).to(x.device)
         curr_dec_out_ = None
+        curr_alpha_mask = None
         if not self.decode_hidden:
             if 'CAT' in self.decoder_type:
                 pred_latent = self.latent_transform(h_new.view(h_new.shape[0],-1)) # Shape: [N, K*hidden_size] -> [N, embedding_size]
