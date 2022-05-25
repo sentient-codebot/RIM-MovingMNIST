@@ -222,14 +222,14 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                 recons, preds, hidden, memory, curr_alpha_mask = model(inputs, hidden, memory)
             soft_masks.append(curr_alpha_mask) # [BS, K, 1, H, W]
         
-        pred_list = gen_masks(
-            batch_size=data.shape[0],
-            n_steps=len(soft_masks),
-            n_slots=args.num_slots,
-            id_counter=id_counter,
-            pred_list=pred_list,
-            soft_masks=torch.stack(soft_masks, dim=1).cpu(),
-        )
+            pred_list = gen_masks(
+                batch_size=data.shape[0],
+                n_steps=len(soft_masks),
+                n_slots=args.num_slots,
+                id_counter=id_counter,
+                pred_list=pred_list,
+                soft_masks=torch.stack(soft_masks, dim=1).cpu(),
+            )
         
         if not rollout:
             ssim += pt_ssim.ssim(data[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
