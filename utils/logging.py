@@ -51,9 +51,9 @@ def log_stats(args, is_train, **kwargs):
     grided_ind_pred = (make_grid_video(
         target = individual_output[0],
         return_dim = 5,
-    )*255).to(torch.uint8)
+    )*255).to(torch.uint8).cpu()
     cat_video = (make_grid_video(ground_truth[0:num_vids, 1:, :, :, :],
-                                prediction[0:num_vids], return_dim=5)*255).to(torch.uint8)
+                                prediction[0:num_vids], return_dim=5)*255).to(torch.uint8).cpu()
 
     # scalars
     #   tensorboard
@@ -131,13 +131,13 @@ def log_stats(args, is_train, **kwargs):
         writer.add_video('Individual Predictions', grided_ind_pred) # N num_blocks T 1 H W
     #   wandb
     video_dict = {
-        'Predicted Videos': wandb.Video((cat_video.cpu()*255).to(torch.uint8), fps=3),
+        'Predicted Videos': wandb.Video(cat_video, fps=3),
         
     }
     if 'SEP' in args.decoder_type:
         video_dict.update(
             {
-                'Individual Predictions': wandb.Video((grided_ind_pred.cpu()*255).to(torch.uint8), fps=3),
+                'Individual Predictions': wandb.Video(grided_ind_pred, fps=3),
             }
         )
     if args.core == 'RIM' or args.core == 'SCOFF':
