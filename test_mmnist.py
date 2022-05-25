@@ -343,7 +343,7 @@ def main():
 
     # wandb setup
     project, name = args.id.split('_',1)
-    wandb.init(project=project, name=name+'_test', config=vars(args), entity='nan-team', settings=wandb.Settings(start_method="fork"))
+    wandb.init(project=project, name=name+'_test', config=vars(args), entity='nan-team', settings=wandb.Settings(start_method="thread"))
     print(args)
     columns = setup_wandb_columns(args)
 

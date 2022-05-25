@@ -117,7 +117,7 @@ def main():
 
     # wandb setup
     project, name = args.id.split('_',1)
-    wandb.init(project=project, name=name, config=vars(args), entity='nan-team', settings=wandb.Settings(start_method="fork"))
+    wandb.init(project=project, name=name, config=vars(args), entity='nan-team', settings=wandb.Settings(start_method="thread"))
     columns = setup_wandb_columns(args) # artifact columns
 
     # data setup
