@@ -144,7 +144,7 @@ def gen_masks(batch_size, n_steps, n_slots, id_counter, pred_list, soft_masks):
         video = []
         obj_ids = np.arange(n_slots) + id_counter
         for t in range(n_steps):
-            binarized_masks = binarize_masks(soft_masks[sample_idx,t])
+            binarized_masks = binarize_masks(soft_masks[sample_idx,t]) # [K, H, W]
             binarized_masks = np.array(binarized_masks).astype(np.uint8)
 
             frame = {}

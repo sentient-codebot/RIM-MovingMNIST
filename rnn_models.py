@@ -44,6 +44,7 @@ class RIMCell(nn.Module):
         memory_size = None, use_rule_sharing = False, use_rule_embedding = False, num_rules = None,
         hard_input_attention = False, 
         null_input_type = 'zero',
+        input_attention_key_norm = True,
     ):
         super().__init__()
         if comm_value_size != hidden_size:
@@ -86,6 +87,7 @@ class RIMCell(nn.Module):
             k,
             input_dropout,
             hard_argmax=hard_input_attention,
+            key_norm=input_attention_key_norm,
         )
 
         self.use_sw = use_sw

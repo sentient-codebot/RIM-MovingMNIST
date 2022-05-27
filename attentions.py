@@ -69,6 +69,7 @@ class InputAttention(Attention):
                  share_query_proj=False,
                  num_shared_query_proj=1,
                  hard_argmax=False,
+                 key_norm=True,
                  ):
         super().__init__(dropout)
         self.num_heads = num_heads
@@ -92,6 +93,7 @@ class InputAttention(Attention):
         self.epsilon = epsilon
         
         self.hard_argmax = hard_argmax
+        self.key_norm = key_norm
 
     def forward(self, x, h):
         key = self.key(x)  # Shape: [batch_size, num_heads, kdim]
@@ -110,9 +112,10 @@ class InputAttention(Attention):
         attention_probs = nn.Softmax(dim=1)(attention_scores)
 
         # For each rim, give them normalized summation weights (for each rim, the weights all sum to 1) NOTE is this necessary?
-        attention_probs = attention_probs + self.epsilon  # in case of unstability
-        attention_probs = attention_probs / \
-            torch.sum(attention_probs, dim=2, keepdim=True)
+        if self.key_norm:
+            attention_probs = attention_probs + self.epsilon  # in case of unstability
+            attention_probs = attention_probs / \
+                torch.sum(attention_probs, dim=2, keepdim=True)
         if self.hard_argmax:
             attention_probs_mask = (ArgMax.apply(attention_probs)).detach()
             attention_selected_probs = (attention_probs*attention_probs_mask).detach()

@@ -143,7 +143,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                         recons, preds, hidden, memory, curr_alpha_mask = model(inputs, hidden, memory)
                     else:
                         recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias, curr_alpha_mask = model(inputs, hidden, memory)
-                    soft_masks.append(curr_alpha_mask) # [BS, K, 1, H, W]
+                    soft_masks.append(curr_alpha_mask.squeeze(2)) # [BS, K, 1, H, W]
                 else:
                     if not args.spotlight_bias:
                         recons, preds, hidden, memory = model(inputs, hidden, memory)
@@ -223,7 +223,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                         recons, preds, hidden, memory, curr_alpha_mask = model(inputs, hidden, memory)
                 else:
                     recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias, curr_alpha_mask = model(inputs, hidden, memory)
-            soft_masks.append(curr_alpha_mask) # [BS, K, 1, H, W]
+            soft_masks.append(curr_alpha_mask) # [BS, K, H, W]
         
             pred_list = gen_masks(
                 batch_size=data.shape[0],
@@ -231,7 +231,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                 n_slots=args.num_slots,
                 id_counter=id_counter,
                 pred_list=pred_list,
-                soft_masks=torch.stack(soft_masks, dim=1).cpu(),
+                soft_masks=torch.stack(soft_masks, dim=1).cpu(), # [BS, T, K, H, W]
             )
         
         if not rollout:

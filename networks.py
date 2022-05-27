@@ -493,6 +493,7 @@ class BallModel(nn.Module):
                                         num_rules=self.args.num_rules,
                                         hard_input_attention=self.args.hard_input_attention,
                                         null_input_type=self.args.null_input_type,
+                                        input_attention_key_norm=self.args.input_attention_key_norm,
                 )
             else:
                 raise NotImplementedError('Sparse RIM not updated with new args yet')

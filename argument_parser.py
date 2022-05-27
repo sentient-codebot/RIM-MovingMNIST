@@ -168,6 +168,7 @@ def argument_parser():
     parser.add_argument('--num_comm_heads', type=int, default=4)
     parser.add_argument('--hard_input_attention', type=str2bool, default=False)
     parser.add_argument('--null_input_type', type=str, default='zero', help='either zero or rand')
+    parser.add_argument('--input_attention_key_norm', type=str2bool, default=True)
     #       SharedWorkspace settings
     parser.add_argument('--use_sw', type=str2bool, default=False)
     parser.add_argument('--num_sw_write_heads', type=int, default=1)
