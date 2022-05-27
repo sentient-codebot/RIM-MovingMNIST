@@ -63,39 +63,15 @@
             "console": "integratedTerminal",
             "args": [
                 "--experiment_name",
-                "GEN_debug",
+                "SPRITES_SABCD_444",
                 "--cfg_json",
-                "configs/scoff/scoff_basic.json",
-                "--core",
-                "SCOFF",
-                "--should_resume",
-                "false",
-                "--k",
-                "2",
-                "--num_hidden",
-                "2",
-                "--num_slots",
-                "2",
-                "--task",
-                "spritesmot",
-                "--encoder_type",
-                "NONFLATTEN",
-                "--decoder_type",
-                "SEP_BASIC",
+                "configs/synmot/rim_sabcd.json",
                 "--dataset_dir",
-                "data",
-                "--hidden_size",
-                "50",
-                "--batch_size",
-                "3",
-                "--spotlight_bias",
-                "false",
-                "--use_past_slots",
-                "false",
+                "data"
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "0",
-                // "DEBUG": "1"
+                "DEBUG": "1"
             }
         },
         {

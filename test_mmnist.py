@@ -337,21 +337,21 @@ def dec_rim_util(model, h):
 def main():
     # parse and process args
     args = argument_parser()
+    # data setup
+    train_loader, val_loader, test_loader = setup_dataloader(args=args)
+    # resume args
     print(f"Loading args from "+f"{args.folder_save}/args/args.pt")
     args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt")['args'])
     if not args.should_resume:
         args.should_resume = True
     cudable = torch.cuda.is_available()
     args.device = torch.device("cuda" if cudable else "cpu")
-
+    
     # wandb setup
     project, name = args.id.split('_',1)
     wandb.init(project=project, name=name+'_test', config=vars(args), entity='nan-team', settings=wandb.Settings(start_method="thread"))
     print(args)
     columns = setup_wandb_columns(args)
-
-    # data setup
-    train_loader, val_loader, test_loader = setup_dataloader(args=args)
 
     # model setup
     model, epoch = setup_model(args=args)

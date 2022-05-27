@@ -706,6 +706,7 @@ class BallModel(nn.Module):
         self.hidden_features['individual_output'] = torch.empty((h_new.shape[0],self.num_hidden,1,64,64)).to(x.device)
         curr_dec_out_ = None
         curr_alpha_mask = None
+        object_mask = None
         if not self.decode_hidden:
             if 'CAT' in self.decoder_type:
                 pred_latent = self.latent_transform(h_new.view(h_new.shape[0],-1)) # Shape: [N, K*hidden_size] -> [N, embedding_size]
@@ -732,17 +733,25 @@ class BallModel(nn.Module):
         
         if getattr(self, 'mot_eval', False):
             """output evaluation stats for MOT"""
+            object_mask = self.object_mask(curr_channels, curr_alpha_mask)
             if self.spotlight_bias:
-                return curr_dec_out_, next_dec_out_, h_new, M, slot_means, slot_variances, attn_param_bias, curr_alpha_mask
+                return curr_dec_out_, next_dec_out_, h_new, M, slot_means, slot_variances, attn_param_bias, object_mask
             else:
-                return curr_dec_out_, next_dec_out_, h_new, M, curr_alpha_mask # # (BS, <K>, 1, H, W)
+                return curr_dec_out_, next_dec_out_, h_new, M, object_mask # # (BS, <K>, 1, H, W)
         
         if self.spotlight_bias:
             return curr_dec_out_, next_dec_out_, h_new, M, slot_means, slot_variances, attn_param_bias
         else:
             return curr_dec_out_, next_dec_out_, h_new, M
 
-    
+    def object_mask(self, channels, alpha_mask):
+        """
+        channels: [N, k, C, H, W]
+        alpha_mask: [N, k, 1, H, W]
+        """
+        gray_scaled = torch.norm(channels, dim=2, keepdim=True) # [N, k, 1, H, W]
+        object_mask = gray_scaled * alpha_mask # [N, k, 1, H, W]
+        return object_mask
 
     def init_hidden(self, batch_size): 
         """init hidden states, also clear out past slots"""
