@@ -219,7 +219,10 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         if args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
             inputs = data[:, frame, :, :, :]
             with torch.no_grad():
-                recons, preds, hidden, memory, curr_alpha_mask = model(inputs, hidden, memory)
+                if not args.spotlight_bias:
+                        recons, preds, hidden, memory, curr_alpha_mask = model(inputs, hidden, memory)
+                else:
+                    recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias, curr_alpha_mask = model(inputs, hidden, memory)
             soft_masks.append(curr_alpha_mask) # [BS, K, 1, H, W]
         
             pred_list = gen_masks(
