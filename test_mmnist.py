@@ -223,7 +223,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                         recons, preds, hidden, memory, curr_alpha_mask = model(inputs, hidden, memory)
                 else:
                     recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias, curr_alpha_mask = model(inputs, hidden, memory)
-            soft_masks.append(curr_alpha_mask) # [BS, K, H, W]
+            soft_masks.append(curr_alpha_mask.squeeze(2)) # [BS, K, H, W]
         
             pred_list = gen_masks(
                 batch_size=data.shape[0],
