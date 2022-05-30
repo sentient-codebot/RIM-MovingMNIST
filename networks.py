@@ -185,7 +185,7 @@ class SharedBroadcastDecoder(nn.Module):
         self.cnn = BroadcastConvDecoder(embedding_size,) # fixed output dimension (3, 64, 64)
         
     def forward(self, x):
-        x = x.permute(1, 0, 2) # Shape: [M, N, embedding_size] -> [M, N, embedding_size]
+        x = x.permute(1, 0, 2) # Shape: [N, M, embedding_size] -> [M, N, embedding_size]
         out_list = []
         mask_list = []
         for component in x: # Shape: [N, embedding_size]

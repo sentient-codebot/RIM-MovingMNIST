@@ -188,8 +188,8 @@ class BroadcastConvDecoder(nn.Module):
     Inputs:
         `z`: [N, latent_dim]
     Outputs:
-        `slot`: [N, 3, image_size, image_size] unnormalized
-        `mask`: [N, 1, image_size, image_size] unnormalized
+        `slot`: [N, 3, image_size, image_size] normalized (sigmoid)
+        `mask`: [N, 1, image_size, image_size] unnormalized (R)
         """
     def __init__(self, latent_dim, image_size=64):
         super().__init__()
@@ -228,6 +228,7 @@ class BroadcastConvDecoder(nn.Module):
         z = self.broadcast(z)
         x = self.g(z)
         slot = x[:, :3]
+        slot = nn.Sigmoid()(slot)
         mask = x[:, 3:]        
         return slot, mask
 
