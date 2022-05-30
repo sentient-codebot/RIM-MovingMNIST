@@ -42,7 +42,7 @@ if DEBUG:
     @mini_dataset(nfold=90)
     class SyntheticMOTDataset(SyntheticMOTDataset): ...
 
-def setup_dataloader(args):
+def setup_dataloader(args, return_dataset=False):
     """function to setup dataset and dataloaders
     
     Args:
@@ -135,6 +135,9 @@ def setup_dataloader(args):
     else:
         raise ValueError('Unknown task '+args.task)
 
+    if return_dataset:
+        return train_set, val_set, test_set
+    
     train_loader = torch.utils.data.DataLoader(
         dataset=train_set,
         batch_size=args.batch_size,

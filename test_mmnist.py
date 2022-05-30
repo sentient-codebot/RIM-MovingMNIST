@@ -46,8 +46,8 @@ def get_grad_norm(model):
     return total_norm
 
 # @torch.no_grad()
-def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_columns=None):
-    '''test(model, test_loader, args, loss_fn, writer, rollout)'''
+def test(model, test_loader, args, loss_fn, rollout=True, epoch=0, log_columns=None):
+    '''test(model, test_loader, args, loss_fn, rollout)'''
     start_time = time()
     # wandb table
     if log_columns is not None:
