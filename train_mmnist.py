@@ -301,6 +301,9 @@ def setup_model(args):
     else:
         loss_fn = torch.nn.MSELoss()
 
+    if torch.cuda.device_count() > 1:
+        print(f"Using {torch.cuda.device_count()} GPUs")
+        model = torch.nn.DataParallel(model)
     return model, optimizer, scheduler, loss_fn, start_epoch, train_batch_idx, best_mse
 
 def param_count(model: torch.nn.Module) -> int:
