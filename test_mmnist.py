@@ -264,7 +264,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         individual_recons = torch.stack(individual_recons, dim=2) # [N, K, T, C, H, W]
     object_masks = None
     if len(soft_masks) > 0:
-        object_masks = torch.stack(soft_masks, dim=2) # [BS, K, T, H, W]
+        object_masks = torch.stack(soft_masks, dim=2).unsqueeze(3) # [BS, K, T, H, W]
     epoch_loss = epoch_loss / (batch_idx+1)
     epoch_recon_loss /= len(test_loader)
     epoch_pred_loss /= len(test_loader)

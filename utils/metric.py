@@ -5,6 +5,7 @@ from tqdm import tqdm
 import json
 from pandas import DataFrame
 import os
+import matplotlib.pyplot as plt
 
 DEBUG = os.environ.get('DEBUG', False)
 
@@ -67,6 +68,18 @@ def binarize_masks(masks):
     for i in range(n):
         binarized_masks[i] = (idc == i).int()
     return binarized_masks
+
+def binarize_masks_(masks, threshold=0.2):
+    """Custom binarization funciton 
+    Args:
+        masks: torch.Tensor of Shape [K, H, W], ranging from 0. ~ 1.
+    """
+    K = masks.shape[0]
+    binarized_masks = torch.zeros_like(masks)
+    for k in range(K):
+        binarized_masks[k] = (masks[k] > threshold).int()
+    return binarized_masks
+
 
 def rle_encode(img):
     '''
@@ -147,7 +160,7 @@ def gen_masks(batch_size, n_steps, n_slots, id_counter, pred_list, soft_masks):
         video = []
         obj_ids = np.arange(n_slots) + id_counter
         for t in range(n_steps):
-            binarized_masks = binarize_masks(soft_masks[sample_idx,t]) # [K, H, W]
+            binarized_masks = binarize_masks_(soft_masks[sample_idx,t]) # [K, H, W]
             binarized_masks = np.array(binarized_masks).astype(np.uint8)
 
             frame = {}
@@ -277,7 +290,7 @@ def get_mot_metrics(pred_file, gt_file, exclude_bg=True, start_step=2, stop_step
     
 def main():
     mot_metrics = get_mot_metrics(
-        'data/gt_jsons/spmot_test.json',
+        'logs/SPRITES_SASBD_447_SA_4_100_3_RIM_7_100_ver_0/mot_json.json',
         'data/gt_jsons/spmot_test.json'
     )
     ...
