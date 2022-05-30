@@ -127,7 +127,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             data.shape[4])
         ) # (BS, num_blocks, T, C, H, W)
         reconstruction = []
-        individual_masks = []
+        individual_recons = []
         soft_masks = [] # list of batches of masks
 
         do_logging = batch_idx==len(test_loader)-1
