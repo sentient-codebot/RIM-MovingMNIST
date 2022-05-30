@@ -303,7 +303,7 @@ def setup_model(args):
 
     if torch.cuda.device_count() > 1:
         print(f"Using {torch.cuda.device_count()} GPUs")
-        model = torch.nn.DataParallel(model)
+        model = torch.nn.DataParallel(model, device_ids=list(range(torch.cuda.device_count())))
     return model, optimizer, scheduler, loss_fn, start_epoch, train_batch_idx, best_mse
 
 def param_count(model: torch.nn.Module) -> int:
