@@ -4,6 +4,9 @@ import motmetrics as mm
 from tqdm import tqdm
 import json
 from pandas import DataFrame
+import os
+
+DEBUG = os.environ.get('DEBUG', False)
 
 @torch.no_grad()
 def f1_score(y_true:torch.Tensor, y_pred:torch.Tensor) -> torch.Tensor:
@@ -211,7 +214,7 @@ def compute_dists_per_frame(gt_frame, pred_frame, im_size, min_num_pix, exclude_
 def accumulate_events(gt_dict, pred_dict, start_step, stop_step, im_size, min_num_pix, exclude_bg, iou_thresh):
     acc = mm.MOTAccumulator()
     count = 0
-    for i in tqdm(range(len(gt_dict))):
+    for i in tqdm(range(len(pred_dict))):
         for t in range(start_step, stop_step):
             gt_dict_frame = gt_dict[i][t]
             pred_dict_frame = pred_dict[i][t]
@@ -246,7 +249,11 @@ def get_mot_metrics(pred_file, gt_file, exclude_bg=True, start_step=2, stop_step
         pred_dict = json.load(f)
     with open(gt_file, 'r') as f:
         gt_dict = json.load(f)
-    assert len(pred_dict) == len(gt_dict)
+    if not DEBUG:
+        assert len(pred_dict) == len(gt_dict)
+    else:
+        if len(pred_dict) != len(gt_dict):
+            print('doing incomplete evaluation')
     
     acc = accumulate_events(gt_dict, pred_dict,
                             start_step=start_step,

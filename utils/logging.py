@@ -1,5 +1,6 @@
 from matplotlib.pyplot import xlabel
 from argparse import Namespace
+from numpy import object_
 import wandb
 from .visualize import make_grid_video, heatmap_to_video, plot_heatmap
 import torch
@@ -42,6 +43,9 @@ def log_stats(args, is_train, **kwargs):
         input_attn_probs = metrics['input_attn_probs']
         rule_attn_argmax = metrics['rule_attn_argmax'] # LongTensor
         rule_attn_probs = metrics.get('rule_attn_probs') 
+    reconstruction = metrics.get('reconstruction') # Tensor|None
+    individual_recons = metrics.get('individual_recons') # Tensor|None
+    object_masks = metrics.get('object_masks') # Tensor|None
     # videos patching
     individual_output = metrics['individual_output'] # dim == 6
     if args.task == 'MMNIST':
@@ -52,8 +56,35 @@ def log_stats(args, is_train, **kwargs):
         target = individual_output[0],
         return_dim = 5,
     )*255).to(torch.uint8).cpu()
-    cat_video = (make_grid_video(ground_truth[0:num_vids, 1:, :, :, :],
+    gt_preds_video = (make_grid_video(ground_truth[0:num_vids, 1:, :, :, :],
                                 prediction[0:num_vids], return_dim=5)*255).to(torch.uint8).cpu()
+    gt_recons_video = None
+    if reconstruction is not None:
+        # [N, T, C, H, W]
+        frame_length = reconstruction.shape[1]
+        gt_recons_video = (
+            make_grid_video(
+                ground_truth[0:num_vids, 0:frame_length, :, :, :],
+                reconstruction[0:num_vids, 0:frame_length, :, :, :],
+                return_dim=5
+            )*255
+        ).to(torch.uint8).cpu()
+    grided_ind_recon = None
+    if individual_recons is not None:
+        grided_ind_recon = (
+            make_grid_video(
+                individual_recons[0],
+                return_dim=5
+            )*255
+        ).to(torch.uint8).cpu()
+    grided_obj_masks = None
+    if object_masks is not None:
+        grided_obj_masks = (
+            make_grid_video(
+                object_masks[0],
+                return_dim=5
+            )*255
+        ).to(torch.uint8).cpu()
 
     # scalars
     #   tensorboard
@@ -127,11 +158,11 @@ def log_stats(args, is_train, **kwargs):
             writer.add_video('Input Attention Probs', input_attn_probs[:1], epoch)
         if args.core == 'SCOFF' or args.use_rule_sharing:
             writer.add_video('Rule Attention Probs', rule_attn_probs[:1], epoch)
-        writer.add_video('Predicted Videos', cat_video, epoch)
+        writer.add_video('Predicted Videos', gt_preds_video, epoch)
         writer.add_video('Individual Predictions', grided_ind_pred) # N num_blocks T 1 H W
     #   wandb
     video_dict = {
-        'Predicted Videos': wandb.Video(cat_video, fps=3),
+        'Predicted Videos': wandb.Video(gt_preds_video, fps=3),
         
     }
     if 'SEP' in args.decoder_type:
@@ -167,6 +198,12 @@ def log_stats(args, is_train, **kwargs):
                 fps=1,
             ), # [T, 3, H, W]
         })
+    if gt_recons_video is not None:
+        video_dict['Reconstructed Videos'] = wandb.Video(gt_recons_video, fps=3)
+    if grided_ind_recon is not None:
+        video_dict['Individual Reconstructions'] = wandb.Video(grided_ind_recon, fps=3)
+    if grided_obj_masks is not None:
+        video_dict['Object Masks'] = wandb.Video(grided_obj_masks, fps=3)
     
     # histograms
     if args.core == 'RIM':

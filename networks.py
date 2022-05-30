@@ -718,7 +718,8 @@ class BallModel(nn.Module):
                 next_dec_out_, next_channels, next_alpha_mask = self.decoder(pred_latent)
                 if self.do_logging:
                     blocked_out_ = next_channels*next_alpha_mask
-                    self.hidden_features['individual_output'] = blocked_out_
+                    self.hidden_features['individual_output'] = blocked_out_.detach()
+                    self.hidden_features['individual_recons'] = (curr_channels*curr_alpha_mask).detach()
             else:
                 curr_dec_out_ = self.decoder(encoded_input.view(encoded_input.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
                 next_dec_out_ = self.decoder(pred_latent.view(pred_latent.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]

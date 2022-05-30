@@ -67,7 +67,9 @@
                 "--cfg_json",
                 "configs/synmot/rim_sabcd.json",
                 "--dataset_dir",
-                "data"
+                "data",
+                "--decode_hidden",
+                "false"
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "0",

@@ -126,6 +126,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             data.shape[3],
             data.shape[4])
         ) # (BS, num_blocks, T, C, H, W)
+        reconstruction = []
+        individual_masks = []
         soft_masks = [] # list of batches of masks
 
         do_logging = batch_idx==len(test_loader)-1
@@ -140,10 +142,10 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                     inputs = data[:, frame, :, :, :]
                 if args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
                     if not args.spotlight_bias:
-                        recons, preds, hidden, memory, curr_alpha_mask = model(inputs, hidden, memory)
+                        recons, preds, hidden, memory, object_mask = model(inputs, hidden, memory)
                     else:
-                        recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias, curr_alpha_mask = model(inputs, hidden, memory)
-                    soft_masks.append(curr_alpha_mask.squeeze(2)) # [BS, K, 1, H, W]
+                        recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias, object_mask = model(inputs, hidden, memory)
+                    soft_masks.append(object_mask.squeeze(2)) # [BS, K, 1, H, W]
                 else:
                     if not args.spotlight_bias:
                         recons, preds, hidden, memory = model(inputs, hidden, memory)
@@ -167,6 +169,10 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             if do_logging:
                 blocked_prediction[:, 0, frame+1, :, :, :] = preds # dim == 6
                 blocked_prediction[:, 1:, frame+1, :, :, :] = model.hidden_features['individual_output']
+                if recons is not None:
+                    reconstruction.append(recons) # [BS, C, H, W]
+                    if not args.decode_hidden:
+                        individual_recons.append(model.hidden_features['individual_recons']) # [BS, K, C, H, W]
 
                 # wandb logging for table
                 for sample_idx in range(data.shape[0]):
@@ -220,10 +226,10 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             inputs = data[:, frame, :, :, :]
             with torch.no_grad():
                 if not args.spotlight_bias:
-                        recons, preds, hidden, memory, curr_alpha_mask = model(inputs, hidden, memory)
+                        recons, preds, hidden, memory, object_mask = model(inputs, hidden, memory)
                 else:
-                    recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias, curr_alpha_mask = model(inputs, hidden, memory)
-            soft_masks.append(curr_alpha_mask.squeeze(2)) # [BS, K, H, W]
+                    recons, preds, hidden, memory, slot_means, slot_variances, attn_param_bias, object_mask = model(inputs, hidden, memory)
+            soft_masks.append(object_mask.squeeze(2)) # [BS, K, H, W]
         
             pred_list = gen_masks(
                 batch_size=data.shape[0],
@@ -252,6 +258,13 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
 
     prediction = prediction[:, 1:, :, :, :] # last batch of prediction, starting from frame 1
     blocked_prediction = blocked_prediction[:, :, 1:, :, :, :]
+    if reconstruction:
+        reconstruction = torch.stack(reconstruction, dim=1) # [N, T, C, H, W]
+    if individual_recons:
+        individual_recons = torch.stack(individual_recons, dim=2) # [N, K, T, C, H, W]
+    object_masks = None
+    if len(soft_masks) > 0:
+        object_masks = torch.stack(soft_masks, dim=2) # [BS, K, T, H, W]
     epoch_loss = epoch_loss / (batch_idx+1)
     epoch_recon_loss /= len(test_loader)
     epoch_pred_loss /= len(test_loader)
@@ -296,6 +309,12 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             'f1': f1_avg,
             'individual_output': blocked_prediction
         }
+    if len(reconstruction) > 0:
+        metrics['reconstruction'] = reconstruction
+    if len(individual_recons) > 0:
+        metrics['individual_recons'] = individual_recons
+    if object_masks is not None:
+        metrics['object_masks'] = object_masks
     if mot_metrics is not None:
         metrics['mot_metrics'] = mot_metrics
 
