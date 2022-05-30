@@ -153,7 +153,8 @@ def train_dist(rank, model, train_loader, optimizer, epoch, train_batch_idx, arg
 def dist_run(rank, world_size, args, columns):
     print(f"Running basic DDP example on rank {rank}.")
     setup(rank, world_size)
-    torch.cuda.set_device(rank)
+    if torch.cuda.is_available():
+        torch.cuda.set_device(rank)
     
     # create model and move it to GPU with id rank
     train_loader, _, test_loader = setup_dataloader_dist(rank, world_size, args)
