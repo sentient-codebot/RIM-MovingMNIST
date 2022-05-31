@@ -322,8 +322,9 @@ def test(model, test_loader, args, loss_fn, rollout=True, epoch=0, log_columns=N
     print('test runtime:', time() - start_time)
     return epoch_loss, epoch_recon_loss, epoch_pred_loss, prediction, data, metrics, test_table
 
-def test_dist(model, test_loader, args, loss_fn, rollout=True, epoch=0, log_columns=None):
+def test_dist(rank, model, test_loader, args, loss_fn, rollout=True, epoch=0, log_columns=None):
     '''test(model, test_loader, args, loss_fn, rollout)'''
+    device = rank if torch.cuda.is_available() else 'cpu'
     start_time = time()
     # wandb table
     if log_columns is not None:
@@ -357,10 +358,10 @@ def test_dist(model, test_loader, args, loss_fn, rollout=True, epoch=0, log_colu
     if args.task in MOT_TASKS:
         model.module.mot_eval = True
 
-    epoch_loss = torch.tensor(0.).to(args.device)
+    epoch_loss = torch.tensor(0.).to(device)
     epoch_recon_loss = 0.
     epoch_pred_loss = 0.
-    epoch_mseloss = torch.tensor(0.).to(args.device)
+    epoch_mseloss = torch.tensor(0.).to(device)
     f1 = 0.
     ssim = 0.
     most_used_units = []
@@ -369,21 +370,21 @@ def test_dist(model, test_loader, args, loss_fn, rollout=True, epoch=0, log_colu
     for batch_idx, data in enumerate(tqdm(test_loader) if __name__ == "__main__" else test_loader): # tqdm doesn't work here?
         if args.task == 'MMNIST':
             # data: (labels, frames_in, frames_out)
-            digit_labels, in_frames, out_frames = [tensor.to(args.device) for tensor in data] 
+            digit_labels, in_frames, out_frames = [tensor.to(device) for tensor in data] 
             data = torch.cat((in_frames, out_frames), dim=1) # [N, *T, 1, H, W]
         else:
-            data = data.to(args.device)
-        hidden = model.module.init_hidden(data.shape[0]).to(args.device)
+            data = data.to(device)
+        hidden = model.module.init_hidden(data.shape[0]).to(device)
         memory = None
         if args.use_sw:
-            memory = model.init_memory(data.shape[0]).to(args.device)
+            memory = model.init_memory(data.shape[0]).to(device)
         if args.core == 'RIM':
             rim_actv.reset()
             rim_actv_mask.reset()
             dec_util.reset()
         if args.core == 'SCOFF':
             rule_attn_argmax.reset()
-        data = data.to(args.device) # Shape: [batch_size, T, C, H, W] or [batch_size, T, H, W]
+        data = data.to(device) # Shape: [batch_size, T, C, H, W] or [batch_size, T, H, W]
         if data.dim()==4:
             data = data.unsqueeze(2).float() # Shape: [batch_size, T, 1, H, W]
         hidden = hidden.detach()

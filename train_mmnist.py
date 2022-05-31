@@ -98,23 +98,24 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
     return train_batch_idx, epoch_loss, epoch_recon_loss, epoch_pred_loss
 
 def train_dist(rank, model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn):
+    device = rank if torch.cuda.is_available() else 'cpu'
     model.module.train()
 
-    epoch_loss = torch.tensor(0.).to(rank)
+    epoch_loss = torch.tensor(0.).to(device)
     epoch_recon_loss = 0.
     epoch_pred_loss = 0.
     for batch_idx, data in enumerate(tqdm(train_loader)):
         # data: (labels, frames_in, frames_out)
         if args.task == 'MMNIST':
-            digit_labels, in_frames, out_frames = [tensor.to(rank) for tensor in data] 
+            digit_labels, in_frames, out_frames = [tensor.to(device) for tensor in data] 
             data = torch.cat((in_frames, out_frames), dim=1) # [N, *T, 1, H, W]
         else:
-            data = data.to(rank)
-        hidden = model.module.init_hidden(data.shape[0]).to(rank)
+            data = data.to(device)
+        hidden = model.module.init_hidden(data.shape[0]).to(device)
         hidden = hidden.detach()
         memory = None
         if args.use_sw:
-            memory = model.module.init_memory(data.shape[0]).to(rank)
+            memory = model.module.init_memory(data.shape[0]).to(device)
         
         optimizer.zero_grad()
         recon_loss = 0.
@@ -183,6 +184,7 @@ def dist_run(rank, world_size, args, columns):
             if args.test_frequency > 0 and epoch % args.test_frequency == 0 or epoch <= 15:
                 """test model accuracy and log intermediate variables here"""
                 test_loss, test_recon_loss, test_pred_loss, prediction, data, metrics, test_table = test_dist(
+                    rank = rank,
                     model = model, 
                     test_loader = test_loader, 
                     args = args, 
@@ -288,7 +290,7 @@ def main():
     columns = setup_wandb_columns(args) # artifact columns
 
     # run training
-    world_size = torch.cuda.device_count()
+    world_size = 2
     print('using a worldsize of {}'.format(world_size))
     mp.spawn(
         dist_run,
@@ -369,6 +371,10 @@ def setup_model(args):
 
 def setup_model_dist(args, rank):
     """setup model, optimizer, (scheduler), loss_fn, start_epoch, train_batch_idx"""
+    # setup device
+    cudable = torch.cuda.is_available()
+    device = rank if cudable else 'cpu'
+    
     # find latest checkpoint    
     if args.should_resume:
         print(f"Loading args from "+f"{args.folder_save}/args/args.pt")
@@ -386,13 +392,18 @@ def setup_model_dist(args, rank):
     
     # initialize
     if args.task == 'MMNIST' or args.task == 'BBALL' or args.task == 'SPRITESMOT':
-        model = BallModel(args).to(rank)
+        model = BallModel(args).to(device)
     elif args.task == 'TRAFFIC4CAST':
-        model = TrafficModel(args).to(rank)
+        model = TrafficModel(args).to(device)
         raise NotImplementedError('traffic4cast not implemented')
     else:
         raise ValueError('not recognized task')
-    model = DDP(model, device_ids=[rank], output_device=rank, find_unused_parameters=True)
+    model = DDP(
+        model, 
+        device_ids=[rank] if cudable else None, 
+        output_device=rank if cudable else None, 
+        find_unused_parameters=True
+    )
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, min_lr=0.01*args.lr, verbose=True)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 20, T_mult=2, eta_min=0.01*args.lr, last_epoch=- 1, verbose=True)
