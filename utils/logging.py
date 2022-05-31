@@ -5,6 +5,7 @@ import wandb
 from .visualize import make_grid_video, heatmap_to_video, plot_heatmap
 import torch
 import os
+from functools import partial
 
 def log_stats(args, is_train, **kwargs):
     """
@@ -252,12 +253,17 @@ class enable_logging():
         self.model = model
         self.prev = getattr(self.model, 'do_logging', False)
         self.do_logging = do_logging
+        def set_logging_(module, do_logging):
+            module.do_logging = do_logging
+        
+        self.set_logging = partial(set_logging_, do_logging=self.do_logging)
+        self.reset_logging = partial(set_logging_, do_logging=self.prev)
 
     def __enter__(self,):
-        self.model.do_logging = self.do_logging
+        self.model.apply(self.set_logging)
 
     def __exit__(self, type, value, traceback):
-        self.model.do_logging = self.prev
+        self.model.apply(self.reset_logging)
 
 def setup_wandb_columns(args: Namespace) -> list[str]:
     """
