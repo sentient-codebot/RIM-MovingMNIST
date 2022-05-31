@@ -18,7 +18,7 @@ from utils.logging import log_stats, setup_wandb_columns
 from utils.ddp import setup, cleanup, setup_dataloader_dist
 from datasets import setup_dataloader
 from tqdm import tqdm
-from test_mmnist import dec_rim_util, test
+from test_mmnist import dec_rim_util, test, test_dist
 
 import os 
 from os import listdir
@@ -182,7 +182,7 @@ def dist_run(rank, world_size, args, columns):
             
             if args.test_frequency > 0 and epoch % args.test_frequency == 0 or epoch <= 15:
                 """test model accuracy and log intermediate variables here"""
-                test_loss, test_recon_loss, test_pred_loss, prediction, data, metrics, test_table = test(
+                test_loss, test_recon_loss, test_pred_loss, prediction, data, metrics, test_table = test_dist(
                     model = model, 
                     test_loader = test_loader, 
                     args = args, 
@@ -288,7 +288,7 @@ def main():
     columns = setup_wandb_columns(args) # artifact columns
 
     # run training
-    world_size = 2
+    world_size = 1
     mp.spawn(
         dist_run,
         args=(world_size, args, columns),
