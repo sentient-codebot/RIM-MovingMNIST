@@ -402,7 +402,7 @@ def setup_model_dist(args, rank):
         model, 
         device_ids=[rank] if cudable else None, 
         output_device=rank if cudable else None, 
-        find_unused_parameters=True
+        find_unused_parameters=False,
     )
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, min_lr=0.01*args.lr, verbose=True)
