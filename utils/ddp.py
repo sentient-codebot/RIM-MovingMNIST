@@ -40,3 +40,7 @@ def setup_dataloader_dist(rank, world_size, args, pin_memory=False, num_worker=0
                              shuffle=False,
     )    
     return train_loader, None, test_loader
+
+def gather_list(l: list[torch.Tensor], device):
+    l = [ten.to(device) for ten in l]
+    return l

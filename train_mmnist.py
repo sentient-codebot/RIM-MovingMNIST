@@ -15,7 +15,7 @@ from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
 from utils.visualize import make_grid_video
 from utils.logging import log_stats, setup_wandb_columns
-from utils.ddp import setup, cleanup, setup_dataloader_dist
+from utils.ddp import setup, cleanup, setup_dataloader_dist, gather_list
 from datasets import setup_dataloader
 from tqdm import tqdm
 from test_mmnist import dec_rim_util, test, test_dist
@@ -151,7 +151,13 @@ def train_dist(rank, model, train_loader, optimizer, epoch, train_batch_idx, arg
 
     return train_batch_idx, epoch_loss, torch.tensor(epoch_recon_loss), torch.tensor(epoch_pred_loss)
 
-def dist_run(rank, world_size, args, columns):
+def dist_run(rank, world_size, args,):
+    if rank == 0:
+        # wandb setup
+        project, name = args.id.split('_',1)
+        wandb.init(project=project, name=name, config=vars(args), entity='nan-team', settings=wandb.Settings(start_method="thread"))
+        columns = setup_wandb_columns(args) # artifact columns
+    device = rank if torch.cuda.is_available() else 'cpu'
     print(f"Running basic DDP example on rank {rank}.")
     setup(rank, world_size)
     if torch.cuda.is_available():
@@ -172,6 +178,7 @@ def dist_run(rank, world_size, args, columns):
         dist.all_gather_object(train_recon_loss, train_recon_loss_)
         dist.all_gather_object(train_pred_loss, train_pred_loss_)
         if rank == 0:
+            train_loss, train_recon_loss, train_pred_loss = gather_list(train_loss, device), gather_list(train_recon_loss, device), gather_list(train_pred_loss, device)
             train_loss = torch.mean(torch.stack(train_loss))
             train_recon_loss = torch.mean(torch.stack(train_recon_loss))
             train_pred_loss = torch.mean(torch.stack(train_pred_loss))
@@ -284,17 +291,12 @@ def main():
             "args": vars(args)
         }, f"{args.folder_save}/args/args.pt")
 
-    # wandb setup
-    project, name = args.id.split('_',1)
-    wandb.init(project=project, name=name, config=vars(args), entity='nan-team', settings=wandb.Settings(start_method="thread"))
-    columns = setup_wandb_columns(args) # artifact columns
-
     # run training
-    world_size = 2
+    world_size = torch.cuda.device_count() if cudable else 2
     print('using a worldsize of {}'.format(world_size))
     mp.spawn(
         dist_run,
-        args=(world_size, args, columns),
+        args=(world_size, args,),
         nprocs=world_size,
     )
     
