@@ -288,7 +288,8 @@ def main():
     columns = setup_wandb_columns(args) # artifact columns
 
     # run training
-    world_size = 1
+    world_size = torch.cuda.device_count()
+    print('using a worldsize of {}'.format(world_size))
     mp.spawn(
         dist_run,
         args=(world_size, args, columns),
