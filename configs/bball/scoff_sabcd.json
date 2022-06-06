@@ -1,6 +1,9 @@
 {
     "version"                   : 0,
     "task"                      : "BBALL",
+    "ball_options"              : "TRANSFER",
+    "ball_trainset"             : "4ball",
+    "ball_testset"              : "4ball",
     "core"                      : "SCOFF",
     
     "batch_size"                : 32,
