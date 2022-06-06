@@ -8,7 +8,6 @@ from numpy.random import default_rng
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Dataset
-torch.manual_seed(1997)
 
 class BouncingBall(Dataset):
     """Dataset class. Copied from the LoadDataset below, but modified. 
@@ -49,15 +48,17 @@ class BouncingBall(Dataset):
                                ' You can use download=True to download it')
 
         hdf5_file = h5py.File(self.directory + "/" + filename, 'r')
-        self.input_data = hdf5_file[self.mode]
-        self.input_data = np.array(self.input_data['features'])
+        self.input_data = hdf5_file[self.mode] # HDF5 group
+        # self.input_data = np.array(self.input_data['features'])
+        self.input_data = self.input_data['features'] # HDF5 dataset: [frame, index, h, w, c]
 
     def __getitem__(self, index, out_list=('features', 'groups')):
         # ['collisions', 'events', 'features', 'groups', 'positions', 'velocities']
         # Currently MAX (51 ,64, 64, 1)
 
         frame_indices = [frame_idx for frame_idx in range(0, self.MAX_LENGTH, self.downsample_ratio)]
-        features = 1.0 * self.input_data[frame_indices[:self.length], index, :, :, :]
+        features = self.input_data[frame_indices[:self.length], index, :, :, :]
+        features = 1.0 * np.array(features)
         # True, False label, conert to int
         # Convert to tensors
         features = torch.tensor(features.reshape(features.shape[0], 1, 64, 64)) # [50, 1, 64, 64]
@@ -209,3 +210,11 @@ def get_rgb_dataloaders(args):
 
     return [_get_dataloader(mode, dataset_name, shuffle) for
             mode, dataset_name, shuffle in zip(modes, dataset_names, shuffle_list)]
+
+def main():
+    trainset = BouncingBall(train=True, length=20, root='data', filename='balls4mass64.h5')
+    data = next(iter(trainset))
+    ...
+    
+if __name__ == "__main__":
+    main()

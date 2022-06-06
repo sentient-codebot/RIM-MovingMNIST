@@ -65,7 +65,7 @@
                 "--experiment_name",
                 "SPRITES_SASBD_444",
                 "--cfg_json",
-                "configs/synmot/rim_sasbd.json",
+                "configs/bball/rim_sasbd.json",
                 "--dataset_dir",
                 "data",
                 "--decode_hidden",
