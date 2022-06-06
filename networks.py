@@ -193,9 +193,10 @@ class SharedBroadcastDecoder(nn.Module):
             out_list.append(out_tensor)
             mask_list.append(out_mask)
         channels = torch.stack(out_list, dim=1) # Shape: [N, M, C, H, W]
+        # mask = torch.stack(mask_list, dim=1) # Shape: [N, M, 1, H, W]
+        # mask = nn.Softmax(dim=1)(mask) # Shape: [N, M, 1, H, W]
         mask = torch.stack(mask_list, dim=1) # Shape: [N, M, 1, H, W]
-        mask = nn.Softmax(dim=1)(mask) # Shape: [N, M, 1, H, W]
-        
+        mask = mask/(torch.sum(mask, dim=1, keepdim=True)+1e-8) # Normalization. Shape: [N, M, 1, H, W]
         fused = torch.sum(channels*mask, dim=1) # Shape: [N, C, H, W]
         return fused, channels, mask
 
@@ -462,7 +463,7 @@ class BallModel(nn.Module):
         elif args.decoder_type == "SEP_BASIC":
             self.decoder = SharedBasicDecoder(embedding_size=self.embedding_size, out_channels=out_channels)
         elif args.decoder_type == "SEP_SBD":
-            if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
+            if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR'] and False:
                 self.decoder = SharedBroadcastDecoder(self.embedding_size, 3)
             else:
                 self.decoder = WrappedDecoder(self.embedding_size, decoder=_sbd_decoder, mem_efficient=self.args.sbd_mem_efficient) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
@@ -669,36 +670,35 @@ class BallModel(nn.Module):
         reg_loss = 0.
         # UPDATE
         # pass through self.rnn_model (RNN core)
-        with enable_logging(self.rnn_model, self.do_logging) as _:
-            if self.core=='RIM':
-                if not self.sparse:
-                    h_new, cs_new, M = self.rnn_model(x=encoded_input, hs=h_prev, cs=None, M=M_prev) # one-step prediciton
-                else:
-                    raise NotImplementedError('Sparse RIM not configured for slot input yet')
-            elif self.core=='GRU':
-                h_shape = h_prev.shape # Shape: [batch_size, num_units, hidden_size]
-                h_prev = h_prev.reshape((h_shape[0],1,-1)) # flatten, Shape: [batch_size, 1, num_units*hidden_size]
-                h_new, cs_new, M = self.rnn_model(x=encoded_input.view(encoded_input.shape[0], 1, -1), hs=h_prev, cs=None, M=None) # one-step prediciton
-                h_new = h_new.reshape(h_shape)
-            elif self.core=='LSTM':
-                raise NotImplementedError('LSTM core not implemented yet!')
-            elif self.core=="SCOFF":
-                # SCOFF requires a different input shape
-                #   - input shape: [batch_size, num_object_files*input_size], we can pass different inputs to different OFs
-                #   - h_prev shape: [batch_size, num_object_files*hidden_size]
-                if not self.scoff_share_inp:
-                    encoded_input = encoded_input.view(encoded_input.shape[0], -1, 1).repeat(1, 1, self.num_hidden).flatten(start_dim=1) # Shape: [batch_size, num_object_files*input_size*num_hidden]
-                h_prev = h_prev.view(h_prev.shape[0], -1) # Shape: [batch_size, num_units*hidden_size]
-                h_new, c_new, mask, block_mask, temp_attention = self.rnn_model(inp=encoded_input, hx=h_prev, cx=None)
-                h_new = h_new.view(h_new.shape[0], self.num_hidden, -1) # Shape: [batch_size, num_units, hidden_size]
-
-                # for logging
-                if self.do_logging:
-                    rules_selected = torch.argmax(temp_attention, dim=2, keepdim=False) # temp_attention: [bs, num_hidden, n_templates] -> LongTensor [bs, num_hidden]
-                    self.rnn_model.hidden_features['rule_attn_argmax'] = rules_selected
-                    self.rnn_model.hidden_features['rule_attn_probs'] = temp_attention
+        if self.core=='RIM':
+            if not self.sparse:
+                h_new, cs_new, M = self.rnn_model(x=encoded_input, hs=h_prev, cs=None, M=M_prev) # one-step prediciton
             else:
-                raise RuntimeError('Illegal RNN Core')
+                raise NotImplementedError('Sparse RIM not configured for slot input yet')
+        elif self.core=='GRU':
+            h_shape = h_prev.shape # Shape: [batch_size, num_units, hidden_size]
+            h_prev = h_prev.reshape((h_shape[0],1,-1)) # flatten, Shape: [batch_size, 1, num_units*hidden_size]
+            h_new, cs_new, M = self.rnn_model(x=encoded_input.view(encoded_input.shape[0], 1, -1), hs=h_prev, cs=None, M=None) # one-step prediciton
+            h_new = h_new.reshape(h_shape)
+        elif self.core=='LSTM':
+            raise NotImplementedError('LSTM core not implemented yet!')
+        elif self.core=="SCOFF":
+            # SCOFF requires a different input shape
+            #   - input shape: [batch_size, num_object_files*input_size], we can pass different inputs to different OFs
+            #   - h_prev shape: [batch_size, num_object_files*hidden_size]
+            if not self.scoff_share_inp:
+                encoded_input = encoded_input.view(encoded_input.shape[0], -1, 1).repeat(1, 1, self.num_hidden).flatten(start_dim=1) # Shape: [batch_size, num_object_files*input_size*num_hidden]
+            h_prev = h_prev.view(h_prev.shape[0], -1) # Shape: [batch_size, num_units*hidden_size]
+            h_new, c_new, mask, block_mask, temp_attention = self.rnn_model(inp=encoded_input, hx=h_prev, cx=None)
+            h_new = h_new.view(h_new.shape[0], self.num_hidden, -1) # Shape: [batch_size, num_units, hidden_size]
+
+            # for logging
+            if self.do_logging:
+                rules_selected = torch.argmax(temp_attention, dim=2, keepdim=False) # temp_attention: [bs, num_hidden, n_templates] -> LongTensor [bs, num_hidden]
+                self.rnn_model.hidden_features['rule_attn_argmax'] = rules_selected
+                self.rnn_model.hidden_features['rule_attn_probs'] = temp_attention
+        else:
+            raise RuntimeError('Illegal RNN Core')
         
         
         # DECODING
@@ -728,7 +728,7 @@ class BallModel(nn.Module):
                 next_dec_out_, next_channels, next_alpha_mask = self.decoder(h_new)
                 if self.do_logging:
                     blocked_out_ = next_channels*next_alpha_mask
-                    self.hidden_features['individual_output'] = blocked_out_
+                    self.hidden_features['individual_output'] = blocked_out_.detach()
             else:
                 next_dec_out_ = self.decoder(h_new.view(h_new.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
         

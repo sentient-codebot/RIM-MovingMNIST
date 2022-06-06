@@ -177,13 +177,13 @@ class RIMCell(nn.Module):
         if self.do_logging:
             self.hidden_features.update(
                 {
-                    'input_attention_probs': input_attn_probs, # (0,1), for logging, [N, num_hidden, num_inputs+1]
-                    'input_attention_mask': mask.squeeze(), # {0,1}, for logging, [N, num_hidden,]
+                    'input_attention_probs': input_attn_probs.detach(), # (0,1), for logging, [N, num_hidden, num_inputs+1]
+                    'input_attention_mask': mask.squeeze().detach(), # {0,1}, for logging, [N, num_hidden,]
                 }
             )
             if self.use_rule_sharing:
                 self.hidden_features.update({
-                    'rule_attn_probs': rule_attention, # (0,1), for logging, [N, num_hidden, num_rules]
+                    'rule_attn_probs': rule_attention.detach(), # (0,1), for logging, [N, num_hidden, num_rules]
                 })
 
         # Update hs and cs and return them
@@ -730,8 +730,8 @@ class SCOFFCell(nn.Module):
                 inp_use, inp_attn_mask_, input_attn_probs = self.inp_att(inp, hx.view(hx.shape[0], self.num_hidden, -1))
                 iatt[:,:,0] = 1. - input_attn_probs[:,:,-1]
                 if self.do_logging:
-                    self.hidden_features['input_attention_probs'] = input_attn_probs
-                    self.hidden_features['input_attention_mask'] = inp_attn_mask_.squeeze()
+                    self.hidden_features['input_attention_probs'] = input_attn_probs.detach()
+                    self.hidden_features['input_attention_mask'] = inp_attn_mask_.squeeze().detach()
 
             inp_use = inp_use.reshape((inp_use.shape[0], self.inp_att_out * self.num_hidden)) # [bs, self.inp_att_out * num_hidden], self.inp_att_out ~= input_size for following GRU
 
@@ -771,7 +771,7 @@ class SCOFFCell(nn.Module):
             hx_new, temp_attention = self.block_lstm(inp_use, hx) # template attention: temp_attention: [bs, num_hidden, n_templates]
             cx_new = hx_new
             if self.do_logging:
-                self.hidden_features['rule_attn_probs'] = temp_attention
+                self.hidden_features['rule_attn_probs'] = temp_attention.detach()
         else:
             hx_new, cx_new, temp_attention = self.block_lstm(inp_use, hx, cx)
         

@@ -63,13 +63,15 @@
             "console": "integratedTerminal",
             "args": [
                 "--experiment_name",
-                "SPRITES_SABCD_444",
+                "SPRITES_SASBD_444",
                 "--cfg_json",
-                "configs/synmot/rim_sabcd.json",
+                "configs/synmot/rim_sasbd.json",
                 "--dataset_dir",
                 "data",
                 "--decode_hidden",
-                "false"
+                "false",
+                "--batch_size",
+                "8"
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "0",
