@@ -76,7 +76,8 @@ def str2ballset(inp_str):
 def str2balltask(inp):
     inp = inp.upper()
     if inp is None:
-        return None
+        print('ball task not specified, using TRANSFER as default.')
+        return "TRANSFER"
     elif inp == 'TRANSFER':
         return 'TRANSFER'
     elif True:
