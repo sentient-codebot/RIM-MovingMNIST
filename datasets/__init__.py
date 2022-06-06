@@ -81,7 +81,7 @@ def setup_dataloader(args):
         )
     elif args.task == 'BBALL':
         train_set = BouncingBall(root=args.dataset_dir, train=True, length=20, filename=args.ball_trainset)
-        test_set = BouncingBall(root=args.dataset_dir, train=False, length=50, filename=args.ball_testset)
+        test_set = BouncingBall(root=args.dataset_dir, train=False, length=20, filename=args.ball_testset)
     elif args.task == 'TRAFFIC4CAST':
         raise NotImplementedError('Traffic4Cast not implemented')
     elif args.task == 'SPRITESMOT':
