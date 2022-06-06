@@ -253,7 +253,9 @@ def argument_parser():
             args.slot_size = args.hidden_size
 
     if args.task == "BBALL":
-        assert args.ball_options is not None
+        # assert args.ball_options is not None
+        if args.ball_options is None:
+            args.ball_options = 'TRANSFER'
         assert args.ball_trainset is not None
         assert args.ball_testset is not None
 
