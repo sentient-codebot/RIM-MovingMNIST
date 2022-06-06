@@ -134,7 +134,8 @@ def spatial_broadcast(slots, resolution):
         `img`: (BS*K, d_slot, H, W) """
 
     slots = slots.reshape(slots.shape[0]*slots.shape[1], -1, 1, 1) # (BS*K, d_slot, 1, 1)
-    img = slots.repeat((1, 1, *resolution))
+    # img = slots.repeat((1, 1, *resolution))
+    img = slots.expand((-1, -1, *resolution))
 
     return img
 

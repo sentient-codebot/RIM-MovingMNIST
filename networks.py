@@ -644,8 +644,8 @@ class BallModel(nn.Module):
                     encoded_input, attn, attn_param_bias = self.slot_attention(encoded_input, self.past_slots) # Shape: [batch_size, num_slots, slot_size]
                     grid_val = util.build_grid2D(self.resolution).repeat(encoded_input.shape[0],1,1,1).reshape([encoded_input.shape[0],-1,2]).to(h_prev.device)
                     slot_means = torch.matmul(attn.permute(0,2,1),grid_val)
-                    slot_means_ = slot_means.unsqueeze(1)
-                    grid_val_ = grid_val.unsqueeze(2)
+                    slot_means_ = slot_means.unsqueeze(1) # [N, 1, num_slots, 2]
+                    grid_val_ = grid_val.unsqueeze(2) # [N, num_inputs, 1, 2]
                     slot_variances_ = ((slot_means_ - grid_val_)**2).sum(-1)
                     slot_variances_ = slot_variances_ * attn
                     slot_variances = slot_variances_.sum(-1)
