@@ -212,7 +212,7 @@ def get_rgb_dataloaders(args):
             mode, dataset_name, shuffle in zip(modes, dataset_names, shuffle_list)]
 
 def main():
-    trainset = BouncingBall(train=True, length=20, root='data', filename='balls4mass64.h5')
+    trainset = BouncingBall(train=False, length=20, root='data', filename='balls4mass64.h5')
     data = next(iter(trainset))
     ...
     

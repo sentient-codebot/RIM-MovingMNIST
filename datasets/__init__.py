@@ -20,7 +20,8 @@ def mini_dataset(nfold=10):
         `nfold`: number of fold on the dataset length
     """
     def mini_dataset_dec(dataset: torch.utils.data.Dataset):
-        print(f'Warning: {dataset.__name__} length is divided by {nfold}')
+        name = dataset.__class__.__name__ if isinstance(dataset, torch.utils.data.Dataset) else dataset.__name__
+        print(f'Warning: {name} length is divided by {nfold}')
         old_len = dataset.__len__
         dataset.__len__ = lambda args: max(old_len(args) // nfold, 1)
         return dataset
@@ -81,7 +82,8 @@ def setup_dataloader(args):
         )
     elif args.task == 'BBALL':
         train_set = BouncingBall(root=args.dataset_dir, train=True, length=20, filename=args.ball_trainset)
-        test_set = BouncingBall(root=args.dataset_dir, train=False, length=20, filename=args.ball_testset)
+        print('divide test set length by 10 --> 1000')
+        test_set = mini_dataset(nfold=10)(BouncingBall)(root=args.dataset_dir, train=False, length=20, filename=args.ball_testset)
     elif args.task == 'TRAFFIC4CAST':
         raise NotImplementedError('Traffic4Cast not implemented')
     elif args.task == 'SPRITESMOT':
