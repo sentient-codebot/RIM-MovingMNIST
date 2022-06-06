@@ -7,7 +7,7 @@
     "core"                      : "SCOFF",
     
     "batch_size"                : 64,
-    "epochs"                    : 400,
+    "epochs"                    : 20,
     "should_resume"             : false,
     "save_frequency"            : 20,
     "test_frequency"            : 10,
