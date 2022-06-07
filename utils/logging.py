@@ -47,6 +47,8 @@ def log_stats(args, is_train, **kwargs):
     reconstruction = metrics.get('reconstruction') # Tensor|None
     individual_recons = metrics.get('individual_recons') # Tensor|None
     object_masks = metrics.get('object_masks') # Tensor|None
+    slot_attn_probs = metrics.get('slot_attn_probs') # Tensor|None, [batch_size, num_iter*num_frames, num_slots, h, w]
+    slot_attn_map = metrics.get('slot_attn_map') # Tensor|None
     # videos patching
     individual_output = metrics['individual_output'] # dim == 6
     if args.task == 'MMNIST':
@@ -86,6 +88,27 @@ def log_stats(args, is_train, **kwargs):
                 return_dim=5
             )*255
         ).to(torch.uint8).cpu()
+    # slot attention
+    if slot_attn_probs is not None:
+        # [batch_size, num_iter*num_frames, num_slots, h, w]
+        titles = [f'Slot {i}' for i in range(slot_attn_probs.shape[2])]
+        slot_attn_probs_vid = heatmap_to_video(
+                    slot_attn_probs[0], # [num_iter*num_frames, num_slots, h, w]
+                    title=titles,
+                    cbar=True,
+                    linewidth=0.,
+                )
+    if slot_attn_map is not None:
+        # [batch_size, num_iter*num_frames, num_slots, h, w]
+        slot_attn_map = slot_attn_map - slot_attn_map.min()
+        slot_attn_map = slot_attn_map / (slot_attn_map.max() + 1e-8) # [0, 1]
+        titles = [f'Slot {i}' for i in range(slot_attn_probs.shape[2])]
+        slot_attn_map_vid = heatmap_to_video(
+                    slot_attn_map[0], # [num_iter*num_frames, num_slots, h, w]
+                    title=titles,
+                    cbar=False,
+                    linewidth=0.,
+                )
 
     # scalars
     #   tensorboard
@@ -205,6 +228,14 @@ def log_stats(args, is_train, **kwargs):
         video_dict['Individual Reconstructions'] = wandb.Video(grided_ind_recon, fps=3)
     if grided_obj_masks is not None:
         video_dict['Object Masks'] = wandb.Video(grided_obj_masks, fps=3)
+    if slot_attn_probs is not None:
+        video_dict['Slot Attention Probs'] = wandb.Video(
+            slot_attn_probs_vid, fps=1,
+        )
+    if slot_attn_map is not None:
+        video_dict['Slot Attention Map'] = wandb.Video(
+            slot_attn_probs_vid, fps=1,
+        )
     
     # histograms
     if args.core == 'RIM':

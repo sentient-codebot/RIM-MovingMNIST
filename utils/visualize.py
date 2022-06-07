@@ -392,20 +392,28 @@ def array_handler(data: ArrayLike) -> ArrayLike:
         raise RuntimeError('unrecognized data type: {}'.format(type(data)))
 
 def plot_heatmap(data: ArrayLike, 
-                 x_label: str,
-                 y_label: str,
+                 x_label: Optional[Union[str, List[str]]] = None,
+                 y_label: Optional[Union[str, List[str]]] = None,
                  vmin: float=0.,
                  vmax: float=1.,
                  cmap: Optional[Colormap]=None,
                  title: Optional[str]=None,
-                 figsize: Union[FigSize, str]='auto', cbar: bool=True, annot: Union[bool, str]='auto', fmt: str='.2f', square: bool=True) -> plt.Figure:
+                 figtitle: Optional[str]=None,
+                 figsize: Union[FigSize, str]='auto', cbar: bool=True, annot: Union[bool, str]='auto', fmt: str='.2f', square: bool=True,
+                 linewidth: float = .5) -> plt.Figure:
     """
-    data: 2D array-like
+    data: 2D array-like or N x 2D array-like
     cbar: bool
     annot: bool or str
     """
     data = array_handler(data)
-    H, W = data.shape
+    if data.dim() == 3:
+        data_list = [_data for _data in data]
+        N, H, W = data.shape
+    else:
+        data_list = [data]
+        H, W = data.shape
+        N = 1
     if isinstance(annot, bool):
         ...
     else:
@@ -419,26 +427,52 @@ def plot_heatmap(data: ArrayLike,
             raise RuntimeError("'annot': {} unrecognized. ".format(annot))
     if isinstance(figsize, str):
         if figsize == 'auto':
-            figsize = (2+2.5*W/H, 4.5) # W, H
+            figsize = ((2+2.5*W/H)*N, 4.5) # W, H
         else:
             raise RuntimeError("'figsize': {} unrecognized. ".format(figsize))
-    fig, ax = plt.subplots(figsize=figsize)
+    if N == 1:
+        fig, ax = plt.subplots(figsize=figsize)
+        axes = [ax]
+    else:
+        fig, axes = plt.subplots(ncols=N, figsize=figsize)
     if cmap is None:
         cmap = sns.diverging_palette(220, 20, as_cmap=True)
-    sns.heatmap(data, 
-                annot=annot, 
-                cbar=cbar,
-                fmt=fmt, 
-                linewidths=.5, 
-                ax=ax, 
-                cmap=cmap,
-                vmin=vmin,
-                vmax=vmax,
-                square=square)
-    ax.set_xlabel(x_label)
-    ax.set_ylabel(y_label)
-    if title is not None:
-        ax.set_title(title)
+    for idx, ax in enumerate(axes):
+        data = data_list[idx]
+        cax = None
+        if cbar and idx == len(data_list)-1:
+            fig.subplots_adjust(right=0.85)
+            cax = fig.add_axes([0.9, 0.1, 0.03/N, 0.7])
+        sns.heatmap(data, 
+                    annot=annot, 
+                    cbar=cbar and idx == len(data_list)-1,
+                    cbar_ax=cax,
+                    fmt=fmt, 
+                    linewidths=linewidth, 
+                    ax=ax, 
+                    cmap=cmap,
+                    vmin=vmin,
+                    vmax=vmax,
+                    square=square)
+        if x_label is not None:
+            if isinstance(x_label, str):
+                ax.set_xlabel(x_label)
+            else:
+                ax.set_xlabel(x_label[idx])
+        if y_label is not None:
+            if isinstance(y_label, str):
+                ax.set_ylabel(y_label)
+            else:
+                ax.set_ylabel(y_label[idx])
+        if x_label is None and y_label is None:
+            ax.set_axis_off()
+        if title is not None:
+            if isinstance(title, str):
+                ax.set_title(title)
+            else:
+                ax.set_title(title[idx])
+    if figtitle is not None:
+        fig.suptitle(figtitle)
     plt.close()
     return fig
 class VecStack():
@@ -506,17 +540,18 @@ def mplfig_to_npvideo(figs: list[plt.figure]) -> np.ndarray:
 
 def heatmap_to_video(data: Tensor, *args, **kwargs) -> np.ndarray:
     """
-        `data`: Shape [T, 1, H, W] or [T, H, W]
+        `data`: Shape [T, N, H, W] or [T, H, W]
         
     """
     if data.dim() == 4:
-        data = data.squeeze(1)
+        if data.shape[1] == 1:
+            data = data.squeeze(1)
     elif data.dim() != 3:
-        raise RuntimeError('expected data.dim() == 4, got {}'.format(data.dim()))
+        raise RuntimeError('expected data.dim() == 4 or 3, got {}'.format(data.dim()))
 
     figs = []
     for frame_idx, frame in enumerate(data):
-        figs.append(plot_heatmap(frame, *args, title=f'Frame {frame_idx:d}', **kwargs))
+        figs.append(plot_heatmap(frame, *args, figtitle=f'Frame {frame_idx:d}', **kwargs))
     return mplfig_to_npvideo(figs)
 
 def main():
@@ -527,13 +562,26 @@ def main():
     # _t = _t.unsqueeze(2)
     # plot_frames(_t, _t, 0, 18, 6)
 
-    '''test saliency'''
-    background = torch.round(torch.rand((3, 64, 64)))
-    saliency = torch.zeros_like(background) + torch.rand_like(background)*0.05
-    saliency[1, 32:, 32:] = 0.3
-    saliency[1, 48:, 48:] = 0.8
-    saliency[1, 60:, 60:] = 5
-    plot_saliency(background, saliency, 'test variable', 'epoch', 10, '.')
+    # '''test saliency'''
+    # background = torch.round(torch.rand((3, 64, 64)))
+    # saliency = torch.zeros_like(background) + torch.rand_like(background)*0.05
+    # saliency[1, 32:, 32:] = 0.3
+    # saliency[1, 48:, 48:] = 0.8
+    # saliency[1, 60:, 60:] = 5
+    # plot_saliency(background, saliency, 'test variable', 'epoch', 10, '.')
+    
+    '''test heatmap'''
+    data = torch.rand((6, 64, 64))
+    # data = torch.rand((4, 6))
+    titles = [f'Slot {i}' for i in range(data.shape[0])]
+    fig = plot_heatmap(
+        data,
+        title=titles,
+        cbar=True,
+        linewidth=0.,
+        figtitle='suptitle example'
+    )
+    ...
 
 
 if __name__ == "__main__":

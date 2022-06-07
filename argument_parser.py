@@ -92,7 +92,7 @@ def argument_parser():
     config_parser = argparse.ArgumentParser(
         description='Experiment Script',
         add_help=False) # a must because otherwise the child will have two help options
-    config_parser.add_argument('--cfg_json','--config', type=str)
+    config_parser.add_argument('--cfg_json','--config','--configs', type=str)
     config_parser.add_argument('--experiment_name','--name','--n', type=str)
 
     parser = argparse.ArgumentParser(parents=[config_parser])

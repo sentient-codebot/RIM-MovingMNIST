@@ -116,6 +116,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         loss = 0.
         mseloss = 0.
         prediction = torch.zeros_like(data)
+        slot_attn_probs = [] 
+        slot_attn_map = []
         input_attn_probs = []
         rule_attn_probs_list = []
         blocked_prediction = torch.zeros(
@@ -205,6 +207,11 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                         test_table.add_data(
                             *[table_row[col] for col in log_columns],
                         )
+                        
+                # wandb log
+                if args.use_slot_attention:
+                    slot_attn_probs.append(model.slot_attention.hidden_features['attention_probs']) # [batch_size, *, num_slots, h, w]
+                    slot_attn_map.append(model.slot_attention.hidden_features['attention_map']) # [batch_size, *, num_slots, h, w]
                 if args.core == 'RIM' or args.core == 'SCOFF':
                 # wandb/tb logging for concatenated image
                     dec_util.append(model.rnn_model.hidden_features.get("decoder_utilization", torch.zeros(1, 1)))
@@ -317,6 +324,11 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         metrics['object_masks'] = object_masks
     if mot_metrics is not None:
         metrics['mot_metrics'] = mot_metrics
+        
+    # slot attention
+    if args.use_slot_attention:
+        metrics['slot_attn_probs'] = torch.cat(slot_attn_probs, dim=1) # [batch_size, **, num_slots, h, w]
+        metrics['slot_attn_map'] = torch.cat(slot_attn_map, dim=1) # [batch_size, **, num_slots, h, w]
 
     model.mot_eval = False
     print('test runtime:', time() - start_time)

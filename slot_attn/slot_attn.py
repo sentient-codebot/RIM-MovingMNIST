@@ -93,6 +93,11 @@ class SlotAttention(nn.Module):
             nn.Linear(self.mlp_hidden_size, self.slot_size),
         )
         
+        self.do_logging = False
+        self.hidden_features = {}
+        self.hidden_features['attention_probs'] = []
+        self.hidden_features['attention_map'] = []
+        
     def manual_init_slots(self, manual_slots) -> torch.Tensor:
         """manually initialize slots
         
@@ -131,7 +136,9 @@ class SlotAttention(nn.Module):
             slots = self.manual_init_slots(init_slots)
 
         # Multiple rounds of attention.
-        for _ in range(self.num_iterations):
+        self.hidden_features['attention_probs'] = []
+        self.hidden_features['attention_map'] = []
+        for iter_idx in range(self.num_iterations):
             slots_prev = slots
             slots = self.norm_slots(slots)
 
@@ -146,6 +153,20 @@ class SlotAttention(nn.Module):
             attn = attn + self.epsilon
             attn = attn / attn.sum(dim=-2, keepdim=True) # NOTE what is the sum of `attn`?
             updates = torch.matmul(attn.transpose(1,2), v) # Shape: (batch_size, num_slots, slot_size).
+            if self.do_logging:
+                with torch.no_grad():
+                    bs, n_in, n_s = attn.shape
+                    from math import sqrt
+                    h, w = int(sqrt(n_in)), int(sqrt(n_in))
+                    _attn_probs = attn.permute(0, 2, 1).view(bs, n_s, h, w).detach() # [batch_size, num_slots, h, w]
+                    self.hidden_features['attention_probs'].append(_attn_probs)
+                    self.hidden_features['attention_map'].append(
+                        _attn_probs * inputs.view(bs, 1, h, w, -1).norm(dim=-1).detach() \
+                        # [batch_size, num_slots, h, w]
+                    )
+                    if iter_idx == self.num_iterations - 1:
+                        self.hidden_features['attention_probs'] = torch.stack(self.hidden_features['attention_probs'], dim=1) # [batch_size, *, num_slots, h, w]
+                        self.hidden_features['attention_map'] = torch.stack(self.hidden_features['attention_map'], dim=1)
 
             # Slots update.
             slots, _ = self.gru(
@@ -155,10 +176,10 @@ class SlotAttention(nn.Module):
             slots = slots.view(batch_size, self.num_slots, self.slot_size)
             slots = slots + self.mlp(self.norm_mlp(slots))
 
-            if self.spotlight_bias_loss:
-                return slots, attn, self.attn_param_bias
-            else:
-                return slots
+        if self.spotlight_bias_loss:
+            return slots, attn, self.attn_param_bias
+        else:
+            return slots
 
 def main():
     cudable = torch.cuda.is_available() 
