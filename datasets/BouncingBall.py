@@ -65,7 +65,10 @@ class BouncingBall(Dataset):
         return features.float()
 
     def __len__(self):
-        return int(np.shape(self.input_data)[1])
+        if self.mode == 'training':
+            return self.input_data.shape[1]
+        else:
+            return min(self.input_data.shape[1],1000)
     
     def _check_exists(self):
         return os.path.exists(os.path.join(self.directory, self.filename)) 
@@ -213,6 +216,7 @@ def get_rgb_dataloaders(args):
 
 def main():
     trainset = BouncingBall(train=False, length=20, root='data', filename='balls4mass64.h5')
+    print(len(trainset))
     data = next(iter(trainset))
     ...
     
