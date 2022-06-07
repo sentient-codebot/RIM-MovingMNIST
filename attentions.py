@@ -132,7 +132,8 @@ class InputAttention(Attention):
 
         # inputs = (bs, num_blocks, vdim), all value vectors are just scaled version of each other.
         inputs = torch.matmul(self.dropout(
-            attention_probs), value) * mask_.unsqueeze(2)
+            attention_probs), value) * mask_.unsqueeze(2) # Shape: [batch_size, num_blocks, vdim]
+        inputs = nn.LayerNorm(inputs.shape[-1])(inputs)
 
         # with torch.no_grad():
         #     out_probs = 1.-attention_probs[:,:, -1]
