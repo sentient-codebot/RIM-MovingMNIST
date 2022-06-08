@@ -97,6 +97,7 @@ def log_stats(args, is_train, **kwargs):
                     title=titles,
                     cbar=True,
                     linewidth=0.,
+                    cmap='OrRd',
                 )
     if slot_attn_map is not None:
         # [batch_size, num_iter*num_frames, num_slots, h, w]
@@ -108,6 +109,7 @@ def log_stats(args, is_train, **kwargs):
                     title=titles,
                     cbar=False,
                     linewidth=0.,
+                    cmap='OrRd',
                 )
 
     # scalars

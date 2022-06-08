@@ -70,6 +70,8 @@
                 "data",
                 "--decode_hidden",
                 "false",
+                "--num_slots",
+                "3"
                 // "--batch_size",
                 // "8"
             ],

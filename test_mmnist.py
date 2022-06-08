@@ -210,7 +210,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                         
                 # wandb log
                 if args.use_slot_attention:
-                    slot_attn_probs.append(model.slot_attention.hidden_features['attention_probs']) # [batch_size, *, num_slots, h, w]
+                    slot_attn_probs.append(model.slot_attention.hidden_features['attention_probs']) # [batch_size, num_iter, num_slots, h, w]
                     slot_attn_map.append(model.slot_attention.hidden_features['attention_map']) # [batch_size, *, num_slots, h, w]
                 if args.core == 'RIM' or args.core == 'SCOFF':
                 # wandb/tb logging for concatenated image
