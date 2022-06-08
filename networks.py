@@ -4,7 +4,7 @@ from tempfile import gettempdir
 from turtle import forward, st
 import torch
 import torch.nn as nn
-from rnn_models import RIMCell, RIM, SparseRIMCell, LayerNorm, Flatten, UnFlatten, Interpolate, SCOFFCell
+from rnn_models import RIMCell, RIM, SparseRIMCell, LayerNorm, Flatten, UnFlatten, Interpolate, SCOFFCell, AltSCOFFCell
 from group_operations import GroupDropout, SharedGRUCell
 from collections import namedtuple
 import numpy as np
@@ -591,6 +591,30 @@ class BallModel(nn.Module):
                 straight_through_input=self.args.slot_straight_input,
                 hard_input_attention=self.args.hard_input_attention,
                 null_input_type=self.args.null_input_type,
+            )
+        elif self.core == "ALTSCOFF":
+            self.rnn_model = AltSCOFFCell(
+                device=self.args.device,
+                input_size=self.slot_size if self.use_slot_attention else self.input_size, # NOTE: non-sensetive to num_inputs
+                num_units=self.num_hidden,
+                hidden_size=self.args.hidden_size,
+                k=self.args.k,
+                rnn_cell=self.args.rnn_cell, # defalt GRU
+                input_key_size=self.args.input_key_size,
+                input_value_size=self.args.input_value_size,
+                num_input_heads = self.args.num_input_heads,
+                input_dropout = self.args.input_dropout,
+                use_sw = self.use_sw,
+                comm_key_size = self.args.comm_key_size,
+                comm_value_size = self.args.comm_value_size, 
+                num_comm_heads = self.args.num_comm_heads, 
+                comm_dropout = self.args.comm_dropout,
+                memory_size = self.args.memory_size,
+                use_rule_embedding=self.args.use_rule_embedding,
+                num_rules=self.args.num_rules,
+                hard_input_attention=self.args.hard_input_attention,
+                null_input_type=self.args.null_input_type,
+                input_attention_key_norm=self.args.input_attention_key_norm,
             )
         else:
             raise ValueError('Illegal RNN Core')

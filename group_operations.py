@@ -437,7 +437,8 @@ class SharedGroupGRU(nn.Module):
         self.use_rule_embedding = use_rule_embedding # we can use a higher rule_emb size and then project to kdim, but also directly use kdim
         if not self.use_rule_embedding:
             self.gll_read = GroupLinearLayer(self.hidden_size,self.key_size,1) # hidden -> q, 16 == key size
-            self.gll_write = GroupLinearLayer(self.hidden_size,self.key_size, self.num_rules) # hidden_new -> k, 16 == key size
+            # self.gll_write = GroupLinearLayer(self.hidden_size,self.key_size, self.num_rules) # hidden_new -> k
+            self.gll_write = nn.Linear(self.hidden_size, self.key_size, bias=False) # hidden_new -> k, sharing same key proj matrix
         else:
             self.gll_read = GroupLinearLayer(self.input_size+self.hidden_size,self.key_size, 1) # input+hidden -> q, 16 == key size
             self.rule_embeddings = nn.Parameter(torch.randn(1, self.num_rules, self.key_size)) # Shape: [1, num_rules, key_size]
@@ -448,11 +449,11 @@ class SharedGroupGRU(nn.Module):
     def forward(self, input, h):
         """
         Inputs:
-            `input`: [N, num_hidden,single_input_size]
-            `h`: [N, num_hidden,single_hidden_size]
+            `input`: [N, num_hidden, single_input_size]
+            `h`: [N, num_hidden, single_hidden_size]
             
         Outputs:
-            `hnext`: [N, num_hidden*single_hidden_size],
+            `hnext`: [N, num_hidden, single_hidden_size],
             `attn`: [N, num_OFs, n_templates] (num_bloccks==k==num_object_files)
         """
 
@@ -460,7 +461,7 @@ class SharedGroupGRU(nn.Module):
         bs = h.shape[0]                                                                      # h: previous hidden state  
         h = h.reshape((h.shape[0]*self.num_hidden, self.hidden_size))   # h.shape: (bs*num_hidden, hidden_size)
 
-        input = input.reshape(input.shape[0]*self.num_hidden, self.input_size)  # Shape: [N*num_hidden, input_sixe]
+        input = input.reshape(input.shape[0]*self.num_hidden, self.input_size)  # Shape: [N*num_hidden, input_size]
 
         if not self.use_rule_embedding:
             h_read = self.gll_read((h*1.0).reshape((h.shape[0], 1, h.shape[1]))) # from current hidden to q, shape: [N*num_hidden, 1, kdim]
