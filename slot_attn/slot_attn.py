@@ -18,6 +18,7 @@ class SlotAttention(nn.Module):
         spotlight_bias=False,
         manual_init=False,
         manual_init_scale=None,
+        eval_softmax_temp=1.0,
         ):
         """Build Slot Attention module.
         
@@ -54,6 +55,7 @@ class SlotAttention(nn.Module):
         self.norm_inputs = LayerNorm()
         self.norm_slots = LayerNorm()
         self.norm_mlp = LayerNorm()
+        self.eval_sm_temp = eval_softmax_temp
         
         self.manual_init = manual_init
         self.manual_init_scale = manual_init_scale
@@ -147,6 +149,8 @@ class SlotAttention(nn.Module):
             attn_logits = torch.matmul(k, q.transpose(1, 2)) / math.sqrt(self.slot_size) # Shape: (batch_size, num_inputs, num_slots).
             if self.spotlight_bias_loss:
                 attn_logits = attn_logits + self.attn_param_bias
+            if not self.training:
+                attn_logits = attn_logits*self.eval_sm_temp
             attn = torch.softmax(attn_logits, dim=-1) # Shape: (batch_size, num_inputs, num_slots).
 
             # Weighted mean.

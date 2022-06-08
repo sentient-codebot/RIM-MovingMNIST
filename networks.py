@@ -438,6 +438,7 @@ class BallModel(nn.Module):
                 input_size=self.input_size,
                 spotlight_bias=self.spotlight_bias,
                 manual_init=self.args.use_past_slots,
+                eval_softmax_temp=self.args.sa_sm_temp,
             ).to(self.args.device) # Shape: [batch_size,num_inputs, input_size] -> [batch_size, num_slots, slot_size]
             self.num_inputs = self.num_slots # number of output vectors of SlotAttention
         if self.use_compositional_MLP:
