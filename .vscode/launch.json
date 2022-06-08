@@ -65,7 +65,7 @@
                 "--experiment_name",
                 "SPRITES_SASBD_444",
                 "--cfg_json",
-                "configs/mmnist/rim_sasbd.json",
+                "configs/mmnist/altscoff_sasbd.json",
                 "--dataset_dir",
                 "data",
                 "--decode_hidden",

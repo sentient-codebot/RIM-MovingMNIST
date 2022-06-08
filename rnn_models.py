@@ -12,7 +12,6 @@ from typing import Any
 
 from group_operations import GroupLinearLayer, GroupTorchGRU, GroupLSTMCell, SharedWorkspace, SharedBlockGRU, SharedBlockLSTM, SharedGroupGRU
 from attentions import InputAttention, CommAttention, SparseInputAttention, PositionAttention, SelectionAttention, MultiHeadAttention
-from relational_memory import RelationalMemory
 
 from utils.logging import enable_logging
 
@@ -150,12 +149,13 @@ class RIMCell(nn.Module):
             c_old = cs * 1.0
         
         # Compute RNN(LSTM or GRU) output 
-        rule_attention = None
+        rule_attn_gsm = None
+        rule_attn_sm = None
         if isinstance(self.rnn, SharedGroupGRU):
             if cs is not None:
-                hs, cs, rule_attention = self.rnn(inputs, (hs, cs))
+                hs, cs, rule_attn_sm, rule_attn_gsm = self.rnn(inputs, (hs, cs))
             else:
-                hs, rule_attention = self.rnn(inputs, hs)
+                hs, rule_attn_sm, rule_attn_gsm = self.rnn(inputs, hs)
         else:
             if cs is not None:
                 hs, cs = self.rnn(inputs, (hs, cs))
@@ -181,9 +181,10 @@ class RIMCell(nn.Module):
                     'input_attention_mask': mask.squeeze().detach(), # {0,1}, for logging, [N, num_hidden,]
                 }
             )
-            if rule_attention is not None:
+            if rule_attn_gsm is not None and rule_attn_sm is not None:
                 self.hidden_features.update({
-                    'rule_attn_probs': rule_attention.detach(), # (0,1), for logging, [N, num_hidden, num_rules]
+                    'rule_attn_probs_sm': rule_attn_sm.detach(), # (0,1), for logging, [N, num_hidden, num_rules]
+                    'rule_attn_probs_gsm': rule_attn_gsm.detach(), # {0,1}, for logging, [N, num_hidden, num_rules]
                 })
 
         # Update hs and cs and return them

@@ -34,16 +34,17 @@ def log_stats(args, is_train, **kwargs):
     f1 = metrics.get('f1')
     ssim = metrics.get('ssim')
     if args.core == 'RIM':
-        input_attn_probs = metrics['input_attn_probs']
         rim_actv_mask = metrics['rim_actv_mask']
         dec_util = metrics['dec_util']
         most_used_units = metrics['most_used_units']
         if args.use_rule_sharing:
             rule_attn_probs = metrics['rule_attn_probs']
     elif args.core == 'SCOFF':
-        input_attn_probs = metrics['input_attn_probs']
         rule_attn_argmax = metrics['rule_attn_argmax'] # LongTensor
-        rule_attn_probs = metrics.get('rule_attn_probs') 
+        rule_attn_probs = metrics.get('rule_attn_probs')
+    input_attn_probs = metrics.get('input_attn_probs')
+    rule_attn_probs_sm = metrics.get('rule_attn_probs_sm')
+    rule_attn_probs_gsm = metrics.get('rule_attn_probs_gsm')
     reconstruction = metrics.get('reconstruction') # Tensor|None
     individual_recons = metrics.get('individual_recons') # Tensor|None
     object_masks = metrics.get('object_masks') # Tensor|None
@@ -180,8 +181,8 @@ def log_stats(args, is_train, **kwargs):
     # videos
     #   tensorboard
     if writer is not None:
-        if args.core == 'RIM' or args.core == 'SCOFF':
-            writer.add_video('Input Attention Probs', input_attn_probs[:1], epoch)
+        if input_attn_probs is not None:
+                writer.add_video('Input Attention Probs', input_attn_probs[:1], epoch)
         if args.core == 'SCOFF' or args.use_rule_sharing:
             writer.add_video('Rule Attention Probs', rule_attn_probs[:1], epoch)
         writer.add_video('Predicted Videos', gt_preds_video, epoch)
@@ -197,7 +198,7 @@ def log_stats(args, is_train, **kwargs):
                 'Individual Predictions': wandb.Video(grided_ind_pred, fps=3),
             }
         )
-    if args.core == 'RIM' or args.core == 'SCOFF':
+    if input_attn_probs is not None:
         video_dict.update({
             # 'Input Attention Probs': wandb.Video((input_attn_probs[:1].cpu()*255).to(torch.uint8)), # [1, T, 1, H, W]
             'Input Attention Probs': wandb.Video(
@@ -211,6 +212,28 @@ def log_stats(args, is_train, **kwargs):
                 fps=1,
             ), # [T, 3, H, W]
         })
+    if rule_attn_probs_sm is not None:
+        video_dict['Rule Attention Probs Softmax'] = wandb.Video(
+            heatmap_to_video(
+                    rule_attn_probs_sm[0], 
+                    x_label='Rules',
+                    y_label='OFs',
+                    vmin=0.,
+                    vmax=1.,
+                ),
+            fps=1,
+        )
+    if rule_attn_probs_gsm is not None:
+        video_dict['Rule Attention Probs Gumbel-Softmax'] = wandb.Video(
+            heatmap_to_video(
+                    rule_attn_probs_gsm[0], 
+                    x_label='Rules',
+                    y_label='OFs',
+                    vmin=0.,
+                    vmax=1.,
+                ),
+            fps=1,
+        )
     if args.core == 'SCOFF' or args.use_rule_sharing:
         video_dict.update({
             'Rule Attention Probs': wandb.Video(

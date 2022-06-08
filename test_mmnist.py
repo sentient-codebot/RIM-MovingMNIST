@@ -120,6 +120,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         slot_attn_map = []
         input_attn_probs = []
         rule_attn_probs_list = []
+        rule_attn_probs_sm = []
+        rule_attn_probs_gsm = []
         blocked_prediction = torch.zeros(
             (data.shape[0],
             args.num_hidden+1,
@@ -227,6 +229,11 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                     rule_attn_probs_list.append(model.rnn_model.hidden_features['rule_attn_probs'].unsqueeze(1)) # NOTE [N, 1, num_hidden, num_rules]
                     if 'input_attention_probs' in model.rnn_model.hidden_features:
                         input_attn_probs.append(model.rnn_model.hidden_features['input_attention_probs'].unsqueeze(1)) # Shape: [N, 1, num_hidden, num_inputs]
+                if 'rule_attn_probs_sm' in model.rnn_model.hidden_features:
+                    rule_attn_probs_sm.append(model.rnn_model.hidden_features['rule_attn_probs_sm']) # [N, num_hidden, num_rules]
+                if 'rule_attn_probs_gsm' in model.rnn_model.hidden_features:
+                    rule_attn_probs_gsm.append(model.rnn_model.hidden_features['rule_attn_probs_gsm']) # [N, num_hidden, num_rules]
+                    
         
         # for MOT tasks, do one more step
         if args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
@@ -324,6 +331,10 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         metrics['object_masks'] = object_masks
     if mot_metrics is not None:
         metrics['mot_metrics'] = mot_metrics
+    if len(rule_attn_probs_sm) > 0:
+        metrics['rule_attn_probs_sm'] = torch.stack(rule_attn_probs_sm, dim=1) # Shape: [N, T, num_hidden, num_rules]
+    if len(rule_attn_probs_gsm) > 0:
+        metrics['rule_attn_probs_gsm'] = torch.stack(rule_attn_probs_gsm, dim=1) # Shape: [N, T, num_hidden, num_rules]
         
     # slot attention
     if args.use_slot_attention:

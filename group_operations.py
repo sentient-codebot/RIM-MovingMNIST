@@ -454,7 +454,8 @@ class SharedGroupGRU(nn.Module):
             
         Outputs:
             `hnext`: [N, num_hidden, single_hidden_size],
-            `attn`: [N, num_OFs, n_templates] (num_bloccks==k==num_object_files)
+            `attn_sm`: [N, num_hidden, num_rules] from softmax
+            `attn_gsm`: [N, num_OFs, n_templates] (num_bloccks==k==num_object_files) from gumbel_softmax
         """
 
         #self.blockify_params()
@@ -484,7 +485,8 @@ class SharedGroupGRU(nn.Module):
         else:
             write_key = self.rule_embeddings # [1, num_rules, kdim]
 
-        att = torch.nn.functional.gumbel_softmax(torch.matmul(h_read, write_key.permute(0, 2, 1)),  tau=0.5, hard=True)    # Shape: [N*num_hidden, 1, num_rules]
+        att_logits = torch.matmul(h_read, write_key.permute(0, 2, 1))
+        att = torch.nn.functional.gumbel_softmax(att_logits,  tau=0.5, hard=True)    # Shape: [N*num_hidden, 1, num_rules]
 
         #print('hnext shape before att', hnext.shape)
         hnext = torch.bmm(att, hnext)   # [N*num_hidden, 1, num_rules], [N*num_hidden, num_rules, hidden_size] -> [N*num_hidden, 1, hidden_size]
@@ -492,7 +494,7 @@ class SharedGroupGRU(nn.Module):
         hnext = hnext.reshape((bs, self.num_hidden, self.hidden_size)) # [N, num_hidden, hidden_size]
         #print('shapes', hnext.shape, cnext.shape)
 
-        return hnext, att.data.reshape(bs,self.num_hidden,self.num_rules)
+        return hnext, nn.Softmax(-1)(att_logits).data.reshape(bs,self.num_hidden,self.num_rules), att.data.reshape(bs,self.num_hidden,self.num_rules)
     
 class SharedBlockLSTM(nn.Module):
     """Dynamic sharing of parameters between blocks(RIM's)
