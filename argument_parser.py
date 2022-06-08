@@ -261,7 +261,10 @@ def argument_parser():
 
     args.id = f"{args.experiment_name}_"
     if args.use_slot_attention:
-        args.id = args.id + 'SA_' + f"{args.num_slots}_{args.slot_size}_{args.num_iterations_slot}_"
+        if args.spotlight_bias:
+            args.id = args.id + 'SSA_' + f"{args.num_slots}_{args.slot_size}_{args.num_iterations_slot}_"
+        else:
+            args.id = args.id + 'SA_' + f"{args.num_slots}_{args.slot_size}_{args.num_iterations_slot}_"
     args.id = args.id + args.core.upper() + f"_{args.num_hidden}_{args.hidden_size}"
     if args.core == 'SCOFF':
         args.id = args.id + f"_{args.num_rules}"
