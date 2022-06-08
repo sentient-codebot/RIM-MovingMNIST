@@ -16,6 +16,7 @@ class SlotAttention(nn.Module):
     def __init__(self, 
         num_iterations, num_slots, slot_size, mlp_hidden_size, epsilon, num_input, input_size,
         spotlight_bias=False,
+        do_key_norm=True,
         manual_init=False,
         manual_init_scale=None,
         eval_softmax_temp=1.0,
@@ -55,6 +56,7 @@ class SlotAttention(nn.Module):
         self.norm_inputs = LayerNorm()
         self.norm_slots = LayerNorm()
         self.norm_mlp = LayerNorm()
+        self.do_key_norm = do_key_norm
         self.eval_sm_temp = eval_softmax_temp
         
         self.manual_init = manual_init
@@ -154,8 +156,9 @@ class SlotAttention(nn.Module):
             attn = torch.softmax(attn_logits, dim=-1) # Shape: (batch_size, num_inputs, num_slots).
 
             # Weighted mean.
-            attn = attn + self.epsilon
-            attn = attn / attn.sum(dim=-2, keepdim=True) # NOTE what is the sum of `attn`?
+            if self.do_key_norm:
+                attn = attn + self.epsilon
+                attn = attn / attn.sum(dim=-2, keepdim=True) # NOTE what is the sum of `attn`?
             updates = torch.matmul(attn.transpose(1,2), v) # Shape: (batch_size, num_slots, slot_size).
             if self.do_logging:
                 with torch.no_grad():
