@@ -149,18 +149,18 @@ class RIMCell(nn.Module):
         if cs is not None:
             c_old = cs * 1.0
         
-        # Compute RNN(LSTM or GRU) output
-        
-        if not self.use_rule_sharing:
-            if cs is not None:
-                hs, cs = self.rnn(inputs, (hs, cs))
-            else:
-                hs = self.rnn(inputs, hs)
-        else:
+        # Compute RNN(LSTM or GRU) output 
+        rule_attention = None
+        if isinstance(self.rnn, SharedGroupGRU):
             if cs is not None:
                 hs, cs, rule_attention = self.rnn(inputs, (hs, cs))
             else:
                 hs, rule_attention = self.rnn(inputs, hs)
+        else:
+            if cs is not None:
+                hs, cs = self.rnn(inputs, (hs, cs))
+            else:
+                hs = self.rnn(inputs, hs)
 
         # Block gradient through inactive units
         mask = mask.unsqueeze(2).detach()
@@ -181,7 +181,7 @@ class RIMCell(nn.Module):
                     'input_attention_mask': mask.squeeze().detach(), # {0,1}, for logging, [N, num_hidden,]
                 }
             )
-            if self.use_rule_sharing:
+            if rule_attention is not None:
                 self.hidden_features.update({
                     'rule_attn_probs': rule_attention.detach(), # (0,1), for logging, [N, num_hidden, num_rules]
                 })

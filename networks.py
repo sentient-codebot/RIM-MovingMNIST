@@ -694,7 +694,7 @@ class BallModel(nn.Module):
         reg_loss = 0.
         # UPDATE
         # pass through self.rnn_model (RNN core)
-        if self.core=='RIM':
+        if self.core=='RIM' or self.core=='ALTSCOFF':
             if not self.sparse:
                 h_new, cs_new, M = self.rnn_model(x=encoded_input, hs=h_prev, cs=None, M=M_prev) # one-step prediciton
             else:
