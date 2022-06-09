@@ -106,6 +106,7 @@ def main():
             args.device = torch.device("cpu" if mps.is_available() else "cpu")
         except ModuleNotFoundError:
             args.device = torch.device("cpu")
+    print(f'using device {args.device}')
     make_dir(args.folder_log)
     make_dir(f"{args.folder_save}/checkpoints")
     make_dir(f"{args.folder_save}/best_model")

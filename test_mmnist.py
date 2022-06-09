@@ -382,12 +382,24 @@ def main():
     # data setup
     train_loader, val_loader, test_loader = setup_dataloader(args=args)
     # resume args
-    print(f"Loading args from "+f"{args.folder_save}/args/args.pt")
-    args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt")['args'])
+    # print(f"Loading args from "+f"{args.folder_save}/args/args.pt")
+    # args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt")['args'])
     if not args.should_resume:
         args.should_resume = True
     cudable = torch.cuda.is_available()
-    args.device = torch.device("cuda" if cudable else "cpu")
+    if cudable:
+        args.device = torch.device("cuda")
+    else:
+        try:
+            import torch.backends.mps as mps
+            args.device = torch.device("cpu" if mps.is_available() else "cpu")
+        except ModuleNotFoundError:
+            args.device = torch.device("cpu")
+    print(f'using device {args.device}')
+    make_dir(args.folder_log)
+    make_dir(f"{args.folder_save}/checkpoints")
+    make_dir(f"{args.folder_save}/best_model")
+    make_dir(f"{args.folder_save}/args")
     
     # wandb setup
     project, name = args.id.split('_',1)
@@ -449,12 +461,11 @@ def setup_model(args) -> torch.nn.Module:
         else:
             # Find the last checkpointed model and resume from that
             model_dir = f"{args.folder_save}/checkpoints"
-            # latest_model_idx = max(
-            #     [int(model_idx) for model_idx in listdir(model_dir)
-            #      if model_idx != "args"]
-            # )
+            checkpoint_list = [int(f.split('.')[0]) for f in os.listdir(model_dir) if f.endswith('.pt')]
+            if len(checkpoint_list) == 0:
+                raise RuntimeError("No checkpoint found in {}".format(model_dir))
             latest_model_idx = max(
-                [int(f.split('.')[0]) for f in os.listdir(model_dir) if f.endswith('.pt')]
+                checkpoint_list
             )
             args.path_to_load_model = f"{model_dir}/{latest_model_idx}.pt"
             args.checkpoint = {"epoch": latest_model_idx}
