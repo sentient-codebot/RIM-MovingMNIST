@@ -12,6 +12,8 @@ import numpy as np
 
 from typing import Any
 
+from slot_attn.decoder_cnn import LayerNorm
+
 
 class Attention(nn.Module):
     """
@@ -55,7 +57,7 @@ class InputAttention(Attention):
         `num_blocks`: always equal to number of OFs/hidden state vectors
         `share_query_proj`: whether to share the same projection matrix for all query vectors. 
         `num_shared_query_proj`: number of shared query projection matrices."""
-
+    mlp_hidden_size = 128
     def __init__(self,
                  input_size,
                  hidden_size,
@@ -70,6 +72,7 @@ class InputAttention(Attention):
                  num_shared_query_proj=1,
                  hard_argmax=False,
                  key_norm=True,
+                 refinement=False,
                  ):
         super().__init__(dropout)
         self.num_heads = num_heads
@@ -94,8 +97,20 @@ class InputAttention(Attention):
         
         self.hard_argmax = hard_argmax
         self.key_norm = key_norm
+        
+        self.norm_inputs = LayerNorm()
+        self.refinement = refinement
+        if self.refinement:
+            self.norm_slots = LayerNorm()
+            self.norm_mlp = LayerNorm()
+            self.mlp = nn.Sequential(
+                nn.Linear(self.slot_size, self.mlp_hidden_size),
+                nn.ReLU(),
+                nn.Linear(self.mlp_hidden_size, self.slot_size),
+            )
 
     def forward(self, x, h):
+        x = self.norm_inputs(x)
         key = self.key(x)  # Shape: [batch_size, num_heads, kdim]
         value = self.value(x)
         query = self.query(h)
@@ -136,6 +151,9 @@ class InputAttention(Attention):
 
         # with torch.no_grad():
         #     out_probs = 1.-attention_probs[:,:, -1]
+
+        if self.refinement:
+            inputs = inputs + self.mlp(self.norm_slots(inputs))
 
         return inputs, mask_, attention_probs
 

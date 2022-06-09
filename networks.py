@@ -497,6 +497,7 @@ class BallModel(nn.Module):
                                         hard_input_attention=self.args.hard_input_attention,
                                         null_input_type=self.args.null_input_type,
                                         input_attention_key_norm=self.args.input_attention_key_norm,
+                                        input_attention_refinement=self.args.input_attention_refinement,
                 )
             else:
                 raise NotImplementedError('Sparse RIM not updated with new args yet')
@@ -617,6 +618,7 @@ class BallModel(nn.Module):
                 hard_input_attention=self.args.hard_input_attention,
                 null_input_type=self.args.null_input_type,
                 input_attention_key_norm=self.args.input_attention_key_norm,
+                input_attention_refinement=self.args.input_attention_refinement,
             )
         else:
             raise ValueError('Illegal RNN Core')

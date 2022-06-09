@@ -145,10 +145,14 @@ class WrappedDecoder(nn.Module):
     Args:
         `hidden_size`: the hidden size of the encoder
         `decoder`: the decoder type, either 'interp' or 'transconv'
+        `confidence_mod`: bool, if True, use confidence modulation
+            type 1: using hidden[:,:,0] as confidence *
+            type 2: pred confidence from hidden
 
     Input:
         `hidden`: (BS, K, d_slot) """
-    def __init__(self, hidden_size, decoder='interp', mem_efficient=False):
+    # conf_pred_hidden_size = 128
+    def __init__(self, hidden_size, decoder='interp', mem_efficient=False, confidence_mod=False):
         super().__init__()
         if decoder == 'synmot':
             self.decoder = make_synmot_decoder(hidden_size)
@@ -162,10 +166,14 @@ class WrappedDecoder(nn.Module):
         self.pos_embed = SoftPositionEmbed(hidden_size, (8,8))
         self.hidden_size = hidden_size
         self.mem_efficient = mem_efficient
+        self.confidence_mod = confidence_mod
 
     def forward(self, hidden):
+        # hidden: shape [BS, K, slot_size]
         batch_size = hidden.shape[0]
         num_slots = hidden.shape[1]
+        confidence = nn.Softmax(dim=1)(hidden[:,:,0]).unsqueeze(1) # [BS, K, 1]
+        hidden = hidden * confidence # [BS, K, slot_size]
         hidden = spatial_broadcast(hidden, (8,8)) # (BS*K, d_slot, 8, 8)
         hidden = self.pos_embed(hidden) # (BS*K, d_slot, 8, 8)
         if self.mem_efficient:
