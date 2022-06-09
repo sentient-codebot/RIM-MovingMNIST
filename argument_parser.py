@@ -148,6 +148,7 @@ def argument_parser():
     parser.add_argument('--encoder_type', type=str2encoder, default='FLATTEN',
                         help="Type of encoder to use. 'FLATTEN' or 'NONFLATTEN'")
     #   decoder Settings
+    parser.add_argument('--confidence_mod', type=str2bool, default=False)
     parser.add_argument('--decode_hidden', type=str2bool, default=True)
     parser.add_argument('--decoder_type', type=str2decoder, default='CAT_BASIC')
     #   SlotAttention settings

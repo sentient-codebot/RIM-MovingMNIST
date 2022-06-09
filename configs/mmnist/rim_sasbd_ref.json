@@ -43,5 +43,6 @@
 
     "use_composiitonal_MLP"     : false,
 
-    "input_attention_refinement": true
+    "input_attention_refinement": true,
+    "confidence_mod"            : true
 }

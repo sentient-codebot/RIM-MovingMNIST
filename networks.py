@@ -468,7 +468,8 @@ class BallModel(nn.Module):
             if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR'] and False:
                 self.decoder = SharedBroadcastDecoder(self.embedding_size, 3)
             else:
-                self.decoder = WrappedDecoder(self.embedding_size, decoder=_sbd_decoder, mem_efficient=self.args.sbd_mem_efficient) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
+                self.decoder = WrappedDecoder(self.embedding_size, decoder=_sbd_decoder, mem_efficient=self.args.sbd_mem_efficient,
+                                              confidence_mod=self.args.confidence_mod) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
         else:
             raise NotImplementedError("Not implemented decoder type: {}".format(args.decoder_type))
 
