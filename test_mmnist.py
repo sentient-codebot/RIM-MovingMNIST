@@ -443,23 +443,27 @@ def setup_model(args) -> torch.nn.Module:
     model = BallModel(args).to(args.device)
     
     if args.should_resume:
-        # Find the last checkpointed model and resume from that
-        model_dir = f"{args.folder_save}/checkpoints"
-        # latest_model_idx = max(
-        #     [int(model_idx) for model_idx in listdir(model_dir)
-        #      if model_idx != "args"]
-        # )
-        latest_model_idx = max(
-            [int(f.split('.')[0]) for f in os.listdir(model_dir) if f.endswith('.pt')]
-        )
-        args.path_to_load_model = f"{model_dir}/{latest_model_idx}.pt"
-        args.checkpoint = {"epoch": latest_model_idx}
+        if os.path.exists(f"{args.folder_save}/best_model/best.pt"):
+            args.path_to_load_model = f"{args.folder_save}/best_model/best.pt"
+            args.checkpoint = 'best'
+        else:
+            # Find the last checkpointed model and resume from that
+            model_dir = f"{args.folder_save}/checkpoints"
+            # latest_model_idx = max(
+            #     [int(model_idx) for model_idx in listdir(model_dir)
+            #      if model_idx != "args"]
+            # )
+            latest_model_idx = max(
+                [int(f.split('.')[0]) for f in os.listdir(model_dir) if f.endswith('.pt')]
+            )
+            args.path_to_load_model = f"{model_dir}/{latest_model_idx}.pt"
+            args.checkpoint = {"epoch": latest_model_idx}
 
     if args.path_to_load_model != "":
-        print(f"Resuming experiment id: {args.id} from epoch: {args.checkpoint}")
+        print(f"Resuming experiment id: {args.id} from {args.checkpoint}")
         checkpoint = torch.load(args.path_to_load_model.strip(), map_location=args.device)
         model.load_state_dict(checkpoint['model_state_dict'])
-        epoch = checkpoint['epoch'] if 'epoch' in checkpoint else args.checkpoint['checkpoint']
+        epoch = checkpoint['epoch'] if 'epoch' in checkpoint else 0
 
     return model, epoch
 

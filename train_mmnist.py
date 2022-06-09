@@ -1,3 +1,4 @@
+from multiprocessing.sharedctypes import Value
 from tabnanny import check
 from time import time
 
@@ -106,10 +107,10 @@ def main():
         except ModuleNotFoundError:
             args.device = torch.device("cpu")
     make_dir(args.folder_log)
+    make_dir(f"{args.folder_save}/checkpoints")
+    make_dir(f"{args.folder_save}/best_model")
+    make_dir(f"{args.folder_save}/args")
     if not args.should_resume:
-        make_dir(f"{args.folder_save}/checkpoints")
-        make_dir(f"{args.folder_save}/best_model")
-        make_dir(f"{args.folder_save}/args")
         print(f"Saving args to {args.folder_save}/args/args.pt")
         torch.save({
             "args": vars(args)
@@ -201,6 +202,11 @@ def main():
                         'mse': metrics['mse'],
                         'best_mse': best_mse,
                     }, f"{args.folder_save}/best_model/best.pt")
+                wandb.run.summary['best_mse'] = best_mse
+                wandb.run.summary['best_mse_epoch'] = epoch
+                wandb.run.summary['best_mse_f1'] = metrics.get('f1', -1)
+                wandb.run.summary['best_mse_ssim'] = metrics.get('ssim', -1)
+                wandb.run.summary.update()
 
         else:
             print(f"epoch {epoch}/{args.epochs} | "+\
@@ -240,18 +246,20 @@ def setup_model(args):
     """setup model, optimizer, (scheduler), loss_fn, start_epoch, train_batch_idx"""
     # find latest checkpoint    
     if args.should_resume:
-        print(f"Loading args from "+f"{args.folder_save}/args/args.pt")
-        args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt")['args'])
         model_dir = f"{args.folder_save}/checkpoints"
-        latest_model_idx = max(
-            [int(f.split('.')[0]) for f in os.listdir(model_dir) if f.endswith('.pt')]
-        )
-        args.path_to_load_model = f"{model_dir}/{latest_model_idx}.pt"
-        args.checkpoint = {"epoch": latest_model_idx}
-        args.should_resume = True
-    # if args.path_to_load_model != "":
-    #     print(f"Loading args from "+f"{args.folder_save}/args/args.pt")
-    #     args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt")['args']) # NOTE this will overwrite args.path_.... to skip model resume!
+        checkpoint_list = [int(f.split('.')[0]) for f in os.listdir(model_dir) if f.endswith('.pt')]
+        if len(checkpoint_list) > 0: # checkpoint exists
+            latest_model_idx = max(
+                checkpoint_list
+            )
+            # print(f"Loading args from "+f"{args.folder_save}/args/args.pt")
+            # args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt")['args'])
+            args.path_to_load_model = f"{model_dir}/{latest_model_idx}.pt"
+            args.checkpoint = {"epoch": latest_model_idx}
+            args.should_resume = True
+        else:
+            args.path_to_load_model = ""
+            args.should_resume = False      
     
     # initialize
     if args.task == 'MMNIST' or args.task == 'BBALL' or args.task == 'SPRITESMOT':
@@ -280,7 +288,7 @@ def setup_model(args):
     # resume model state dict
     if args.path_to_load_model != "":
         print('Resuming model from '+args.path_to_load_model)
-        checkpoint = torch.load(args.path_to_load_model.strip())
+        checkpoint = torch.load(args.path_to_load_model.strip(), map_location=args.device)
         start_epoch = checkpoint['epoch'] + 1
         print(f"Resuming experiment id: {args.id}, from epoch: {start_epoch-1}")
         model.load_state_dict(checkpoint['model_state_dict'])
