@@ -207,7 +207,6 @@ def main():
                 wandb.run.summary['best_mse_epoch'] = epoch
                 wandb.run.summary['best_mse_f1'] = metrics.get('f1', -1)
                 wandb.run.summary['best_mse_ssim'] = metrics.get('ssim', -1)
-                wandb.run.summary.update()
 
         else:
             print(f"epoch {epoch}/{args.epochs} | "+\
