@@ -172,8 +172,9 @@ class WrappedDecoder(nn.Module):
         # hidden: shape [BS, K, slot_size]
         batch_size = hidden.shape[0]
         num_slots = hidden.shape[1]
-        confidence = nn.Softmax(dim=1)(hidden[:,:,0]).unsqueeze(1) # [BS, K, 1]
-        hidden = hidden * confidence # [BS, K, slot_size]
+        if self.confidence_mod:
+            confidence = nn.Softmax(dim=1)(hidden[:,:,0]).unsqueeze(2) # [BS, K, 1]
+            hidden = hidden * confidence # [BS, K, slot_size]
         hidden = spatial_broadcast(hidden, (8,8)) # (BS*K, d_slot, 8, 8)
         hidden = self.pos_embed(hidden) # (BS*K, d_slot, 8, 8)
         if self.mem_efficient:
