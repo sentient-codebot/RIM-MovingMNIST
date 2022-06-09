@@ -50,6 +50,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     '''test(model, test_loader, args, loss_fn, writer, rollout)'''
     start_time = time()
     # wandb table
+    test_table = None
     if log_columns is not None:
         test_table = wandb.Table(columns=log_columns)
 
