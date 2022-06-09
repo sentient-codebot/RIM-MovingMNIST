@@ -271,15 +271,18 @@ def log_stats(args, is_train, **kwargs):
     # wandb log
     project, name = args.id.split('_',1)
     if not os.environ.get('DISABLE_ARTIFACT', False):
-        metadata = vars(args)
-        metadata['epoch'] = epoch
-        if is_train:
-            wandb_artf = wandb.Artifact(project+'_'+name, type='predictions', metadata=metadata)
-        else:
-            wandb_artf = wandb.Artifact(project+'_'+name+'_test', type='predictions', metadata=metadata)
-        wandb_artf.add(test_table, "predictions")
-        print('logging artifact')
-        wandb.run.log_artifact(wandb_artf)
+        try:
+            metadata = vars(args)
+            metadata['epoch'] = epoch
+            if is_train:
+                wandb_artf = wandb.Artifact(project+'_'+name, type='predictions', metadata=metadata)
+            else:
+                wandb_artf = wandb.Artifact(project+'_'+name, type='predictions_test', metadata=metadata)
+            wandb_artf.add(test_table, "predictions")
+            print('logging artifact')
+            wandb.run.log_artifact(wandb_artf)
+        except OSError as e:
+            print('OSError occurred:', e)
     wandb.log({
         'Loss': loss_dict,
         'Metrics': metric_dict,

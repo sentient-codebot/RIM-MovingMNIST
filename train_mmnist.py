@@ -164,7 +164,7 @@ def main():
                 writer = writer,
                 rollout = True,
                 epoch = epoch,
-                log_columns=columns
+                log_columns=columns if epoch%50==0 else None,
             )
             log_stats(
                 args=args,
