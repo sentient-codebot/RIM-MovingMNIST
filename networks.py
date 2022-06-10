@@ -14,6 +14,7 @@ from slot_attn.pos_embed import SoftPositionEmbed
 from utils import util
 from utils.logging import enable_logging
 
+MOT_TASKS = ['SPRITESMOT', 'VMDS', 'VOR']
 class BasicEncoder(nn.Module):
     """basic encoder as baseline
     
@@ -622,19 +623,23 @@ class BallModel(nn.Module):
             raise ValueError('Illegal RNN Core')
         
         self.latent_transform = None
-        if not self.decode_hidden:
-            if 'CAT' in args.decoder_type:
-                self.latent_transform = nn.Sequential(
-                    nn.Linear(self.num_hidden*self.hidden_size, 256),
-                    nn.ReLU(),
-                    nn.Linear(256, self.embedding_size)
-                ) # hidden_state -> image embedding
-            else:
-                self.latent_transform = nn.Sequential(
-                    nn.Linear(self.hidden_size, 256),
-                    nn.ReLU(),
-                    nn.Linear(256, self.embedding_size)
-                )
+        if self.args.task in MOT_TASKS:
+            self.synmot_pred = nn.Linear(self.hidden_size, self.hidden_size)
+            self.decode_hidden = False
+        else:
+            if not self.decode_hidden:
+                if 'CAT' in args.decoder_type:
+                    self.latent_transform = nn.Sequential(
+                        nn.Linear(self.num_hidden*self.hidden_size, 256),
+                        nn.ReLU(),
+                        nn.Linear(256, self.embedding_size)
+                    ) # hidden_state -> image embedding
+                else:
+                    self.latent_transform = nn.Sequential(
+                        nn.Linear(self.hidden_size, 256),
+                        nn.ReLU(),
+                        nn.Linear(256, self.embedding_size)
+                    )
         
         self.past_slots = None
         
@@ -733,30 +738,39 @@ class BallModel(nn.Module):
         curr_dec_out_ = None
         curr_alpha_mask = None
         object_mask = None
-        if not self.decode_hidden:
-            if 'CAT' in self.decoder_type:
-                pred_latent = self.latent_transform(h_new.view(h_new.shape[0],-1)) # Shape: [N, K*hidden_size] -> [N, embedding_size]
-            else:
-                pred_latent = self.latent_transform(h_new) # Shape: [N, K, hidden_size] -> [N, K, slot/input_size]
-            
-            if "SEP" in self.decoder_type:
-                curr_dec_out_, curr_channels, curr_alpha_mask = self.decoder(encoded_input)
-                next_dec_out_, next_channels, next_alpha_mask = self.decoder(pred_latent)
-                if self.do_logging:
-                    blocked_out_ = next_channels*next_alpha_mask
-                    self.hidden_features['individual_output'] = blocked_out_.detach()
-                    self.hidden_features['individual_recons'] = (curr_channels*curr_alpha_mask).detach()
-            else:
-                curr_dec_out_ = self.decoder(encoded_input.view(encoded_input.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
-                next_dec_out_ = self.decoder(pred_latent.view(pred_latent.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
+        if self.args.task in MOT_TASKS:
+            h_next = self.synmot_pred(h_new)
+            # decoder type has to be 'SEP'
+            curr_dec_out_, curr_channels, curr_alpha_mask = self.decoder(h_new) # h_new for currect step
+            next_dec_out_, next_channels, next_alpha_mask = self.decoder(h_next) # h_next for next step
+            if self.do_logging:
+                self.hidden_features['individual_output'] = (next_channels*next_alpha_mask).detach()
+                self.hidden_features['individual_recons'] = (curr_channels*curr_alpha_mask).detach()
         else:
-            if "SEP" in self.decoder_type:
-                next_dec_out_, next_channels, next_alpha_mask = self.decoder(h_new)
-                if self.do_logging:
-                    blocked_out_ = next_channels*next_alpha_mask
-                    self.hidden_features['individual_output'] = blocked_out_.detach()
+            if not self.decode_hidden:
+                if 'CAT' in self.decoder_type:
+                    pred_latent = self.latent_transform(h_new.view(h_new.shape[0],-1)) # Shape: [N, K*hidden_size] -> [N, embedding_size]
+                else:
+                    pred_latent = self.latent_transform(h_new) # Shape: [N, K, hidden_size] -> [N, K, slot/input_size]
+                
+                if "SEP" in self.decoder_type:
+                    curr_dec_out_, curr_channels, curr_alpha_mask = self.decoder(encoded_input)
+                    next_dec_out_, next_channels, next_alpha_mask = self.decoder(pred_latent)
+                    if self.do_logging:
+                        blocked_out_ = next_channels*next_alpha_mask
+                        self.hidden_features['individual_output'] = blocked_out_.detach()
+                        self.hidden_features['individual_recons'] = (curr_channels*curr_alpha_mask).detach()
+                else:
+                    curr_dec_out_ = self.decoder(encoded_input.view(encoded_input.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
+                    next_dec_out_ = self.decoder(pred_latent.view(pred_latent.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
             else:
-                next_dec_out_ = self.decoder(h_new.view(h_new.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
+                if "SEP" in self.decoder_type:
+                    next_dec_out_, next_channels, next_alpha_mask = self.decoder(h_new)
+                    if self.do_logging:
+                        blocked_out_ = next_channels*next_alpha_mask
+                        self.hidden_features['individual_output'] = blocked_out_.detach()
+                else:
+                    next_dec_out_ = self.decoder(h_new.view(h_new.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
         
         if getattr(self, 'mot_eval', False):
             """output evaluation stats for MOT"""

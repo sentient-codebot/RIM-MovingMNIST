@@ -63,13 +63,11 @@
             "console": "integratedTerminal",
             "args": [
                 "--experiment_name",
-                "SPRITES_SASBD_444",
+                "DEBUG_SASBD",
                 "--cfg_json",
-                "configs/mmnist/altscoff_sasbd.json",
+                "configs/synmot/rim_sasbd.json",
                 "--dataset_dir",
                 "data",
-                "--decode_hidden",
-                "false",
                 "--num_slots",
                 "3"
                 // "--batch_size",
@@ -78,7 +76,8 @@
             "env": {
                 "CUDA_VISIBLE_DEVICES": "0",
                 "DEBUG": "1"
-            }
+            },
+            "justMyCode": false
         },
         {
             "name": "train/test mmnist RIM basic",
