@@ -61,7 +61,7 @@ def setup_dataloader(args):
             train=True, 
             n_frames_input=10,
             n_frames_output=10,
-            num_objects=[1,2],
+            num_objects=args.mmnist_num_objects[0],# 2
             download=True
         )
         test_set = MovingMNIST(
@@ -69,7 +69,7 @@ def setup_dataloader(args):
             train=False, 
             n_frames_input=10,
             n_frames_output=10,
-            num_objects=[2],
+            num_objects=args.mmnist_num_objects[1],# 2
             download=True
         )
         val_set = MovingMNIST(
@@ -77,7 +77,7 @@ def setup_dataloader(args):
             train=True,
             n_frames_input=10,
             n_frames_output=10,
-            num_objects=[1,2,3],
+            num_objects=args.mmnist_num_objects[2],# 1 2 3
             download=True
         )
     elif args.task == 'BBALL':

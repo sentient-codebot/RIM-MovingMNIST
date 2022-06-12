@@ -85,6 +85,18 @@ def str2balltask(inp):
     else:
         raise argparse.ArgumentTypeError('Unrecognized bouncing ball task type.')
 
+def mmnist_num_obj(string):
+    """string: 1,2,3;2;,3"""
+    list_ = string.split(';') # ['1,2,3', '2', '3']
+    list__ = [foo.split(',') for foo in list_] # [['1', '2', '3'], ['2'], ['3']]
+    def _to_int(foo):
+        if isinstance(foo[0], list): #[['1', '2', '3']]
+            return [_to_int(bar) for bar in foo]
+        else: #['1', '2', '3']
+            return [int(foo) for foo in foo]
+    return _to_int(list__)
+print(mmnist_num_obj('1,2,3,4;1;0'))
+
 def argument_parser():
     """Function to parse all the arguments"""
 
@@ -105,6 +117,9 @@ def argument_parser():
     parser.add_argument('--ball_options', type=str2balltask, default=None, help='options for ball task. transfer or ...')
     parser.add_argument('--ball_trainset', type=str2ballset, default=None, help='train set for ball task')
     parser.add_argument('--ball_testset', type=str2ballset, default=None, help='test set for ball task')
+    
+    parser.add_argument('--mmnist_num_objects', '--num_objects', '--num_obj', type=mmnist_num_obj, default=[[2],[2],[1,2,3]], 
+                        help='number of objects in the MMNIST task (train/test/val). default: 2;2;1,2,3')
 
     # Training Settings
     parser.add_argument('--dataset_dir', type=str, default='')
