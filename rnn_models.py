@@ -87,6 +87,7 @@ class RIMCell(nn.Module):
             input_dropout,
             hard_argmax=hard_input_attention,
             key_norm=input_attention_key_norm,
+            gumbel_argmax=True
         )
 
         self.use_sw = use_sw
@@ -161,15 +162,21 @@ class RIMCell(nn.Module):
                 hs, cs = self.rnn(inputs, (hs, cs))
             else:
                 hs = self.rnn(inputs, hs)
+        
+        # Prepare mask
+        mask = mask.unsqueeze(2).detach()
+        # [NEW] Change back unactivated units
+        h_new = mask * hs + (1 - mask) * h_old
+        if cs is not None:
+            cs = mask * cs + (1 - mask) * c_old
 
         # Block gradient through inactive units
-        mask = mask.unsqueeze(2).detach()
-        h_new = blocked_grad.apply(hs, mask)
+        h_new = blocked_grad.apply(h_new, mask)
 
         # Compute communication attention
         if not self.use_sw:
             context = self.communication_attention(h_new, mask.squeeze(2))
-            h_new = h_new + context
+            h_new = h_new + context * mask
         else:
             M, h_new = self.communication_attention(M, h_new, mask.squeeze(2))
 
@@ -187,10 +194,6 @@ class RIMCell(nn.Module):
                     'rule_attn_probs_gsm': rule_attn_gsm.detach(), # {0,1}, for logging, [N, num_hidden, num_rules]
                 })
 
-        # Update hs and cs and return them
-        hs = mask * h_new + (1 - mask) * h_old
-        if cs is not None:
-            cs = mask * cs + (1 - mask) * c_old
         return hs, cs, M
 
 class AltSCOFFCell(RIMCell):

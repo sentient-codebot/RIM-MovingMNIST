@@ -69,6 +69,7 @@ class InputAttention(Attention):
                  share_query_proj=False,
                  num_shared_query_proj=1,
                  hard_argmax=False,
+                 gumbel_argmax=False,
                  key_norm=True,
                  ):
         super().__init__(dropout)
@@ -94,6 +95,7 @@ class InputAttention(Attention):
         
         self.hard_argmax = hard_argmax
         self.key_norm = key_norm
+        self.gumbel_argmax = gumbel_argmax
 
     def forward(self, x, h):
         key = self.key(x)  # Shape: [batch_size, num_heads, kdim]
@@ -106,10 +108,21 @@ class InputAttention(Attention):
         query = self.transpose_for_scores(query, self.num_heads, self.kdim)
 
         attention_scores = torch.matmul(
-            query, key.transpose(-1, -2)) / math.sqrt(self.kdim)
-        attention_scores = torch.mean(attention_scores, dim=1)
+            query, key.transpose(-1, -2)) / math.sqrt(self.kdim) # Shape: [batch_size, num_heads, num_queries, num_keys]
+        attention_scores = torch.mean(attention_scores, dim=1) # Shape: [batch_size, num_queries, num_keys]
         # (batch_size, num_query, num_key) NOTE for each input, rims compete with each other
         attention_probs = nn.Softmax(dim=1)(attention_scores)
+        
+        # select activation
+        if self.gumbel_argmax:
+            actv_probs = torch.cat(
+                [
+                    attention_scores[:, :, :-1].sum(dim=-1, keepdim=True), # [N, K, 1]
+                    attention_scores[:, :, -1:], # [N, K, 1]
+                ],
+                dim=2,
+            ) # [N, K, 2]
+            mask = nn.functional.gumbel_softmax(actv_probs, tau=0.5, hard=True,) # Shape: [batch_size, num_queries, 1]
 
         # For each rim, give them normalized summation weights (for each rim, the weights all sum to 1) NOTE is this necessary?
         if self.key_norm:
@@ -121,14 +134,17 @@ class InputAttention(Attention):
             attention_selected_probs = (attention_probs*attention_probs_mask).detach()
             attention_probs = attention_probs*attention_probs_mask/(attention_selected_probs + 0.000001)
 
-        mask_ = torch.zeros((x.size(0), self.num_hidden), device=x.device)
-        # Shape: [batch_size, num_blocks, ] NOTE how much focus is NOT on the null input
-        not_null_probs = 1. - attention_probs[:, :, -1]
-        topk1 = torch.topk(not_null_probs, self.k, dim=1)
-        batch_indices = torch.arange(x.shape[0]).unsqueeze(1)
-        # repeat to the same shape as topk1.indices
-        row_to_activate = batch_indices.repeat((1, self.k))
-        mask_[row_to_activate.view(-1), topk1.indices.view(-1)] = 1
+        if not self.gumbel_argmax:
+            mask_ = torch.zeros((x.size(0), self.num_hidden), device=x.device)
+            # Shape: [batch_size, num_blocks, ] NOTE how much focus is NOT on the null input
+            not_null_probs = 1. - attention_probs[:, :, -1]
+            topk1 = torch.topk(not_null_probs, self.k, dim=1)
+            batch_indices = torch.arange(x.shape[0]).unsqueeze(1)
+            # repeat to the same shape as topk1.indices
+            row_to_activate = batch_indices.repeat((1, self.k))
+            mask_[row_to_activate.view(-1), topk1.indices.view(-1)] = 1
+        else:
+            mask_ = mask[:, :, 0] # [N, K]
 
         # inputs = (bs, num_blocks, vdim), all value vectors are just scaled version of each other.
         inputs = torch.matmul(self.dropout(
