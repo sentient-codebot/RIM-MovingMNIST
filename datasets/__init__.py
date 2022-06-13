@@ -9,7 +9,7 @@ from .SpritesMOT import SpritesMOT
 from .SynMOTs import SyntheticMOTDataset
 
 import os
-DEBUG = os.environ.get('DEBUG', False)
+DEBUG = bool(int(os.environ.get('DEBUG', False)))
 
 g = torch.Generator()
 g.manual_seed(0)
@@ -64,7 +64,7 @@ def setup_dataloader(args):
             num_objects=args.mmnist_num_objects[0],# 2
             download=True
         )
-        test_set = MovingMNIST(
+        test_set = MovingMNIST( # len = 10000
             root=args.dataset_dir, 
             train=False, 
             n_frames_input=10,

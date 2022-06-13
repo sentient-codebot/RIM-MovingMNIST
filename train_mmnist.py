@@ -48,7 +48,7 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
     for batch_idx, data in enumerate(tqdm(train_loader)):
         # data: (labels, frames_in, frames_out)
         if args.task == 'MMNIST':
-            digit_labels, in_frames, out_frames = [tensor.to(args.device) for tensor in data] 
+            digit_labels, in_frames, out_frames, ind_digits = [tensor.to(args.device) for tensor in data] 
             data = torch.cat((in_frames, out_frames), dim=1) # [N, *T, 1, H, W]
         else:
             data = data.to(args.device)
