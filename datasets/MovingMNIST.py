@@ -48,7 +48,8 @@ class MovingMNIST(data.Dataset):
     def __init__(self, root, train=True, n_frames_input=10, n_frames_output=10, num_objects=[2],
                 static_prob=-1,
                 download=False,
-                transform=None):
+                transform=None,
+                length=int(1e4),):
         '''
         Args:
             `root`: Root directory of the dataset (mnist dataset and moving mnist test set)
@@ -83,7 +84,7 @@ class MovingMNIST(data.Dataset):
                 self.mnist, self.mnist_label = load_mnist(root)
             else:
                 self.dataset = load_fixed_set(root, False)
-        self.length = int(1e4) if self.dataset is None else self.dataset.shape[1]
+        self.length = length if self.dataset is None else self.dataset.shape[1]
 
         self.num_objects = num_objects
         self.n_frames_input = n_frames_input
@@ -148,6 +149,7 @@ class MovingMNIST(data.Dataset):
         Get random trajectories for the digits and generate a video.
         '''
         data = np.zeros((self.n_frames_total, self.image_size_, self.image_size_), dtype=np.float32)
+        ind_data = np.zeros((max(self.num_objects), self.n_frames_total, self.image_size_, self.image_size_), dtype=np.float32)
         labels = np.ones((max(self.num_objects),), dtype=np.int64)*(-1) # default value 
         for n in range(num_digits):
             # Trajectory
@@ -162,28 +164,35 @@ class MovingMNIST(data.Dataset):
                 bottom = top + self.digit_size_
                 right = left + self.digit_size_
                 # Draw digit
-                data[i, top:bottom, left:right] = np.maximum(data[i, top:bottom, left:right], digit_image)
+                data[i, top:bottom, left:right] = np.maximum(data[i, top:bottom, left:right], digit_image) # addition
+                ind_data[n, i, top:bottom, left:right] = digit_image
 
         data = data[..., np.newaxis]
-        return data, labels
+        ind_data = ind_data[..., np.newaxis]
+        return data, ind_data, labels
 
     def __getitem__(self, idx):
         length = self.n_frames_input + self.n_frames_output
         labels = np.ones((max(self.num_objects),), dtype=np.int64)*(-1) # default value 
+        ind_images = None
         if self.is_train or self.num_objects[0] != 2:
             # Sample number of objects
             num_digits = random.choice(self.num_objects)
             # Generate data on the fly
-            images, labels = self.generate_moving_mnist(num_digits)
+            images, ind_images, labels = self.generate_moving_mnist(num_digits)
         else:
             images = self.dataset[:, idx, ...]
 
         if self.transform is not None:
             images = self.transform(images)
+            if ind_images is not None:
+                ind_images = self.transform(ind_images)
 
         r = 1 # patch size (a 4 dans les PredRNN)
         w = int(64 / r)
         images = images.reshape((length, w, r, w, r)).transpose(0, 2, 4, 1, 3).reshape((length, r * r, w, w))
+        if ind_images is not None:
+            ind_images = ind_images.transpose(0, 1, 4, 2, 3) # [N, T, C, H, W]
 
         input = images[:self.n_frames_input]
         if self.n_frames_output > 0:
@@ -194,8 +203,11 @@ class MovingMNIST(data.Dataset):
         output = torch.from_numpy(output / 255.0).contiguous().float()
         input = torch.from_numpy(input / 255.0).contiguous().float()
         labels = torch.from_numpy(labels).contiguous().long() # Shape: [num_digits]
+        
+        if ind_images is None:
+            ind_images = torch.cat([input, output], dim=0)
 
-        out = [labels,input,output]
+        out = [labels,input,output, ind_images]
         return out
 
     def __len__(self):
@@ -233,17 +245,17 @@ class MovingMNIST(data.Dataset):
 
 def main():
     train_set = MovingMNIST(
-        root='./../data',
+        root='./data',
         train=True,
         n_frames_input=10,
         n_frames_output=10,
         num_objects=[2],
         static_prob=0.5,
-        download=True
+        download=False
     )
-    train_loader = data.DataLoader(train_set, batch_size=1, shuffle=True, num_workers=4)
+    train_loader = data.DataLoader(train_set, batch_size=1, shuffle=True, num_workers=0)
     for idx, samples in enumerate(tqdm(train_loader)):
-        print(samples[0].shape, samples[1].shape, samples[2].shape)
+        print(samples[0].shape, samples[1].shape, samples[2].shape, samples[3].shape)
         break
     labels, v_in, v_target = next(iter(train_set)) # v_in.size() = (10, 1, 64, 64)
     show = make_grid([*v_in, *v_target], nrow=10)

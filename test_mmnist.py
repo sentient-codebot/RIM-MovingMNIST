@@ -94,7 +94,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     for batch_idx, data in enumerate(tqdm(test_loader) if __name__ == "__main__" else test_loader): # tqdm doesn't work here?
         if args.task == 'MMNIST':
             # data: (labels, frames_in, frames_out)
-            digit_labels, in_frames, out_frames = [tensor.to(args.device) for tensor in data] 
+            digit_labels, in_frames, out_frames, ind_digits = [tensor.to(args.device) for tensor in data] 
             data = torch.cat((in_frames, out_frames), dim=1) # [N, *T, 1, H, W]
         else:
             data = data.to(args.device)
