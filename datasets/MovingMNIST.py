@@ -193,6 +193,7 @@ class MovingMNIST(data.Dataset):
         images = images.reshape((length, w, r, w, r)).transpose(0, 2, 4, 1, 3).reshape((length, r * r, w, w))
         if ind_images is not None:
             ind_images = ind_images.transpose(0, 1, 4, 2, 3) # [N, T, C, H, W]
+            ind_images = torch.from_numpy(ind_images / 255.0).contiguous().float()
 
         input = images[:self.n_frames_input]
         if self.n_frames_output > 0:

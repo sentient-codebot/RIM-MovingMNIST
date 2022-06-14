@@ -6,6 +6,7 @@ import json
 from pandas import DataFrame
 import os
 import matplotlib.pyplot as plt
+from .consistensy_measure import consistency_measure
 
 DEBUG = os.environ.get('DEBUG', False)
 
@@ -289,10 +290,34 @@ def get_mot_metrics(pred_file, gt_file, exclude_bg=True, start_step=2, stop_step
     
     
 def main():
-    mot_metrics = get_mot_metrics(
-        'logs/SPRITES_SASBD_447_SA_4_100_3_RIM_7_100_ver_0/mot_json.json',
-        'data/gt_jsons/spmot_test.json'
-    )
+    # test mot metrics
+    # mot_metrics = get_mot_metrics(
+    #     'logs/SPRITES_SASBD_447_SA_4_100_3_RIM_7_100_ver_0/mot_json.json',
+    #     'data/gt_jsons/spmot_test.json'
+    # )
+    
+    # test consistency measure
+    if os.path.exists('./mmnist_sample.pt'):
+        mmnist_sample = torch.load('./mmnist_sample.pt')
+        labels, input, output, ind_images = *mmnist_sample, # ind_images, shape [K, T, C, H, W]
+    else:
+        print('No mmnist_sample.pt found')
+        return 444
+    target = ind_images.unsqueeze(0) # [N, K, T, C, H, W]
+    input = ind_images.unsqueeze(0)[:, (1,0), ...] # [N, K, T, C, H, W]
+    # add some noise
+    rand_idx = torch.randint(0, 2, (input.shape[0], input.shape[2], 1, 1, 1))
+    bad_input = input[:, 1, ...]*rand_idx + (1-rand_idx)*input[:, 0, ...]
+    input = torch.cat([
+        input,
+        bad_input.unsqueeze(1)
+    ], dim = 1)
+    input = torch.maximum(input, torch.rand_like(input) * 0.5)
+    avr_len, max_len, IDs = consistency_measure(input, target, output_ids=True)
+    print('average consistent length', avr_len)
+    print('maximum consistent length', max_len)
+    print('bad_input_ids        ', rand_idx.squeeze())
+    print('bad_input_pred_ids   ', IDs[0, -1, ...].squeeze())
     ...
     
 if __name__ == '__main__':
