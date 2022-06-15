@@ -13,7 +13,7 @@ from utils import util
 from networks import BallModel, SlotAttentionAutoEncoder, TrafficModel
 from argument_parser import argument_parser
 from logbook.logbook import LogBook
-from utils.util import set_seed, make_dir
+from utils.util import set_seed, make_dir, is_nan, load_model
 from utils.visualize import make_grid_video
 from utils.logging import log_stats, setup_wandb_columns
 from datasets import setup_dataloader
@@ -145,6 +145,9 @@ def main():
             loss_fn = loss_fn,
             writer = writer
         )
+        if is_nan(train_loss):
+            load_model(model, f"{args.folder_save}/checkpoints", args.device)
+            continue
         loss_dict = {
             "train loss": train_loss.item(),
             "train recon loss": train_recon_loss.item() if isinstance(train_recon_loss, torch.Tensor) else train_recon_loss,

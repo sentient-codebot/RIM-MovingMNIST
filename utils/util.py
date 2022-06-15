@@ -3,6 +3,8 @@ import collections
 import os
 import random
 import pathlib
+import math
+from typing import Optional
 
 import numpy as np
 import torch
@@ -91,3 +93,42 @@ def slot_distinctiveness_2(slot_means):
         for k2 in range(k1+1,slot_means.shape[1]):
             loss += distinctiveness_2(slot_means[:,k1],slot_means[:,k2])
     return loss
+
+    
+def is_nan(tensor: torch.Tensor|float) -> bool:
+    if isinstance(tensor, torch.Tensor):
+        return bool(torch.isnan(tensor).any())
+    else:
+        return math.isnan(tensor)
+    
+def load_model(
+    model: torch.nn.Module,
+    model_dir: str,
+    device: torch.device,
+    optimizer: Optional[torch.optim.Optimizer] = None,
+) -> int:
+    """
+    resume checkpoint. so far only used for recovering from failed epoch. 
+    
+    return (int) the checkpoint epoch
+    """
+    checkpoint_list = [int(f.split('.')[0]) for f in os.listdir(model_dir) if f.endswith('.pt')]
+    if len(checkpoint_list) == 0:
+        raise RuntimeError('Training loss is NaN. Failed when trying to reload checkpoint: No Checkpoint Found.')
+    else:
+        print(
+            "Training loss is NaN. Trying to resume previous checkpoint. "
+        )
+        latest_model_idx = max(checkpoint_list)
+        path = os.path.join(f"{model_dir}", f"{latest_model_idx}.pt")
+        checkpoint = torch.load(path, map_location=device)
+        start_epoch = checkpoint['epoch'] + 1
+        print(
+            f"Resuming from epoch {start_epoch-1}"
+        )
+        model.load_state_dict(checkpoint['model_state_dict'])
+        if optimizer is not None:
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        print("Checkpoint resumed")
+        
+        return start_epoch - 1
