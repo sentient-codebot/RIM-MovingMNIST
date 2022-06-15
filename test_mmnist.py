@@ -16,6 +16,7 @@ from utils.util import set_seed, make_dir
 from utils.visualize import VecStack, make_grid_video, plot_heatmap, mplfig_to_video
 from utils.logging import log_stats, enable_logging, setup_wandb_columns
 from utils.metric import f1_score, gen_masks, get_mot_metrics
+from utils.metric import consistency_measure
 from tqdm import tqdm
 import wandb
 from utils import util
@@ -46,7 +47,7 @@ def get_grad_norm(model):
     return total_norm
 
 # @torch.no_grad()
-def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_columns=None):
+def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_columns=None, calc_csty=False):
     '''test(model, test_loader, args, loss_fn, writer, rollout)'''
     start_time = time()
     # wandb table
@@ -90,6 +91,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     ssim = 0.
     most_used_units = []
     pred_list = []
+    epoch_avr_len = 0.
+    epoch_max_len = 0.
     id_counter = 0
     for batch_idx, data in enumerate(tqdm(test_loader) if __name__ == "__main__" else test_loader): # tqdm doesn't work here?
         if args.task == 'MMNIST':
@@ -131,6 +134,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             data.shape[3],
             data.shape[4])
         ) # (BS, num_blocks, T, C, H, W)
+        ind_pred = torch.empty((data.shape[0], args.num_hidden, data.shape[1]-rollout_start, data.shape[2], data.shape[3], data.shape[4]))
         reconstruction = []
         individual_recons = []
         soft_masks = [] # list of batches of masks
@@ -171,6 +175,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             f1 += f1_frame
 
             prediction[:, frame+1, :, :, :] = preds
+            if frame >= rollout_start:
+                ind_pred[:, :, frame-rollout_start, :, :, :] = model.hidden_features['individual_output']
             if do_logging:
                 blocked_prediction[:, 0, frame+1, :, :, :] = preds # dim == 6
                 blocked_prediction[:, 1:, frame+1, :, :, :] = model.hidden_features['individual_output']
@@ -255,6 +261,14 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                 soft_masks=torch.stack(soft_masks, dim=1).cpu(), # [BS, T, K, H, W]
             )
         
+        # calculate consistency
+        avr_len, max_len = None, None
+        if 'SEP' in args.decoder_type and calc_csty:
+            avr_len, max_len = consistency_measure(ind_pred, ind_digits[:, :, rollout_start:, ...], 
+                                                   corr_padding=(1,1), output_ids=False, reduction='mean', exclude_background=True)
+            epoch_avr_len += avr_len
+            epoch_max_len += max_len    
+        
         if not rollout:
             ssim += pt_ssim.ssim(data[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])), # data.shape = (batch, frame, 1, height, width)
                         prediction[:,1:,:,:,:].reshape((-1,1,data.shape[3],data.shape[4])))
@@ -284,6 +298,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     epoch_recon_loss /= len(test_loader)
     epoch_pred_loss /= len(test_loader)
     epoch_mseloss = epoch_mseloss / (batch_idx+1)
+    epoch_avr_len /= len(test_loader)
+    epoch_max_len /= len(test_loader)
     ssim = ssim / (batch_idx+1)
     f1_avg = f1 / (batch_idx+1) / (data.shape[1]-1)
     
@@ -336,6 +352,9 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         metrics['rule_attn_probs_sm'] = torch.stack(rule_attn_probs_sm, dim=1) # Shape: [N, T, num_hidden, num_rules]
     if len(rule_attn_probs_gsm) > 0:
         metrics['rule_attn_probs_gsm'] = torch.stack(rule_attn_probs_gsm, dim=1) # Shape: [N, T, num_hidden, num_rules]
+    if 'SEP' in args.decoder_type and calc_csty:
+        metrics['avr_len'] = epoch_avr_len
+        metrics['max_len'] = epoch_max_len    
         
     # slot attention
     if args.use_slot_attention:
@@ -345,6 +364,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     model.mot_eval = False
     print('test runtime:', time() - start_time)
     return epoch_loss, epoch_recon_loss, epoch_pred_loss, prediction, data, metrics, test_table
+
 
 @torch.no_grad()
 def dec_rim_util(model, h):
@@ -425,13 +445,14 @@ def main():
     # call test function
     test_loss, recon_loss, pred_loss, prediction, data, metrics, test_table = test(
         model = model,
-        test_loader = test_loader,
+        test_loader = val_loader if args.use_val_set else test_loader,
         args = args,
         loss_fn = loss_fn,
         writer = writer,
         rollout = True,
         epoch = epoch,
         log_columns = columns,
+        calc_csty = True if args.use_val_set else False,
     )
     log_stats(
         args=args,

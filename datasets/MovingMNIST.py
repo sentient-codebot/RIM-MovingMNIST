@@ -45,11 +45,13 @@ class MovingMNIST(data.Dataset):
         ("train-labels-idx1-ubyte.gz", "d53e105ee54ea40749a09fcbcd1e9432"),
         ("mnist_test_seq.npy", "be083ec986bfe91a449d63653c411eb2"),
     ]
+    val_dataset = 'mmnist_val.pt'
     def __init__(self, root, train=True, n_frames_input=10, n_frames_output=10, num_objects=[2],
                 static_prob=-1,
                 download=False,
                 transform=None,
-                length=int(1e4),):
+                length=int(1e4),
+                val=False):
         '''
         Args:
             `root`: Root directory of the dataset (mnist dataset and moving mnist test set)
@@ -69,6 +71,10 @@ class MovingMNIST(data.Dataset):
         super(MovingMNIST, self).__init__()
         self.root = root
         self.is_train = train
+        if not self.is_train:
+            self.is_val = val
+        else:
+            self.is_val = False
 
         if download:
             self.download()
@@ -79,12 +85,22 @@ class MovingMNIST(data.Dataset):
         self.dataset = None
         if train:
             self.mnist, self.mnist_label = load_mnist(root)
+        elif self.is_val:
+            if num_objects[0] != 2:
+                self.mnist, self.mnist_label = load_mnist(root)
+            else:
+                self.dataset = torch.load(os.path.join(root, self.val_dataset))
         else:
             if num_objects[0] != 2:
                 self.mnist, self.mnist_label = load_mnist(root)
             else:
                 self.dataset = load_fixed_set(root, False)
-        self.length = length if self.dataset is None else self.dataset.shape[1]
+        if self.dataset is None:
+            self.length = length
+        elif self.is_val:
+            self.length = len(self.dataset)
+        else:
+            self.length = self.dataset.shape[1]
 
         self.num_objects = num_objects
         self.n_frames_input = n_frames_input
@@ -180,6 +196,9 @@ class MovingMNIST(data.Dataset):
             num_digits = random.choice(self.num_objects)
             # Generate data on the fly
             images, ind_images, labels = self.generate_moving_mnist(num_digits)
+        elif self.is_val:
+            labels, input, output, ind_images = *self.dataset[idx],
+            return labels, input, output, ind_images
         else:
             images = self.dataset[:, idx, ...]
 

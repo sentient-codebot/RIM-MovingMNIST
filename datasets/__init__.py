@@ -74,11 +74,12 @@ def setup_dataloader(args):
         )
         val_set = MovingMNIST(
             root=args.dataset_dir,
-            train=True,
+            train=False,
             n_frames_input=10,
             n_frames_output=10,
             num_objects=args.mmnist_num_objects[2],# 1 2 3
-            download=True
+            download=True,
+            val=True,
         )
     elif args.task == 'BBALL':
         train_set = BouncingBall(root=args.dataset_dir, train=True, length=20, filename=args.ball_trainset)
@@ -158,7 +159,7 @@ def setup_dataloader(args):
             dataset=val_set,
             batch_size=args.batch_size,
             shuffle=True,
-            num_workers=4 if not DEBUG else 0,
+            num_workers=0 if not DEBUG else 0,
             worker_init_fn=seed_worker,
             generator=g,
         )

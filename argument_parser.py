@@ -95,7 +95,6 @@ def mmnist_num_obj(string):
         else: #['1', '2', '3']
             return [int(foo) for foo in foo]
     return _to_int(list__)
-print(mmnist_num_obj('1,2,3,4;1;0'))
 
 def argument_parser():
     """Function to parse all the arguments"""
@@ -118,7 +117,7 @@ def argument_parser():
     parser.add_argument('--ball_trainset', type=str2ballset, default=None, help='train set for ball task')
     parser.add_argument('--ball_testset', type=str2ballset, default=None, help='test set for ball task')
     
-    parser.add_argument('--mmnist_num_objects', '--num_objects', '--num_obj', type=mmnist_num_obj, default=[[2],[2],[1,2,3]], 
+    parser.add_argument('--mmnist_num_objects', '--num_objects', '--num_obj', type=mmnist_num_obj, default=[[2],[2],[2]], 
                         help='number of objects in the MMNIST task (train/test/val). default: 2;2;1,2,3')
 
     # Training Settings
@@ -138,6 +137,7 @@ def argument_parser():
     parser.add_argument('--test_frequency', type=int, default=10,
                         metavar="Frequency at which we log the intermediate variables of the model",
                         help='Just type in a positive integer')
+    parser.add_argument('--use_val_set', type=str2bool, default=False)
     parser.add_argument('--path_to_load_model', type=str, default="",
                         metavar='Relative Path to load the model',
                         help='Relative Path to load the model. If this is empty, no model'
@@ -297,7 +297,8 @@ def argument_parser():
     elif args.task == 'VOR':
         args.mot_gt_file = os.path.join(args.dataset_dir, 'gt_jsons', 'vor_test.json')
         
-
+    if args.use_val_set == True and args.task != 'MMNIST':
+        raise NotImplementedError
 
     return args
 

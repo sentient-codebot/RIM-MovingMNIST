@@ -71,7 +71,11 @@
                 "--decode_hidden",
                 "false",
                 "--num_slots",
-                "3"
+                "3",
+                "--task",
+                "MMNIST",
+                "--use_val_set",
+                "false",
                 // "--batch_size",
                 // "8"
             ],

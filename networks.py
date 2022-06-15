@@ -742,7 +742,7 @@ class BallModel(nn.Module):
             if "SEP" in self.decoder_type:
                 curr_dec_out_, curr_channels, curr_alpha_mask = self.decoder(encoded_input)
                 next_dec_out_, next_channels, next_alpha_mask = self.decoder(pred_latent)
-                if self.do_logging:
+                if self.do_logging or True: # always log ind_output
                     blocked_out_ = next_channels*next_alpha_mask
                     self.hidden_features['individual_output'] = blocked_out_.detach()
                     self.hidden_features['individual_recons'] = (curr_channels*curr_alpha_mask).detach()
@@ -752,7 +752,7 @@ class BallModel(nn.Module):
         else:
             if "SEP" in self.decoder_type:
                 next_dec_out_, next_channels, next_alpha_mask = self.decoder(h_new)
-                if self.do_logging:
+                if self.do_logging or True: # always log ind_output
                     blocked_out_ = next_channels*next_alpha_mask
                     self.hidden_features['individual_output'] = blocked_out_.detach()
             else:
