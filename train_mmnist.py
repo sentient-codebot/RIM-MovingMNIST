@@ -18,7 +18,7 @@ from utils.visualize import make_grid_video
 from utils.logging import log_stats, setup_wandb_columns
 from datasets import setup_dataloader
 from tqdm import tqdm
-from test_mmnist import dec_rim_util, test
+from test_mmnist import test
 
 import os 
 from os import listdir
@@ -123,7 +123,7 @@ def main():
     columns = setup_wandb_columns(args) # artifact columns
 
     # data setup
-    train_loader, _, test_loader = setup_dataloader(args=args)
+    train_loader, val_loader, test_loader = setup_dataloader(args=args)
 
     # model setup
     model, optimizer, scheduler, loss_fn, start_epoch, train_batch_idx, best_mse = setup_model(args=args)
@@ -160,13 +160,14 @@ def main():
             """test model accuracy and log intermediate variables here"""
             test_loss, test_recon_loss, test_pred_loss, prediction, data, metrics, test_table = test(
                 model = model, 
-                test_loader = test_loader, 
+                test_loader = val_loader if args.use_val_set else test_loader, 
                 args = args, 
                 loss_fn = loss_fn, 
                 writer = writer,
                 rollout = True,
                 epoch = epoch,
                 log_columns=columns if epoch%50==0 else None,
+                calc_csty = True if args.use_val_set else False
             )
             log_stats(
                 args=args,

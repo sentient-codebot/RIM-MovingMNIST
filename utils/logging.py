@@ -50,6 +50,8 @@ def log_stats(args, is_train, **kwargs):
     object_masks = metrics.get('object_masks') # Tensor|None
     slot_attn_probs = metrics.get('slot_attn_probs') # Tensor|None, [batch_size, num_iter*num_frames, num_slots, h, w]
     slot_attn_map = metrics.get('slot_attn_map') # Tensor|None
+    avr_len = metrics.get('avr_len')
+    max_len = metrics.get('max_len')
     # videos patching
     individual_output = metrics['individual_output'] # dim == 6
     if args.task == 'MMNIST':
@@ -144,6 +146,13 @@ def log_stats(args, is_train, **kwargs):
     stat_dict = {
         'Learning Rate': lr,
     }
+    if avr_len is not None and max_len is not None:
+        stat_dict.update(
+            {
+                'Average Consistent Length': avr_len,
+                'Maximum Consistent Length': max_len,
+            }
+        )
     if manual_init_scale is not None:
         stat_dict['Past Slot Init Scale'] = manual_init_scale
 
@@ -295,15 +304,18 @@ def log_stats(args, is_train, **kwargs):
 
     # print 
     if is_train:
-        print(f"epoch {epoch}/{args.epochs} | "+\
+        message = f"epoch {epoch}/{args.epochs} | "+\
             f"train loss: {train_loss:.4f} | test loss: {test_loss:.4f} | "+\
             f"test mse: {mse:.4f} | "+\
-            f"test F1 score: {f1:.4f} | test SSIM: {ssim:.4f}")
+            f"test F1 score: {f1:.4f} | test SSIM: {ssim:.4f}"
     else:
-         print(f"epoch {epoch}/{args.epochs} | "+\
+        message = f"epoch {epoch}/{args.epochs} | "+\
             f"test loss: {test_loss:.4f} | "+\
             f"test mse: {mse:.4f} | "+\
-            f"test F1 score: {f1:.4f} | test SSIM: {ssim:.4f}")
+            f"test F1 score: {f1:.4f} | test SSIM: {ssim:.4f}"
+    if avr_len is not None:
+        message += f" | test acl {avr_len:.4f} | test mcl {max_len:.4f}"
+    print(message)
 
 class enable_logging():
     """enable logging of a nn.Module by setting 'do_logging' to True/False 
