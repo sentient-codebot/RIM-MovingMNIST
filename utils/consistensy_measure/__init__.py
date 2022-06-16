@@ -19,6 +19,7 @@ def consistency_measure(
     return:
         `avr_len`, `max_len`, (`IDs`)
     """
+    target_seq = target_seq.to(input_seq.device)
     input_seq = input_seq.permute(2, 0, 1, 3, 4, 5) # [T, N, K1, C, H, W]
     target_seq = target_seq.permute(2, 0, 1, 3, 4, 5) # [T, N, K2, C, H, W]
     IDs = []
