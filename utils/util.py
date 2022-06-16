@@ -4,7 +4,7 @@ import os
 import random
 import pathlib
 import math
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 import torch
@@ -95,7 +95,7 @@ def slot_distinctiveness_2(slot_means):
     return loss
 
     
-def is_nan(tensor: torch.Tensor|float) -> bool:
+def is_nan(tensor: Union[torch.Tensor,float]) -> bool:
     if isinstance(tensor, torch.Tensor):
         return bool(torch.isnan(tensor).any())
     else:
