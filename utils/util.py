@@ -114,10 +114,10 @@ def load_model(
     """
     checkpoint_list = [int(f.split('.')[0]) for f in os.listdir(model_dir) if f.endswith('.pt')]
     if len(checkpoint_list) == 0:
-        raise RuntimeError('Training loss is NaN. Failed when trying to reload checkpoint: No Checkpoint Found.')
+        raise RuntimeError('Training loss anomaly. Failed when trying to reload checkpoint: No Checkpoint Found.')
     else:
         print(
-            "Training loss is NaN. Trying to resume previous checkpoint. "
+            "Training loss anomaly. Trying to resume previous checkpoint. "
         )
         latest_model_idx = max(checkpoint_list)
         path = os.path.join(f"{model_dir}", f"{latest_model_idx}.pt")
@@ -132,3 +132,40 @@ def load_model(
         print("Checkpoint resumed")
         
         return start_epoch - 1
+    
+class AnomalyDetector():
+    """class definition for an anomaly detector"""
+    maxlen = 10
+    def __init__(self, init_len=20):
+        self.record = []
+        self.count = 0 # count for recorded datapoints
+        self.init_len = init_len
+        
+    def put(self, datapoint: torch.Tensor) -> None:
+        datapoint = self._to_tensor(datapoint)
+        if len(self.record) < self.maxlen:
+            self.record.append(datapoint)
+        else:
+            self.record.pop(0)
+            self.record.append(datapoint)
+        self.count += 1
+            
+    def _to_tensor(self, datapoint):
+        if not isinstance(datapoint, torch.Tensor):
+            datapoint = torch.tensor(datapoint, dtype=torch.float)
+        return datapoint
+    
+    def __call__(self, datapoint = torch.Tensor) -> bool:
+        datapoint = self._to_tensor(datapoint)
+        
+        if is_nan(datapoint):
+            return True
+        if self.count > self.init_len:
+            record = torch.stack(self.record, dim=0)
+            mean = torch.mean(record)
+            std = torch.sqrt(torch.var(record))
+            if datapoint > mean + 3.*std:
+                return True # anomaly
+        self.put(datapoint)
+        return False # normal
+    

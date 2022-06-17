@@ -13,7 +13,7 @@ from utils import util
 from networks import BallModel, SlotAttentionAutoEncoder, TrafficModel
 from argument_parser import argument_parser
 from logbook.logbook import LogBook
-from utils.util import set_seed, make_dir, is_nan, load_model
+from utils.util import set_seed, make_dir, AnomalyDetector, load_model
 from utils.visualize import make_grid_video
 from utils.logging import log_stats, setup_wandb_columns
 from datasets import setup_dataloader
@@ -132,6 +132,7 @@ def main():
     writer = SummaryWriter(log_dir='./runs/'+args.id)
 
     # training loop
+    anom_det = AnomalyDetector()
     for epoch in range(start_epoch, args.epochs+1):
         # train 
         writer.add_scalar('Learning Rate', optimizer.param_groups[0]['lr'], epoch)
@@ -145,7 +146,7 @@ def main():
             loss_fn = loss_fn,
             writer = writer
         )
-        if is_nan(train_loss):
+        if anom_det(train_loss):
             load_model(model, f"{args.folder_save}/checkpoints", args.device)
             continue
         loss_dict = {
