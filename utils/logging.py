@@ -287,9 +287,10 @@ def log_stats(args, is_train, **kwargs):
                 metadata['epoch'] = epoch
                 if is_train:
                     wandb_artf = wandb.Artifact(project+'_'+name, type='predictions', metadata=metadata)
+                    wandb_artf.add(test_table, "predictions")
                 else:
                     wandb_artf = wandb.Artifact(project+'_'+name, type='predictions_test', metadata=metadata)
-                wandb_artf.add(test_table, "predictions")
+                    wandb_artf.add(test_table, "predictions_test")
                 print('logging artifact')
                 wandb.run.log_artifact(wandb_artf)
             except OSError as e:
