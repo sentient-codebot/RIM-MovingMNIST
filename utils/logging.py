@@ -289,8 +289,8 @@ def log_stats(args, is_train, **kwargs):
                     wandb_artf = wandb.Artifact(project+'_'+name, type='predictions', metadata=metadata)
                     wandb_artf.add(test_table, "predictions")
                 else:
-                    wandb_artf = wandb.Artifact(project+'_'+name, type='predictions_test', metadata=metadata)
-                    wandb_artf.add(test_table, "predictions_test")
+                    wandb_artf = wandb.Artifact(project+'_'+name, type='predictions', metadata=metadata)
+                    wandb_artf.add(test_table, "predictions")
                 print('logging artifact')
                 wandb.run.log_artifact(wandb_artf)
             except OSError as e:
