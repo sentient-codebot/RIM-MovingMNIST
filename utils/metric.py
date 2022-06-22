@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 import numpy as np
 import motmetrics as mm
 from tqdm import tqdm
@@ -288,6 +289,70 @@ def get_mot_metrics(pred_file, gt_file, exclude_bg=True, start_step=2, stop_step
     
     return metric_dict
     
+# def img_to_mask(ind_images: torch.Tensor) -> torch.Tensor:
+#     """covert a set of individual image layers to segmentation mask
+
+#     Args:
+#         ind_image (torch.Tensor): shape [N, K, C, H, W]
+
+#     Returns:
+#         torch.Tensor: shape [N, K, H, W] one-hot in K dim
+#     """
+#     ind_images = ind_images.norm(dim=2) # Shape [N, K, H, W]
+#     bg_layers = ind_images.max(dim=(-1,-2))[0] < 0.1 * ind_images.max() # Shape [N, K]
+    
+
+def adjusted_rand_index(true_mask, pred_mask, exclude_bg=True, reduction='mean'):
+    """adjusted rand index implemented by https://gist.github.com/vadimkantorov/bd1616a3a9eea89658ea3efb1f9a1d5d
+    Adapted for PyTorch from https://github.com/deepmind/multi_object_datasets/blob/master/segmentation_metrics.py
+
+    ## Args:
+        true_mask (tensor): [N, P == num_pixels == H*W, K1 objects], float. layers of images of different objects
+        pred_mask (tensor): [N, P == num_pixels == H*W, K2 objects], float. same but predicted
+        exclude_bg (bool): 
+        reduction (bool): reduction for different samples in one batch
+
+    ## Returns:
+        ari (tensor): float. 
+    """
+    _, n_points, n_true_groups = true_mask.shape
+    n_pred_groups = pred_mask.shape[-1]
+    assert not (n_points <= n_true_groups and n_points <= n_pred_groups), ("adjusted_rand_index requires n_groups < n_points. We don't handle the special cases that can occur when you have one cluster per datapoint.")
+
+    if exclude_bg:
+        if torch.is_floating_point(true_mask):
+            not_bg_px = torch.logical_not(torch.all(true_mask < 0.1 * torch.max(true_mask, dim=1, keepdim=True)[0], dim=2, keepdim=True))
+    else:
+        not_bg_px = torch.tensor(True, device=true_mask.device).expand(true_mask.shape[0], true_mask.shape[1], 1)
+        
+    true_group_ids = torch.argmax(true_mask, -1) # Shape [N, P, K1]
+    pred_group_ids = torch.argmax(pred_mask, -1) # Shape [N, P, K2]
+    true_mask_oh = true_mask.to(torch.float32) 
+    pred_mask_oh = F.one_hot(pred_group_ids, n_pred_groups).to(torch.float32) # Shape [N, P, K2]
+
+    n_points = torch.sum(true_mask_oh, dim=[1, 2]).to(torch.float32) # [N, ] == P 
+
+    nij = torch.einsum('bji,bjk->bki', not_bg_px*pred_mask_oh, not_bg_px*true_mask_oh) # [N,P,K2] [N,P,K1] -> [N,K1,K2]. nij = #pixels in group i (of gt) AND group j (of pred)
+    a = torch.sum(nij, dim=1) # [N, K2], #pixels in each group of pred
+    b = torch.sum(nij, dim=2) # [N, K1], #pixels in each group of gt
+
+    rindex = torch.sum(nij * (nij - 1), dim=[1, 2]) #[N, ]
+    aindex = torch.sum(a * (a - 1), dim=1) # [N, ]
+    bindex = torch.sum(b * (b - 1), dim=1) # [N, ]
+    expected_rindex = aindex * bindex / (n_points*(n_points-1)) # [N,]
+    max_rindex = (aindex + bindex) / 2 # [N,]
+    ari = (rindex - expected_rindex) / (max_rindex - expected_rindex) # [N,]
+
+    # _all_equal = lambda values: torch.all(torch.equal(values, values[..., :1]), dim=-1) # whether a mask pixel is the same across all groups
+    # both_single_cluster = torch.logical_and(_all_equal(true_group_ids), _all_equal(pred_group_ids))
+    # return torch.where(both_single_cluster, torch.ones_like(ari), ari)
+    if reduction=='mean':
+        ari = ari.mean()
+    elif reduction=='sum':
+        ari = ari.sum()
+    else:
+        ari = ari
+    return ari
     
 def main():
     # test mot metrics

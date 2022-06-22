@@ -52,6 +52,7 @@ def log_stats(args, is_train, **kwargs):
     slot_attn_map = metrics.get('slot_attn_map') # Tensor|None
     avr_len = metrics.get('avr_len')
     max_len = metrics.get('max_len')
+    ari = metrics.get('ari')
     # videos patching
     individual_output = metrics['individual_output'] # dim == 6
     if args.task == 'MMNIST':
@@ -153,6 +154,8 @@ def log_stats(args, is_train, **kwargs):
                 'Maximum Consistent Length': max_len,
             }
         )
+    if ari is not None:
+        stat_dict['ARI'] = ari
     if manual_init_scale is not None:
         stat_dict['Past Slot Init Scale'] = manual_init_scale
 
@@ -316,6 +319,8 @@ def log_stats(args, is_train, **kwargs):
             f"test F1 score: {f1:.4f} | test SSIM: {ssim:.4f}"
     if avr_len is not None:
         message += f" | test acl {avr_len:.4f} | test mcl {max_len:.4f}"
+    if ari is not None:
+        message += f" | test ari {ari:.4f}"
     print(message)
 
 class enable_logging():

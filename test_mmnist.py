@@ -1,4 +1,3 @@
-from cgitb import enable
 from time import time
 
 import matplotlib.pyplot as plt
@@ -13,9 +12,10 @@ from argument_parser import argument_parser
 from datasets import setup_dataloader
 from logbook.logbook import LogBook
 from utils.util import set_seed, make_dir
+from statistics import mean
 from utils.visualize import VecStack, make_grid_video, plot_heatmap, mplfig_to_video
 from utils.logging import log_stats, enable_logging, setup_wandb_columns
-from utils.metric import f1_score, gen_masks, get_mot_metrics
+from utils.metric import f1_score, gen_masks, get_mot_metrics, adjusted_rand_index
 from utils.metric import consistency_measure
 from tqdm import tqdm
 import wandb
@@ -93,6 +93,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     pred_list = []
     epoch_avr_len = 0.
     epoch_max_len = 0.
+    epoch_ari = 0.
     id_counter = 0
     for batch_idx, data in enumerate(tqdm(test_loader) if __name__ == "__main__" else test_loader): # tqdm doesn't work here?
         if args.task == 'MMNIST':
@@ -138,6 +139,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         reconstruction = []
         individual_recons = []
         soft_masks = [] # list of batches of masks
+        ari_frame = []
 
         do_logging = batch_idx==len(test_loader)-1
 
@@ -171,6 +173,11 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                     loss = recon_loss + pred_loss
                 
             # frame-wise metrics
+            if 'SEP' in args.decoder_type and calc_csty:
+                ind_pred_frame = model.hidden_features['individual_output'].norm(dim=-3).flatten(start_dim=-2).permute(0,2,1)
+                ind_digits_frame = ind_digits[:,:,frame,...].norm(dim=-3).flatten(start_dim=-2).permute(0,2,1) # ind_digits [N, K, T, C, H, W] -> [N, H*W, K]                
+                ari_frame.append(adjusted_rand_index(ind_digits_frame, ind_pred_frame, reduction='mean').item())
+            
             f1_frame = f1_score(next_target, preds)
             f1 += f1_frame
 
@@ -241,6 +248,9 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                 if 'rule_attn_probs_gsm' in model.rnn_model.hidden_features:
                     rule_attn_probs_gsm.append(model.rnn_model.hidden_features['rule_attn_probs_gsm']) # [N, num_hidden, num_rules]
                     
+        # calculate ARI across frames
+        if len(ari_frame) > 0:
+            epoch_ari += mean(ari_frame)
         
         # for MOT tasks, do one more step
         if args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
@@ -300,6 +310,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     epoch_mseloss = epoch_mseloss / (batch_idx+1)
     epoch_avr_len /= len(test_loader)
     epoch_max_len /= len(test_loader)
+    epoch_ari /= len(test_loader)
     ssim = ssim / (batch_idx+1)
     f1_avg = f1 / (batch_idx+1) / (data.shape[1]-1)
     
@@ -355,6 +366,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     if 'SEP' in args.decoder_type and calc_csty:
         metrics['avr_len'] = epoch_avr_len
         metrics['max_len'] = epoch_max_len    
+        metrics['ari'] = epoch_ari
         
     # slot attention
     if args.use_slot_attention:
