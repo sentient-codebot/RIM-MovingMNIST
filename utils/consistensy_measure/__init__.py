@@ -29,7 +29,7 @@ def consistency_measure(
         bg_flag = input_seq[t].sum(dim=(-1, -2, -3)) < 0.1 * target_seq[t].sum(dim=(-1,-2,-3)).mean(-1, keepdim=True) # [N, K1]
         indices[bg_flag] = target_seq.shape[1]+1 # extra ID for background
         IDs.append(indices)
-    IDs = torch.stack(IDs, dim=-1) # shape [N, 3, T]
+    IDs = torch.stack(IDs, dim=-1) # shape [N, K1, T]
     avr_len = average_consistent_length(IDs)
     max_len = maximum_consistent_length(IDs)
     

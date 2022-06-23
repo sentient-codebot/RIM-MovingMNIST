@@ -40,7 +40,7 @@ def get_grad_norm(model):
     total_norm = total_norm ** 0.5
     return total_norm
 
-def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn, writer):
+def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn, stat_dict):
     model.train()
 
     epoch_loss = torch.tensor(0.).to(args.device)
@@ -81,7 +81,7 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
         grad_norm = get_grad_norm(model)
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=False) 
         optimizer.step()
-        writer.add_scalar('Grad Norm', grad_norm, train_batch_idx)
+        stat_dict['grad_norm'] = grad_norm
 
         train_batch_idx += 1 
         epoch_loss = epoch_loss + loss.detach()
@@ -137,6 +137,7 @@ def main():
     epoch_dev = 0 # epoch deviation
     epoch = start_epoch
     end_epoch = args.epochs+1
+    train_dict = {}
     while epoch < end_epoch:
         # train 
         writer.add_scalar('Learning Rate', optimizer.param_groups[0]['lr'], epoch)
@@ -148,10 +149,11 @@ def main():
             train_batch_idx = train_batch_idx,
             args = args,
             loss_fn = loss_fn,
-            writer = writer
+            stat_dict = train_dict
         )
         if anom_det(train_loss):
             print(f"Anomaly detected at epoch {epoch} with training loss {train_loss:.4f}")
+            print(f'Grad norm is {train_dict["grad_norm"]:.4f}')
             ckpt_epoch = load_model(model, f"{args.folder_save}/checkpoints", args.device, optimizer=optimizer)
             epoch = ckpt_epoch
             continue
