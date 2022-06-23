@@ -304,7 +304,8 @@ def log_stats(args, is_train, **kwargs):
         'Metrics': metric_dict,
         'Stats': stat_dict,
         'Videos': video_dict,
-    }, step=epoch)
+        'Epoch': epoch,
+    })
 
     # print 
     if is_train:

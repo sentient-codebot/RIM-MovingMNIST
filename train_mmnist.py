@@ -1,6 +1,7 @@
 from multiprocessing.sharedctypes import Value
 from tabnanny import check
 from time import time
+from tracemalloc import start
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -133,7 +134,10 @@ def main():
 
     # training loop
     anom_det = AnomalyDetector()
-    for epoch in range(start_epoch, args.epochs+1):
+    epoch_dev = 0 # epoch deviation
+    epoch = start_epoch
+    end_epoch = args.epochs+1
+    while epoch < end_epoch:
         # train 
         writer.add_scalar('Learning Rate', optimizer.param_groups[0]['lr'], epoch)
         train_batch_idx, train_loss, train_recon_loss, train_pred_loss = train(
@@ -147,7 +151,9 @@ def main():
             writer = writer
         )
         if anom_det(train_loss):
-            load_model(model, f"{args.folder_save}/checkpoints", args.device)
+            print(f"Anomaly detected at epoch {epoch} with training loss {train_loss:.4f}")
+            ckpt_epoch = load_model(model, f"{args.folder_save}/checkpoints", args.device, optimizer=optimizer)
+            epoch = ckpt_epoch
             continue
         loss_dict = {
             "train loss": train_loss.item(),
@@ -244,6 +250,7 @@ def main():
             for f in os.listdir(checkpoint_dir):
                 if f.endswith('.pt') and int(f.split('.')[0]) < epoch:
                     os.remove(os.path.join(checkpoint_dir, f))
+        epoch += 1
 
     writer.close()
         
