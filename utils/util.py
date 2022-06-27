@@ -133,17 +133,61 @@ def load_model(
         
         return start_epoch - 1
     
+class LMSFilter():
+    """
+    assume  y = h@x + n
+            n ~ N(0, var)
+    """
+    def __init__(self, p, bias=True):
+        self.h = torch.zeros(p+1, 1) if bias else torch.zeros(p, 1)
+        self.var = torch.ones(1)
+        self.bias = bias
+        
+    def to(self, str):
+        self.h = self.h.to(str)
+    
+    def infer(self, x):
+        return self.forward(x)
+    
+    def learn(self, x, y):
+        # y: Shape [N, 1]
+        # x: Shape [N, p]
+        pred = self.forward(x) # [N, 1]
+        if self.bias:
+            ones = torch.ones(x.shape[0], 1).to(x.device)
+            x = torch.cat((ones, x), dim=1)
+        delta = ((y - pred) * x / x.norm(dim=-1, keepdim=True)).mean(dim=0, keepdim=True).t()
+        self.var = 0.9*self.var + 0.1*(y-pred).square().mean()
+        self.h = self.h + 0.1*delta
+        return pred
+        
+    def forward(self, x):
+        """_summary_
+
+        Args:
+            x (tensor): [N, p]
+
+        Returns:
+            _type_: _description_
+        """
+        if not self.bias:
+            return torch.matmul(x, self.h)
+        else:
+            ones = torch.ones(x.shape[0], 1).to(x.device)
+            x = torch.cat((ones, x), dim=1)
+            return torch.matmul(x, self.h)
 class AnomalyDetector():
     """class definition for an anomaly detector"""
-    maxlen = 10
-    def __init__(self, init_len=20):
+    def __init__(self, init_len=25, p=5):
         self.record = []
         self.count = 0 # count for recorded datapoints
         self.init_len = init_len
+        self.max_len = p
+        self.lms = LMSFilter(p=5, bias=False)
         
     def put(self, datapoint: torch.Tensor) -> None:
         datapoint = self._to_tensor(datapoint)
-        if len(self.record) < self.maxlen:
+        if len(self.record) < self.max_len:
             self.record.append(datapoint)
         else:
             self.record.pop(0)
@@ -160,12 +204,14 @@ class AnomalyDetector():
         
         if is_nan(datapoint):
             return True
-        if self.count > self.init_len:
-            record = torch.stack(self.record, dim=0)
-            mean = torch.mean(record)
-            std = torch.sqrt(torch.var(record))
-            if datapoint > mean + 3.*std:
-                return True # anomaly
+        if len(self.record) >= self.max_len:
+            past = torch.stack(self.record, dim=0).view(1,-1) # [1, p]
+            if self.count > self.init_len:
+                var = self.lms.var
+                pred = self.lms.infer(past)
+                if datapoint > pred + 5.*var.sqrt():
+                    return True # anomaly
+            self.lms.learn(past, datapoint)
         self.put(datapoint)
         return False # normal
     

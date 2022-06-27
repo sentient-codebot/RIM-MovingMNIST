@@ -32,7 +32,7 @@ if DEBUG:
     class BouncingBall(BouncingBall):
         pass
 
-    @mini_dataset(nfold=60)
+    @mini_dataset(nfold=1000)
     class MovingMNIST(MovingMNIST):
         pass
     
