@@ -147,6 +147,7 @@ class LMSFilter():
         
     def to(self, str):
         self.h = self.h.to(str)
+        self.var = self.var.to(str)
         return self
     
     def infer(self, x):
