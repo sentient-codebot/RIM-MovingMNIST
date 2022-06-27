@@ -133,7 +133,7 @@ def main():
     writer = SummaryWriter(log_dir='./runs/'+args.id)
 
     # training loop
-    anom_det = AnomalyDetector()
+    anom_det = AnomalyDetector().to(args.device)
     epoch_dev = 0 # epoch deviation
     epoch = start_epoch
     end_epoch = args.epochs+1

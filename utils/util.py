@@ -147,6 +147,7 @@ class LMSFilter():
         
     def to(self, str):
         self.h = self.h.to(str)
+        return self
     
     def infer(self, x):
         return self.forward(x)
@@ -195,6 +196,10 @@ class AnomalyDetector():
             self.record.pop(0)
             self.record.append(datapoint)
         self.count += 1
+        
+    def to(self, str):
+        self.lms = self.lms.to(str)
+        return self
             
     def _to_tensor(self, datapoint):
         if not isinstance(datapoint, torch.Tensor):
