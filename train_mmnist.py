@@ -154,7 +154,7 @@ def main():
         if anom_det(train_loss):
             print(f"Anomaly detected at epoch {epoch} with training loss {train_loss:.4f}")
             print(f'Grad norm is {train_dict["grad_norm"]:.4f}')
-            ckpt_epoch = load_model(model, f"{args.folder_save}/checkpoints", args.device, optimizer=optimizer)
+            ckpt_epoch = load_model(model, f"{args.folder_save}/checkpoints", args.device, optimizer=optimizer, curr_epoch=epoch)
             torch.randint(0, 10, (1,)) # refresh random state (not necessary?)
             epoch = ckpt_epoch
             # continue
