@@ -7,6 +7,7 @@ from .BouncingBall import BouncingBall
 from .MovingMNIST import MovingMNIST
 from .SpritesMOT import SpritesMOT
 from .SynMOTs import SyntheticMOTDataset
+from MovingSprites import MovingSprites
 
 import os
 DEBUG = bool(int(os.environ.get('DEBUG', False)))
@@ -42,6 +43,9 @@ if DEBUG:
 
     @mini_dataset(nfold=90)
     class SyntheticMOTDataset(SyntheticMOTDataset): ...
+    
+    @mini_dataset(nfold=100)
+    class MovingSprites(MovingSprites): ...
 
 def setup_dataloader(args):
     """function to setup dataset and dataloaders
@@ -81,6 +85,9 @@ def setup_dataloader(args):
             download=True,
             val=True,
         )
+    elif args.task == 'MSPRITES':
+        train_set = MovingSprites(root=args.dataset_dir, train=True)
+        test_set = MovingSprites(root=args.dataset_dir, train=False)
     elif args.task == 'BBALL':
         train_set = BouncingBall(root=args.dataset_dir, train=True, length=20, filename=args.ball_trainset)
         print('cut test set length --> 1000')

@@ -98,10 +98,14 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     for batch_idx, data in enumerate(tqdm(test_loader) if __name__ == "__main__" else test_loader): # tqdm doesn't work here?
         if args.task == 'MMNIST':
             # data: (labels, frames_in, frames_out)
-            digit_labels, in_frames, out_frames, ind_digits = [tensor.to(args.device) for tensor in data] 
+            digit_labels, in_frames, out_frames, obj_frames = [tensor.to(args.device) for tensor in data] 
             data = torch.cat((in_frames, out_frames), dim=1) # [N, *T, 1, H, W]
+        elif args.task == 'MSPRITES':
+            data, obj_frames = data # [N, T, C, H, W]
+            data = data.to(args.device) # [N, K, T, C, H, W]
+            obj_frames = obj_frames.to(args.device)
         else:
-            data = data.to(args.device)
+            data = data.to(args.device) # [N, T, c, H, W]
         hidden = model.init_hidden(data.shape[0]).to(args.device)
         memory = None
         if args.use_sw:
@@ -174,9 +178,9 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                 
             # frame-wise metrics
             if 'SEP' in args.decoder_type and calc_csty:
-                ind_pred_frame = model.hidden_features['individual_output'].norm(dim=-3).flatten(start_dim=-2).permute(0,2,1)
-                ind_digits_frame = ind_digits[:,:,frame,...].norm(dim=-3).flatten(start_dim=-2).permute(0,2,1) # ind_digits [N, K, T, C, H, W] -> [N, H*W, K]                
-                ari_frame.append(adjusted_rand_index(ind_digits_frame, ind_pred_frame, reduction='mean').item())
+                obj_pred_frame = model.hidden_features['individual_output'].norm(dim=-3).flatten(start_dim=-2).permute(0,2,1)
+                obj_gt_frame = obj_frames[:,:,frame,...].norm(dim=-3).flatten(start_dim=-2).permute(0,2,1) # ind_digits [N, K, T, C, H, W] -> [N, H*W, K]                
+                ari_frame.append(adjusted_rand_index(obj_gt_frame, obj_pred_frame, reduction='mean').item())
             
             f1_frame = f1_score(next_target, preds)
             f1 += f1_frame
@@ -274,7 +278,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
         # calculate consistency
         avr_len, max_len = None, None
         if 'SEP' in args.decoder_type and calc_csty:
-            avr_len, max_len = consistency_measure(ind_pred, ind_digits[:, :, rollout_start:, ...], 
+            avr_len, max_len = consistency_measure(ind_pred, obj_frames[:, :, rollout_start:, ...], 
                                                    corr_padding=(1,1), output_ids=False, reduction='mean', exclude_background=True)
             epoch_avr_len += avr_len
             epoch_max_len += max_len    

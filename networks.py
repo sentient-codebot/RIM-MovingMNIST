@@ -411,7 +411,7 @@ class BallModel(nn.Module):
         self.use_compositional_MLP = args.use_compositional_MLP
         
 
-        if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
+        if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR', 'MSPRITES']:
             self.encoder = SynMOTEncoder(self.input_size)
             self.num_inputs=36
             self.fov = 2 # factor of variations
@@ -457,7 +457,7 @@ class BallModel(nn.Module):
 
         out_channels = 1
         _sbd_decoder = 'transconv'
-        if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR']:
+        if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR', 'MSPRITES']:
             out_channels = 3
             _sbd_decoder = 'synmot'
         if args.decoder_type == "CAT_BASIC":
@@ -465,7 +465,7 @@ class BallModel(nn.Module):
         elif args.decoder_type == "SEP_BASIC":
             self.decoder = SharedBasicDecoder(embedding_size=self.embedding_size, out_channels=out_channels)
         elif args.decoder_type == "SEP_SBD":
-            if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR'] and False:
+            if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR', 'MSPRITES'] and False:
                 self.decoder = SharedBroadcastDecoder(self.embedding_size, 3)
             else:
                 self.decoder = WrappedDecoder(self.embedding_size, decoder=_sbd_decoder, mem_efficient=self.args.sbd_mem_efficient) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
