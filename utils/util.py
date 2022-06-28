@@ -107,6 +107,7 @@ def load_model(
     device: torch.device,
     optimizer: Optional[torch.optim.Optimizer] = None,
     curr_epoch: int = 1000,
+    checkpoint_epoch: Optional[int] = None,
 ) -> int:
     """
     resume checkpoint. so far only used for recovering from failed epoch. 
@@ -114,7 +115,7 @@ def load_model(
     return (int) the checkpoint epoch
     """
     _checkpoint_list = [int(f.split('.')[0]) for f in os.listdir(model_dir) if f.endswith('.pt')]
-    checkpoint_list = [item for item in _checkpoint_list if item <= curr_epoch] # don't loaf "future" checkpoints!
+    checkpoint_list = [item for item in _checkpoint_list if item <= curr_epoch] # don't load "future" checkpoints!
     if len(checkpoint_list) == 0:
         raise RuntimeError('Training loss anomaly. Failed when trying to reload checkpoint: No Checkpoint Found.')
     else:
@@ -122,7 +123,10 @@ def load_model(
             "Training loss anomaly. Trying to resume previous checkpoint. "
         )
         latest_model_idx = max(checkpoint_list)
-        path = os.path.join(f"{model_dir}", f"{latest_model_idx}.pt")
+        if checkpoint_epoch is not None and checkpoint_epoch in checkpoint_list:
+            path = os.path.join(f"{model_dir}", f"{checkpoint_epoch}.pt")
+        else:
+            path = os.path.join(f"{model_dir}", f"{latest_model_idx}.pt")
         checkpoint = torch.load(path, map_location=device)
         start_epoch = checkpoint['epoch'] + 1
         print(
