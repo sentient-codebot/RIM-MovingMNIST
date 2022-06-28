@@ -2,6 +2,7 @@ from multiprocessing.sharedctypes import Value
 from tabnanny import check
 from time import time
 from tracemalloc import start
+from xml.dom.domreg import registered
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -138,6 +139,7 @@ def main():
     epoch = start_epoch
     end_epoch = args.epochs+1
     train_dict = {}
+    registered_checkpoints = []
     while epoch < end_epoch:
         # train 
         writer.add_scalar('Learning Rate', optimizer.param_groups[0]['lr'], epoch)
@@ -154,7 +156,8 @@ def main():
         if anom_det(train_loss):
             print(f"Anomaly detected at epoch {epoch} with training loss {train_loss:.4f}")
             print(f'Grad norm is {train_dict["grad_norm"]:.4f}')
-            ckpt_epoch = load_model(model, f"{args.folder_save}/checkpoints", args.device, optimizer=optimizer)
+            ckpt_epoch = load_model(model, f"{args.folder_save}/checkpoints", args.device, optimizer=optimizer, curr_epoch=epoch, 
+                                    checkpoint_epoch=max(registered_checkpoints) if len(registered_checkpoints)>0 else None)
             torch.randint(0, 10, (1,)) # refresh random state (not necessary?)
             epoch = ckpt_epoch
             # continue
@@ -249,10 +252,12 @@ def main():
                 'loss': train_loss,
                 'best_mse': best_mse,
             }, f"{args.folder_save}/checkpoints/{epoch}.pt")
+            registered_checkpoints.append(epoch)
             checkpoint_dir = f"{args.folder_save}/checkpoints"
             for f in os.listdir(checkpoint_dir):
                 if f.endswith('.pt') and int(f.split('.')[0]) < epoch:
-                    os.remove(os.path.join(checkpoint_dir, f))
+                    os.remove(os.path.join(checkpoint_dir, f)) # remove old checkpoints
+                    registered_checkpoints.remove(int(f.split('.')[0])) # remove from registered checkpoints
         epoch += 1
 
     writer.close()
