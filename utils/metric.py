@@ -319,9 +319,10 @@ def adjusted_rand_index(true_mask, pred_mask, exclude_bg=True, reduction='mean')
     n_pred_groups = pred_mask.shape[-1]
     assert not (n_points <= n_true_groups and n_points <= n_pred_groups), ("adjusted_rand_index requires n_groups < n_points. We don't handle the special cases that can occur when you have one cluster per datapoint.")
 
+    max_intensity = max(1., true_mask.max())
     if exclude_bg:
         if torch.is_floating_point(true_mask):
-            not_bg_px = torch.logical_not(torch.all(true_mask < 0.1 * torch.max(true_mask, dim=1, keepdim=True)[0], dim=2, keepdim=True))
+            not_bg_px = torch.logical_not(torch.all(true_mask < 0.1 * max_intensity, dim=2, keepdim=True))
     else:
         not_bg_px = torch.tensor(True, device=true_mask.device).expand(true_mask.shape[0], true_mask.shape[1], 1)
         
@@ -330,7 +331,8 @@ def adjusted_rand_index(true_mask, pred_mask, exclude_bg=True, reduction='mean')
     true_mask_oh = true_mask.to(torch.float32) 
     pred_mask_oh = F.one_hot(pred_group_ids, n_pred_groups).to(torch.float32) # Shape [N, P, K2]
 
-    n_points = torch.sum(true_mask_oh, dim=[1, 2]).to(torch.float32) # [N, ] == P 
+    # n_points = torch.sum(true_mask_oh, dim=[1, 2]).to(torch.float32) # [N, ] == P 
+    n_points = torch.sum(not_bg_px, dim=(1, 2)).to(torch.float32) # [N, ] == P 
 
     nij = torch.einsum('bji,bjk->bki', not_bg_px*pred_mask_oh, not_bg_px*true_mask_oh) # [N,P,K2] [N,P,K1] -> [N,K1,K2]. nij = #pixels in group i (of gt) AND group j (of pred)
     a = torch.sum(nij, dim=1) # [N, K2], #pixels in each group of pred
@@ -342,6 +344,7 @@ def adjusted_rand_index(true_mask, pred_mask, exclude_bg=True, reduction='mean')
     expected_rindex = aindex * bindex / (n_points*(n_points-1)) # [N,]
     max_rindex = (aindex + bindex) / 2 # [N,]
     ari = (rindex - expected_rindex) / (max_rindex - expected_rindex) # [N,]
+    ari[n_points == 0] = 1. # if there are no points, ari is 1.
 
     # _all_equal = lambda values: torch.all(torch.equal(values, values[..., :1]), dim=-1) # whether a mask pixel is the same across all groups
     # both_single_cluster = torch.logical_and(_all_equal(true_group_ids), _all_equal(pred_group_ids))
