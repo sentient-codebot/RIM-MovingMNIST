@@ -307,7 +307,7 @@ def log_stats(args, is_train, **kwargs):
         'Videos': video_dict,
         'Epoch': epoch,
     })
-    runtime = time.time() - start_time
+    runtime = time() - start_time
     print('logging runtime:', runtime)
 
     # print 
