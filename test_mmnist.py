@@ -95,7 +95,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
     epoch_max_len = 0.
     epoch_ari = 0.
     id_counter = 0
-    for batch_idx, data in enumerate(tqdm(test_loader) if __name__ == "__main__" else test_loader): # tqdm doesn't work here?
+    for batch_idx, data in enumerate(tqdm(test_loader, disable=not args.enable_tqdm)): # tqdm doesn't work here?
         if args.task == 'MMNIST':
             # data: (labels, frames_in, frames_out)
             digit_labels, in_frames, out_frames, obj_frames = [tensor.to(args.device) for tensor in data] 
@@ -423,6 +423,7 @@ def main():
     # args.__dict__.update(torch.load(f"{args.folder_save}/args/args.pt")['args'])
     if not args.should_resume:
         args.should_resume = True
+    args.enable_tqdm = True
     cudable = torch.cuda.is_available()
     if cudable:
         args.device = torch.device("cuda")

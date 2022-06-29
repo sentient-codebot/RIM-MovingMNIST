@@ -121,6 +121,7 @@ def argument_parser():
     
     parser.add_argument('--mmnist_num_objects', '--num_objects', '--num_obj', type=mmnist_num_obj, default=[[2],[2],[2]], 
                         help='number of objects in the MMNIST task (train/test/val). default: 2;2;1,2,3')
+    parser.add_argument('--enable_tqdm', action='store_true', default=False)
 
     # Training Settings
     parser.add_argument('--dataset_dir', type=str, default='')
