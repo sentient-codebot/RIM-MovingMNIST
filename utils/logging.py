@@ -1,6 +1,6 @@
 from matplotlib.pyplot import xlabel
 from argparse import Namespace
-from numpy import object_
+from time import time
 import wandb
 from .visualize import make_grid_video, heatmap_to_video, plot_heatmap
 import torch
@@ -11,6 +11,7 @@ def log_stats(args, is_train, **kwargs):
     """
     log one sample of predictions in a batch
     """
+    start_time = time()
     # 
     epoch = kwargs.get('epoch', 0)
     lr = kwargs.get('lr', None)
@@ -306,6 +307,8 @@ def log_stats(args, is_train, **kwargs):
         'Videos': video_dict,
         'Epoch': epoch,
     })
+    runtime = time.time() - start_time
+    print('logging runtime:', runtime)
 
     # print 
     if is_train:

@@ -53,7 +53,7 @@ def train(model, train_loader, optimizer, epoch, train_batch_idx, args, loss_fn,
             digit_labels, in_frames, out_frames, ind_digits = [tensor.to(args.device) for tensor in data] 
             data = torch.cat((in_frames, out_frames), dim=1) # [N, *T, 1, H, W]
         else:
-            data = data.to(args.device)
+            data = data.to(args.device) # [N, T, C, H, W]
         hidden = model.init_hidden(data.shape[0]).to(args.device)
         hidden = hidden.detach()
         memory = None
@@ -183,7 +183,7 @@ def main():
                 rollout = True,
                 epoch = epoch,
                 log_columns=columns if epoch%50==0 else None,
-                calc_csty = True if args.use_val_set else False
+                calc_csty = True if args.use_val_set or args.task == 'MSPRITES' else False
             )
             log_stats(
                 args=args,
@@ -282,7 +282,7 @@ def setup_model(args):
             args.should_resume = False      
     
     # initialize
-    if args.task == 'MMNIST' or args.task == 'BBALL' or args.task == 'SPRITESMOT':
+    if args.task in ['MMNIST', 'MSPRITES','BBALL', 'SPRITESMOT']:
         model = BallModel(args).to(args.device)
     elif args.task == 'TRAFFIC4CAST':
         model = TrafficModel(args).to(args.device)
