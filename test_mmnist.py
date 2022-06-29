@@ -139,6 +139,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             data.shape[3],
             data.shape[4])
         ) # (BS, num_blocks, T, C, H, W)
+        unmasked_ind_preds = blocked_prediction.clone()
         ind_pred = torch.empty((data.shape[0], args.num_hidden, data.shape[1]-rollout_start, data.shape[2], data.shape[3], data.shape[4]))
         reconstruction = []
         individual_recons = []
@@ -191,6 +192,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             if do_logging:
                 blocked_prediction[:, 0, frame+1, :, :, :] = preds # dim == 6
                 blocked_prediction[:, 1:, frame+1, :, :, :] = model.hidden_features['individual_output']
+                unmasked_ind_preds[:, 0, frame+1, :, :, :] = preds # dim == 6
+                unmasked_ind_preds[:, 1:, frame+1, :, :, :] = model.hidden_features['individual_output_unmasked']
                 if recons is not None:
                     reconstruction.append(recons) # [BS, C, H, W]
                     if not args.decode_hidden:
@@ -206,6 +209,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                     }
                     if 'SEP' in args.decoder_type:
                         table_row['individual_prediction'] = wandb.Image(make_grid(model.hidden_features['individual_output'][sample_idx]*255, pad_value=255)) # N K C H W -> K C H W -> C *H **W
+                        table_row['individual_prediction_unmasked'] = wandb.Image(make_grid(model.hidden_features['individual_output_unmasked'][sample_idx]*255, pad_value=255)) # N K C H W -> K C H W -> C *H **W
                     if args.core == 'RIM' or args.core == 'SCOFF':
                         table_row['input attention probs'] = wandb.Image(
                             plot_heatmap(
@@ -301,6 +305,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
 
     prediction = prediction[:, 1:, :, :, :] # last batch of prediction, starting from frame 1
     blocked_prediction = blocked_prediction[:, :, 1:, :, :, :]
+    unmasked_ind_preds = unmasked_ind_preds[:, :, 1:, :, :, :]
     if reconstruction:
         reconstruction = torch.stack(reconstruction, dim=1) # [N, T, C, H, W]
     if individual_recons:
@@ -334,6 +339,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             'rim_actv_mask': rim_actv_mask.show(),
             'dec_util': dec_util.show(),
             'individual_output': blocked_prediction,
+            'individual_output_unmasked': unmasked_ind_preds,
             'most_used_units': most_used_units
         }
         if 'rule_attn_probs' in model.rnn_model.hidden_features:
@@ -344,6 +350,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             'ssim': ssim,
             'f1': f1_avg,
             'individual_output': blocked_prediction,
+            'individual_output_unmasked': unmasked_ind_preds,
             'input_attn_probs': torch.stack(input_attn_probs, dim=1), # Shape: [N, T, 1, num_hidden, num_inputs]
             'rule_attn_argmax': rule_attn_argmax.show(),
             'rule_attn_probs': torch.stack(rule_attn_probs_list, dim=1), # Shape: [N, T, 1, num_hidden, num_rules]
@@ -353,7 +360,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
             'mse': epoch_mseloss,
             'ssim': ssim,
             'f1': f1_avg,
-            'individual_output': blocked_prediction
+            'individual_output': blocked_prediction,
+            'individual_output_unmasked': unmasked_ind_preds,
         }
     if len(reconstruction) > 0:
         metrics['reconstruction'] = reconstruction

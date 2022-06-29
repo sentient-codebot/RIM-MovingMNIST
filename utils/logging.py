@@ -355,6 +355,7 @@ def setup_wandb_columns(args: Namespace) -> list[str]:
     columns = ['sample_id', 'frame_id', 'ground_truth', 'prediction',]
     if 'SEP' in args.decoder_type:
         columns.append('individual_prediction')
+        columns.append('individual_prediction_unmasked')
     if args.core =='RIM' or args.core == 'SCOFF':
         columns.append('input attention probs')
     if args.core == 'SCOFF':

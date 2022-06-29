@@ -730,6 +730,7 @@ class BallModel(nn.Module):
         # DECODING
         # newly added, transform h_new back to slots
         self.hidden_features['individual_output'] = torch.empty((h_new.shape[0],self.num_hidden,1,64,64)).to(x.device)
+        self.hidden_features['individual_output_unmasked'] = torch.empty((h_new.shape[0],self.num_hidden,1,64,64)).to(x.device)
         curr_dec_out_ = None
         curr_alpha_mask = None
         object_mask = None
@@ -745,6 +746,7 @@ class BallModel(nn.Module):
                 if self.do_logging or True: # always log ind_output
                     blocked_out_ = next_channels*next_alpha_mask
                     self.hidden_features['individual_output'] = blocked_out_.detach()
+                    self.hidden_features['individual_output_unmasked'] = next_channels.detach()
                     self.hidden_features['individual_recons'] = (curr_channels*curr_alpha_mask).detach()
             else:
                 curr_dec_out_ = self.decoder(encoded_input.view(encoded_input.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
@@ -755,6 +757,7 @@ class BallModel(nn.Module):
                 if self.do_logging or True: # always log ind_output
                     blocked_out_ = next_channels*next_alpha_mask
                     self.hidden_features['individual_output'] = blocked_out_.detach()
+                    self.hidden_features['individual_output_unmasked'] = next_channels.detach()
             else:
                 next_dec_out_ = self.decoder(h_new.view(h_new.shape[0],-1)) # Shape: [N, num_hidden*hidden_size] -> [batch_size, 1, 64, 64]
         
