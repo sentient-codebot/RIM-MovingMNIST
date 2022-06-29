@@ -83,11 +83,12 @@ class InputAttention(Attention):
         if not share_query_proj:
             # giving each query vector different projection matrix (one-to-one)
             self.query = GroupLinearLayer(
-                hidden_size, kdim * num_heads, num_hidden)
+                hidden_size, kdim * num_heads, num_hidden) # [N, num_hidden, hidden_size] -> [N, num_hidden, kdim * num_heads]
         else:
-            # giving each query vector different projection matrix (one-to-one)
-            self.query = SharedGroupLinearLayer(
-                hidden_size, kdim * num_heads, num_hidden)
+            # giving each query vector same projection matrix (one-to-one)
+            # self.query = SharedGroupLinearLayer(
+            #     hidden_size, kdim * num_heads, num_hidden)
+            self.query = nn.Linear(hidden_size, kdim * num_heads, bias=False) # hidden -> kdim * num_heads
             # all query share the same projection *proj*
         self.dropout = nn.Dropout(p=dropout)
         self.epsilon = epsilon
@@ -96,14 +97,23 @@ class InputAttention(Attention):
         self.key_norm = key_norm
 
     def forward(self, x, h):
+        """attention_input_x_h
+
+        Args:
+            x (_type_): [N, num_inputs, input_size]
+            h (_type_): [N, num_hidden, hidden_size]
+
+        Returns:
+            _type_: [N, num_hidden, value_size]
+        """
         key = self.key(x)  # Shape: [batch_size, num_heads, kdim]
         value = self.value(x)
-        query = self.query(h)
+        query = self.query(h) # Shape: [N, num_hidden, num_heads * kdim]
 
-        key = self.transpose_for_scores(key, self.num_heads, self.kdim)
+        key = self.transpose_for_scores(key, self.num_heads, self.kdim) # Shape: [N, num_heads, num_inputs, kdim]
         value = torch.mean(self.transpose_for_scores(
             value,  self.num_heads, self.vdim), dim=1)
-        query = self.transpose_for_scores(query, self.num_heads, self.kdim)
+        query = query.view(query.shape[0], query.shape[1], self.num_heads, self.kdim).permute(0, 2, 1, 3) # Shape [N, num_heads, num_hidden, kdim]
 
         attention_scores = torch.matmul(
             query, key.transpose(-1, -2)) / math.sqrt(self.kdim)
