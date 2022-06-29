@@ -263,7 +263,7 @@ class SynMOTEncoder(nn.Module):
     Outputs:
             `features`: feature vectors [batch_size, num_inputs, input_size]    
     """
-    def __init__(self, input_size):
+    def __init__(self, input_size, do_flatten = False):
         super().__init__()
         self.input_size = input_size
         self.cnn = nn.Sequential(
@@ -275,14 +275,22 @@ class SynMOTEncoder(nn.Module):
             LayerNorm(),
             nn.Conv2d(64, 128, kernel_size=4, stride=2),
             nn.ELU(),
-            LayerNorm()
+            LayerNorm() # [N, 36, 64]
         )
-        self.pos_emb = SoftPositionEmbed(128, (6, 6))
-        self.mlp = nn.Sequential(
-            nn.Linear(128, 256), # Shape: [batch_size, 6*6, 64]
-            nn.ELU(),
-            nn.Linear(256, self.input_size) # Shape: [batch_size, 6*6, input_size]
-        )
+        self.do_flatten = do_flatten
+        if self.do_flatten:
+            self.mlp = nn.Sequential(
+                nn.Linear(64*6*6, input_size),
+                nn.ELU(),
+                LayerNorm(),
+            )
+        else:
+            self.pos_emb = SoftPositionEmbed(128, (6, 6))
+            self.mlp = nn.Sequential(
+                nn.Linear(128, 256), # Shape: [batch_size, 6*6, 64]
+                nn.ELU(),
+                nn.Linear(256, self.input_size) # Shape: [batch_size, 6*6, input_size]
+            )
 
     def forward(self, x):
         """
@@ -293,11 +301,15 @@ class SynMOTEncoder(nn.Module):
             `features`: feature vectors [batch_size, num_inputs, input_size]
         """
         x = self.cnn(x) # Shape: [batch_size, 64, 6, 6]
-        x = self.pos_emb(x) # Shape: [batch_size, 64, 6, 6]
-        x = x.permute(0, 2, 3, 1) # Shape: [batch_size, 6, 6, 64]
-        x = x.contiguous()
-        x = x.view(x.shape[0], -1, x.shape[-1]) # Shape: [batch_size, 6*6, 64]
-        x = self.mlp(x) # Shape: [batch_size, 6*6, input_size]
+        if self.do_flatten:
+            x = self.mlp(x.flatten(start_dim=1))
+            x = x.unsqueeze(1) # Shape: [batch_size, 1, input_size]
+        else:
+            x = self.pos_emb(x) # Shape: [batch_size, 64, 6, 6]
+            x = x.permute(0, 2, 3, 1) # Shape: [batch_size, 6, 6, 64]
+            x = x.contiguous()
+            x = x.view(x.shape[0], -1, x.shape[-1]) # Shape: [batch_size, 6*6, 64]
+            x = self.mlp(x) # Shape: [batch_size, 6*6, input_size]
 
         return x
     
@@ -412,8 +424,11 @@ class BallModel(nn.Module):
         
 
         if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR', 'MSPRITES']:
-            self.encoder = SynMOTEncoder(self.input_size)
-            self.num_inputs=36
+            self.encoder = SynMOTEncoder(
+                input_size=self.input_size,
+                do_flatten=True if self.encoder_type == "FLATTEN" else False,
+            )
+            self.num_inputs=1 if self.encoder_type == "FLATTEN" else 36
             self.fov = 2 # factor of variations
         else:
             self.fov=2
@@ -461,7 +476,7 @@ class BallModel(nn.Module):
             out_channels = 3
             _sbd_decoder = 'synmot'
         if args.decoder_type == "CAT_BASIC":
-            self.decoder = BasicDecoder(embedding_size=self.embedding_size) # Shape: [batch_size, num_units*hidden_size] -> [batch_size, 1, 64, 64]
+            self.decoder = BasicDecoder(embedding_size=self.embedding_size, out_channels=out_channels) # Shape: [batch_size, num_units*hidden_size] -> [batch_size, 1, 64, 64]
         elif args.decoder_type == "SEP_BASIC":
             self.decoder = SharedBasicDecoder(embedding_size=self.embedding_size, out_channels=out_channels)
         elif args.decoder_type == "SEP_SBD":
