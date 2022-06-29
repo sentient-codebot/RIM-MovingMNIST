@@ -56,12 +56,17 @@ def log_stats(args, is_train, **kwargs):
     ari = metrics.get('ari')
     # videos patching
     individual_output = metrics['individual_output'] # dim == 6
+    ind_pred_unmasked = metrics['individual_output_unmasked'] # dim == 6
     if args.task == 'MMNIST':
         num_vids = 4
     else:
         num_vids = 1
     grided_ind_pred = (make_grid_video(
         target = individual_output[0],
+        return_dim = 5,
+    )*255).to(torch.uint8).cpu()
+    grided_ind_pred_unmasked = (make_grid_video(
+        target = ind_pred_unmasked[0],
         return_dim = 5,
     )*255).to(torch.uint8).cpu()
     gt_preds_video = (make_grid_video(ground_truth[0:num_vids, 1:, :, :, :],
@@ -200,6 +205,7 @@ def log_stats(args, is_train, **kwargs):
             writer.add_video('Rule Attention Probs', rule_attn_probs[:1], epoch)
         writer.add_video('Predicted Videos', gt_preds_video, epoch)
         writer.add_video('Individual Predictions', grided_ind_pred) # N num_blocks T 1 H W
+        writer.add_video('Individual Predictions (unmasked)', grided_ind_pred_unmasked) # N num_blocks T 1 H W
     #   wandb
     video_dict = {
         'Predicted Videos': wandb.Video(gt_preds_video, fps=3),
@@ -209,6 +215,7 @@ def log_stats(args, is_train, **kwargs):
         video_dict.update(
             {
                 'Individual Predictions': wandb.Video(grided_ind_pred, fps=3),
+                'Individual Predictions (unmasked)': wandb.Video(grided_ind_pred_unmasked, fps=3),
             }
         )
     if input_attn_probs is not None:
