@@ -51,8 +51,8 @@ def str2task(_str):
     _str = _str.upper()
     if _str == "MOVINGMNIST" or _str == "MMNIST":
         return "MMNIST"
-    elif _str == 'MOVINGSPRITES' or _str == 'MSPRITES' or _str == 'MOVINGSPRITE' or _str == 'MSPRITE':
-        return 'MSPRTIES'
+    elif _str in ['MOVINGSPRITES', 'MSPRITES', 'MOVINGSPRITE', 'MSPRITE']:
+        return 'MSPRITES'
     elif _str == "BBALL":
         return "BBALL"
     elif _str == "TRAFFIC4CAST":

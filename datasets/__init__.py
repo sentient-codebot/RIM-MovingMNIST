@@ -7,7 +7,7 @@ from .BouncingBall import BouncingBall
 from .MovingMNIST import MovingMNIST
 from .SpritesMOT import SpritesMOT
 from .SynMOTs import SyntheticMOTDataset
-from MovingSprites import MovingSprites
+from .MovingSprites import MovingSprites
 
 import os
 DEBUG = bool(int(os.environ.get('DEBUG', False)))

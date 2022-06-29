@@ -28,7 +28,7 @@ class MovingSprites(data.Dataset):
         ('train_msprites.pt', '0e862810f6b0a08be91c8e0de6ff48b7'),
         ('test_msprites.pt', '68dd6c454f1ccf6aed2bc63fedcfa361'),
     ]
-    def __init__(self, root, train=True, transform=None, ):
+    def __init__(self, root, train=True, transform=None,):
         '''
         Args:
             `root`: Root directory of the dataset (mnist dataset and moving mnist test set)
@@ -63,11 +63,11 @@ class MovingSprites(data.Dataset):
     def __getitem__(self, idx):
         if self.is_train:
             video = self.dataset[idx]
-            return video
+            return video.float() / 255.
         else:
             video = self.dataset[0][idx]
             ind_video = self.dataset[1][idx]
-            return video, ind_video
+            return video.float() / 255., ind_video.float() / 255.
 
         if self.transform is not None:
             images = self.transform(images)

@@ -1,6 +1,6 @@
 {
     "version"                   : 0,
-    "task"                      : "MSRPITES",
+    "task"                      : "MSPRITES",
     "core"                      : "SCOFF",
     
     "batch_size"                : 32,
