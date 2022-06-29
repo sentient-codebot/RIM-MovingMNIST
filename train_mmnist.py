@@ -234,6 +234,7 @@ def main():
                 'Stats': {
                     'Learning Rate': optimizer.param_groups[0]['lr'],
                     'Past Slot Init Scale': 0. if not args.use_past_slots else torch.sigmoid(model.slot_attention.manual_init_scale_digit).detach()},
+                    'Epoch': epoch,
             }, step=epoch)
         writer.add_scalars(f'Loss/{args.loss_fn.upper()}', 
             loss_dict, 
