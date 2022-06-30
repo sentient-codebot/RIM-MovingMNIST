@@ -537,33 +537,32 @@ class BallModel(nn.Module):
                                         N = self.args.batch_size
                 ).to(self.args.device)
         elif self.core == 'GRU':
-            self.rnn_model = RIMCell(
-                device=self.args.device,
-                input_size=self.slot_size*self.num_slots if self.use_slot_attention else self.input_size*self.num_inputs, # NOTE: sensetive to num_inputs
-                num_units=1, # NOTE one bulky GRU
-                hidden_size=self.hidden_size * self.num_hidden,
-                k=1,
-                rnn_cell='GRU', # defalt GRU
-                input_key_size=self.args.input_key_size,
-                input_value_size=self.args.input_value_size,
-                num_input_heads = self.args.num_input_heads,
-                input_dropout = 0.,
-                use_sw = False,
-                comm_key_size = self.args.comm_key_size,
-                comm_value_size = self.args.comm_value_size, 
-                num_comm_heads = self.args.num_comm_heads, 
-                comm_dropout = 0.,
-                memory_size = self.args.memory_size,
-                use_rule_sharing=self.args.use_rule_sharing,
-                use_rule_embedding=self.args.use_rule_embedding,
-                num_rules=self.args.num_rules,
+            # self.rnn_model = RIMCell(
+            #     device=self.args.device,
+            #     input_size=self.slot_size*self.num_slots if self.use_slot_attention else self.input_size*self.num_inputs, # NOTE: sensetive to num_inputs
+            #     num_units=1, # NOTE one bulky GRU
+            #     hidden_size=self.hidden_size * self.num_hidden,
+            #     k=1,
+            #     rnn_cell='GRU', # defalt GRU
+            #     input_key_size=self.args.input_key_size,
+            #     input_value_size=self.args.input_value_size,
+            #     num_input_heads = self.args.num_input_heads,
+            #     input_dropout = 0.,
+            #     use_sw = False,
+            #     comm_key_size = self.args.comm_key_size,
+            #     comm_value_size = self.args.comm_value_size, 
+            #     num_comm_heads = self.args.num_comm_heads, 
+            #     comm_dropout = 0.,
+            #     memory_size = self.args.memory_size,
+            #     use_rule_sharing=self.args.use_rule_sharing,
+            #     use_rule_embedding=self.args.use_rule_embedding,
+            #     num_rules=self.args.num_rules,
+            # )
+            self.rnn_model = nn.GRUCell(
+                                    input_size=self.slot_size*self.num_slots if self.use_slot_attention else self.input_size*self.num_inputs, # NOTE: sensetive to num_inputs
+                                    hidden_size=self.args.hidden_size * self.args.num_hidden,
             )
-            # self.rnn_model = nn.GRU(
-            #                         input_size=self.slot_size*self.num_slots if self.use_slot_attention else self.input_size*self.num_inputs, # NOTE: sensetive to num_inputs
-            #                         hidden_size=self.args.hidden_size * self.args.num_units,
-            #                         num_layers=1,
-            #                         batch_first=True,
-            # ).to(self.args.device)
+            self.rnn_model.hidden_features = {}
         elif self.core == 'LSTM':
             self.rnn_model = RIMCell(
                 device=self.args.device,
@@ -718,8 +717,10 @@ class BallModel(nn.Module):
                 raise NotImplementedError('Sparse RIM not configured for slot input yet')
         elif self.core=='GRU':
             h_shape = h_prev.shape # Shape: [batch_size, num_units, hidden_size]
-            h_prev = h_prev.reshape((h_shape[0],1,-1)) # flatten, Shape: [batch_size, 1, num_units*hidden_size]
-            h_new, cs_new, M = self.rnn_model(x=encoded_input.view(encoded_input.shape[0], 1, -1), hs=h_prev, cs=None, M=None) # one-step prediciton
+            gru_input = encoded_input.view(encoded_input.shape[0], -1)
+            gru_hidden = h_prev.view(h_prev.shape[0], -1)
+            
+            h_new = self.rnn_model(gru_input, gru_hidden)
             h_new = h_new.reshape(h_shape)
         elif self.core=='LSTM':
             raise NotImplementedError('LSTM core not implemented yet!')

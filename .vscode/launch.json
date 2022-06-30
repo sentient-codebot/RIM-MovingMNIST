@@ -74,6 +74,9 @@
                 "3",
                 "--use_val_set",
                 "false",
+                "--core",
+                "GRU",
+                "--enable_tqdm"
                 // "--batch_size",
                 // "8"
             ],
