@@ -1,7 +1,7 @@
 {
     "version"                   : 0,
     "task"                      : "MSPRITES",
-    "core"                      : "SCOFF",
+    "core"                      : "RIM",
     
     "batch_size"                : 32,
     "epochs"                    : 400,
@@ -27,12 +27,13 @@
     "k"                         : 10,
     
     "encoder_type"              : "NONFLATTEN",
-    "decoder_type"              : "SEP_SBD",
+    "decoder_type"              : "CAT_BASIC",
     "decode_hidden"             : true,
 
     "use_slot_attention"        : true,
-    "num_slots"                 : 6,
+    "num_slots"                 : 3,
     "num_iterations_slot"       : 3,
+
 
     "hard_input_attention"      : false,
     "null_input_type"           : "zero",
@@ -40,7 +41,6 @@
     "use_sw"                    : false,
 
     "use_rule_sharing"          : false,
-    "num_rules"                 : 3,
 
     "use_composiitonal_MLP"     : false
 }

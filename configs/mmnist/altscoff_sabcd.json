@@ -1,7 +1,7 @@
 {
     "version"                   : 0,
-    "task"                      : "MSPRITES",
-    "core"                      : "SCOFF",
+    "task"                      : "MOVINGMNIST",
+    "core"                      : "ALTSCOFF",
     
     "batch_size"                : 32,
     "epochs"                    : 400,
@@ -11,7 +11,7 @@
     "lr"                        : 0.0007,
     "loss_fn"                   : "MSE",
 
-    "input_size"                : 32,
+    "input_size"                : 64,
     "hidden_size"               : 100,
     "num_hidden"                : 6,
     "num_input_heads"           : 1,
@@ -23,6 +23,8 @@
     "num_comm_heads"            : 2,
     "input_dropout"             : 0.1,
     "comm_dropout"              : 0.1,
+    
+    "num_rules"                 : 2,
 
     "k"                         : 10,
     
@@ -38,9 +40,6 @@
     "null_input_type"           : "zero",
 
     "use_sw"                    : false,
-
-    "use_rule_sharing"          : false,
-    "num_rules"                 : 3,
 
     "use_composiitonal_MLP"     : false
 }

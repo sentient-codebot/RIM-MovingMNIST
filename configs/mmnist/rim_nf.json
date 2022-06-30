@@ -1,6 +1,6 @@
 {
     "version"                   : 0,
-    "task"                      : "MSPRITES",
+    "task"                      : "MOVINGMNIST",
     "core"                      : "RIM",
     
     "batch_size"                : 32,
@@ -11,7 +11,7 @@
     "lr"                        : 0.0007,
     "loss_fn"                   : "MSE",
 
-    "input_size"                : 32,
+    "input_size"                : 64,
     "hidden_size"               : 100,
     "num_hidden"                : 6,
     "num_input_heads"           : 1,
@@ -26,11 +26,14 @@
 
     "k"                         : 10,
     
-    "encoder_type"              : "FLATTEN",
-    "decoder_type"              : "SEP_SBD",
+    "encoder_type"              : "NONFLATTEN",
+    "decoder_type"              : "CAT_BASIC",
     "decode_hidden"             : true,
 
     "use_slot_attention"        : false,
+    "num_slots"                 : 3,
+    "num_iterations_slot"       : 3,
+
 
     "hard_input_attention"      : false,
     "null_input_type"           : "zero",

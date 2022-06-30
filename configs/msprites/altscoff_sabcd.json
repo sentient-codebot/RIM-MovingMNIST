@@ -1,7 +1,7 @@
 {
     "version"                   : 0,
     "task"                      : "MSPRITES",
-    "core"                      : "RIM",
+    "core"                      : "ALTSCOFF",
     
     "batch_size"                : 32,
     "epochs"                    : 400,
@@ -23,6 +23,8 @@
     "num_comm_heads"            : 2,
     "input_dropout"             : 0.1,
     "comm_dropout"              : 0.1,
+    
+    "num_rules"                 : 2,
 
     "k"                         : 10,
     
@@ -30,15 +32,14 @@
     "decoder_type"              : "SEP_BASIC",
     "decode_hidden"             : true,
 
-    "use_slot_attention"        : false,
+    "use_slot_attention"        : true,
+    "num_slots"                 : 6,
+    "num_iterations_slot"       : 3,
 
     "hard_input_attention"      : false,
     "null_input_type"           : "zero",
 
     "use_sw"                    : false,
-
-    "use_rule_sharing"          : false,
-    "num_rules"                 : 3,
 
     "use_composiitonal_MLP"     : false
 }
