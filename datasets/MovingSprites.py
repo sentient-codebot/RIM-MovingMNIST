@@ -25,8 +25,8 @@ def load_fixed_set(root, is_train):
 
 class MovingSprites(data.Dataset):
     dataset_files = [
-        ('train_msprites.pt', '0e862810f6b0a08be91c8e0de6ff48b7'),
-        ('test_msprites.pt', '68dd6c454f1ccf6aed2bc63fedcfa361'),
+        ('train_msprites.pt', 'f83ed4487d78c090a7e03f2ce4e730ee'),
+        ('test_msprites.pt', 'e8f84bff948753da17f0c6ef5ea63109'),
     ]
     def __init__(self, root, train=True, transform=None,):
         '''
@@ -93,10 +93,16 @@ def main():
     for idx, samples in enumerate(tqdm(train_loader)):
         print(samples.shape)
         break
-    video = train_set[random.randint(0, len(train_set))] # video.size() = (20, 3, 64, 64)
-    show = make_grid(video, nrow=10, pad_value=255)
-    plt.imshow(show.numpy().transpose(1, 2, 0))
+    video = train_set[torch.randint(0, len(train_set), (4,))].view(-1, 3, 64, 64) # video.size() = (20, 3, 64, 64)
+    show = make_grid(video, nrow=20, pad_value=255)
+    fig, ax = plt.subplots()
+    ax.imshow(show.numpy().transpose(1, 2, 0))
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_xlabel('Frames')
+    ax.set_ylabel('Samples')
     plt.show()
+    
     pass
 
 
