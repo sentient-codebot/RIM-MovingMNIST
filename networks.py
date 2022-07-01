@@ -275,12 +275,12 @@ class SynMOTEncoder(nn.Module):
             LayerNorm(),
             nn.Conv2d(64, 128, kernel_size=4, stride=2),
             nn.ELU(),
-            LayerNorm() # [N, 36, 64]
+            LayerNorm() # [N, 36, 128]
         )
         self.do_flatten = do_flatten
         if self.do_flatten:
             self.mlp = nn.Sequential(
-                nn.Linear(64*6*6, input_size),
+                nn.Linear(128*6*6, input_size),
                 nn.ELU(),
                 LayerNorm(),
             )
