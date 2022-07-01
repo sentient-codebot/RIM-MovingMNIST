@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 import numpy as np
+import math
 import motmetrics as mm
 from tqdm import tqdm
 import json
@@ -345,6 +346,7 @@ def adjusted_rand_index(true_mask, pred_mask, exclude_bg=True, reduction='mean')
     max_rindex = (aindex + bindex) / 2 # [N,]
     ari = (rindex - expected_rindex) / (max_rindex - expected_rindex) # [N,]
     ari[n_points == 0] = 1. # if there are no points, ari is 1.
+    ari = ari[torch.logical_not(torch.isnan(ari))] # remove nan
 
     # _all_equal = lambda values: torch.all(torch.equal(values, values[..., :1]), dim=-1) # whether a mask pixel is the same across all groups
     # both_single_cluster = torch.logical_and(_all_equal(true_group_ids), _all_equal(pred_group_ids))

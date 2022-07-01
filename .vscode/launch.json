@@ -63,26 +63,28 @@
             "console": "integratedTerminal",
             "args": [
                 "--experiment_name",
-                "DEBUG_SASBD_444",
+                "MSPRITES_SASBD",
                 "--cfg_json",
-                "configs/msprites/altscoff_sasbd.json",
+                "configs/msprites/rim_sasbd.json",
                 "--dataset_dir",
                 "data",
-                "--decode_hidden",
-                "false",
+                // "--decode_hidden",
+                // "false",
                 "--num_slots",
                 "3",
-                "--use_val_set",
-                "false",
-                "--core",
-                "GRU",
+                "--batch_size",
+                "8",
+                // "--use_val_set",
+                // "false",
+                // "--core",
+                // "GRU",
                 "--enable_tqdm"
                 // "--batch_size",
                 // "8"
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "0",
-                "DEBUG": "1"
+                "DEBUG": "0"
             }
         },
         {

@@ -1,5 +1,5 @@
 from time import time
-
+import math
 import matplotlib.pyplot as plt
 import numpy as np
 import torch 
@@ -477,7 +477,7 @@ def main():
         rollout = True,
         epoch = epoch,
         log_columns = columns,
-        calc_csty = True if args.use_val_set else False,
+        calc_csty = True if args.use_val_set or args.task == 'MSPRITES' else False,
     )
     log_stats(
         args=args,
