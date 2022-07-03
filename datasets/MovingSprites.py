@@ -17,7 +17,7 @@ def load_fixed_set(root, is_train):
     if is_train:
         filename = 'train_msprites.pt'
     else:
-        filename = 'test_msprites.pt'
+        filename = 'test_msprites_masked.pt'
     path = os.path.join(root, filename)
     dataset = torch.load(path) # dataset: tensor if is_train else (tensor, tensor), shape [N, T, C, H, W], [N, O, T, C, H, W]
     return dataset
@@ -25,8 +25,9 @@ def load_fixed_set(root, is_train):
 
 class MovingSprites(data.Dataset):
     dataset_files = [
-        ('train_msprites.pt', 'f83ed4487d78c090a7e03f2ce4e730ee'),
-        ('test_msprites.pt', 'e8f84bff948753da17f0c6ef5ea63109'),
+        'train_msprites.pt',
+        # 'test_msprites.pt',
+        'test_msprites_masked.pt',
     ]
     def __init__(self, root, train=True, transform=None,):
         '''
@@ -79,8 +80,8 @@ class MovingSprites(data.Dataset):
 
     def _check_exists(self) -> bool:
         return all(
-            check_integrity(os.path.join(self.root, filename), md5=md5)
-            for filename, md5 in self.dataset_files
+            os.path.exists(os.path.join(self.root, filename))
+            for filename in self.dataset_files
         )
 
 def main():
