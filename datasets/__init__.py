@@ -145,11 +145,14 @@ def setup_dataloader(args):
     else:
         raise ValueError('Unknown task '+args.task)
 
+    num_workers = getattr(args, 'num_workers', None)
+    if num_workers is None:
+        num_workers = 4 if not DEBUG else 0
     train_loader = torch.utils.data.DataLoader(
         dataset=train_set,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=4 if not DEBUG else 0,
+        num_workers=num_workers,
         worker_init_fn=seed_worker,
         generator=g,
     )
@@ -157,7 +160,7 @@ def setup_dataloader(args):
         dataset=test_set,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=4 if not DEBUG else 0,
+        num_workers=num_workers,
         worker_init_fn=seed_worker,
         generator=g,
     )
@@ -166,7 +169,7 @@ def setup_dataloader(args):
             dataset=val_set,
             batch_size=args.batch_size,
             shuffle=True,
-            num_workers=0 if not DEBUG else 0,
+            num_workers=num_workers,
             worker_init_fn=seed_worker,
             generator=g,
         )

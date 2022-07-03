@@ -124,6 +124,7 @@ def argument_parser():
     parser.add_argument('--enable_tqdm', action='store_true', default=False)
 
     # Training Settings
+    parser.add_argument('--num_workers', type=int, default=None)
     parser.add_argument('--dataset_dir', type=str, default='')
     parser.add_argument('--batch_size', type=int, default=50, metavar='N',
                         help='ADD')
