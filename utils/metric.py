@@ -375,7 +375,7 @@ def adjusted_rand_index_original(true_mask, pred_mask, device):
                 idx[i,j] = 1
         for j in range(pred_mask.shape[1]):
             unified_pred_mask[:, :, i] += idx[i, j]*pred_mask[:, j]
-        unified_pred_mask[:, :, i] = unified_pred_mask[:, :, i]/np.sum(idx[i])   # there is a more efficient way to do it but I don't have time , this should work fine 
+      # there is a more efficient way to do it but I don't have time , this should work fine 
 
     
     
