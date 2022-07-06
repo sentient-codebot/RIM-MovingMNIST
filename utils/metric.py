@@ -358,6 +358,51 @@ def adjusted_rand_index(true_mask, pred_mask, exclude_bg=True, reduction='mean')
     else:
         ari = ari
     return ari
+
+def adjusted_rand_index_original(true_mask, pred_mask, device):
+    _, n_points, n_true_groups = true_mask.shape #every objects 
+    n_pred_groups = pred_mask.shape[-1]
+    assert not (n_points <= n_true_groups and n_points <= n_pred_groups), ("adjusted_rand_index requires n_groups < n_points. We don't handle the special cases that can occur when you have one cluster per datapoint.")
+    delta = torch.zeros((true_mask.shape[2], pred_mask.shape), requires_grad=False).to(device)
+    idx = np.zeros((true_mask.shape[2],pred_mask.shape[1]))  # num of objects x num of rims
+    unified_pred_mask = torch.zeros(true_mask.shape, requires_grad=False).to(device) 
+    # true mask dim [N, P == num_pixels == H*W, K1 objects]
+    # pred masks dim [N, num_rims, P == num_pixels == H*W], we will use single predictions masked by alpha
+    for i in range(true_mask.shape[2]): # for number of num of objects 
+        delta[i] = pred_mask - true_mask[:,:,i]   # prediction single object masked by alpha - true object 
+        for j in range(pred_mask.shape[1]):
+            if torch.sum(torch.abs(delta[i, :, j])) < torch.sum(true_mask[:, j]):
+                idx[i,j] = 1
+        for j in range(pred_mask.shape[1]):
+            unified_pred_mask[:, :, i] += idx[i, j]*pred_mask[:, j]
+        unified_pred_mask[:, :, i] = unified_pred_mask[:, :, i]/np.sum(idx[i])   # there is a more efficient way to do it but I don't have time , this should work fine 
+
+    
+    
+
+    true_group_ids = torch.argmax(true_mask, -1) # along which axis the maximum are computed using -1? does it return the position of the pixel with the greater value?
+    pred_group_ids = torch.argmax(unified_pred_mask, -1)
+    true_mask_oh = true_mask.to(torch.float32) 
+    pred_mask_oh = F.one_hot(pred_group_ids, n_pred_groups)
+
+    n_points = torch.sum(true_mask_oh, dim=[1, 2]).to(torch.float32)
+
+    nij = torch.einsum('bji,bjk->bki', pred_mask_oh, true_mask_oh)
+    a = torch.sum(nij, dim=1)
+    b = torch.sum(nij, dim=2)
+
+    rindex = torch.sum(nij * (nij - 1), dim=[1, 2])
+    aindex = torch.sum(a * (a - 1), dim=1)
+    bindex = torch.sum(b * (b - 1), dim=1)
+    expected_rindex = aindex * bindex / (n_points*(n_points-1))
+    max_rindex = (aindex + bindex) / 2
+    ari = (rindex - expected_rindex) / (max_rindex - expected_rindex)
+
+    _all_equal = lambda values: torch.all(torch.equal(values, values[..., :1]), dim=-1)
+    both_single_cluster = torch.logical_and(_all_equal(true_group_ids), _all_equal(pred_group_ids))
+    return torch.where(both_single_cluster, torch.ones_like(ari), ari)
+
+
     
 def main():
     # test mot metrics
