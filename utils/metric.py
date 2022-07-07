@@ -359,7 +359,7 @@ def adjusted_rand_index(true_mask, pred_mask, exclude_bg=True, reduction='mean')
         ari = ari
     return ari
 
-def adjusted_rand_index_original(true_mask, pred_mask, unmasked_pred_mask, device):
+def adjusted_rand_index_original(true_mask, pred_mask, device):
     _, n_points, n_true_groups = true_mask.shape #every objects 
     n_pred_groups = pred_mask.shape[-1]
     assert not (n_points <= n_true_groups and n_points <= n_pred_groups), ("adjusted_rand_index requires n_groups < n_points. We don't handle the special cases that can occur when you have one cluster per datapoint.")
@@ -374,12 +374,10 @@ def adjusted_rand_index_original(true_mask, pred_mask, unmasked_pred_mask, devic
             if torch.sum(torch.abs(delta[i, :, j])) < torch.sum(true_mask[:, j]):
                 idx[i,j] = 1
         for j in range(pred_mask.shape[1]):
-            unified_pred_mask[:, :, i] += idx[i, j]*unmasked_pred_mask[:, j]
-        unified_pred_mask[:, :, i] = unified_pred_mask[:, :, i]/np.sum(idx[i])
+            unified_pred_mask[:, :, i] += idx[i, j]*pred_mask[:, j]
+       
       # there is a more efficient way to do it but I don't have time , this should work fine 
 
-    
-    
 
     true_group_ids = torch.argmax(true_mask, -1) # along which axis the maximum are computed using -1? does it return the position of the pixel with the greater value?
     pred_group_ids = torch.argmax(unified_pred_mask, -1)
