@@ -11,7 +11,7 @@ from networks import BallModel
 from argument_parser import argument_parser
 from datasets import setup_dataloader
 from logbook.logbook import LogBook
-from utils.util import set_seed, make_dir
+from utils.util import set_seed, make_dir, _plot_mask
 from statistics import mean
 from utils.visualize import VecStack, make_grid_video, plot_heatmap, mplfig_to_video
 from utils.logging import log_stats, enable_logging, setup_wandb_columns
@@ -258,7 +258,7 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                     
         # calculate ARI across frames
         if len(ari_frame) > 0:
-            epoch_ari += mean(ari_frame)
+            epoch_ari += mean(ari_frame[-10:])
         
         # for MOT tasks, do one more step
         if args.task in ['SPRITESMOT', 'VMDS', 'VOR']:

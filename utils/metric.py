@@ -9,6 +9,7 @@ from pandas import DataFrame
 import os
 import matplotlib.pyplot as plt
 from .consistensy_measure import consistency_measure
+from .util import _plot_mask
 
 DEBUG = os.environ.get('DEBUG', False)
 
@@ -319,7 +320,8 @@ def get_seg_mask(ind_images):
     max_intensity = mask.max()
     fg_px = torch.logical_not(torch.all(mask < 0.1 * max_intensity, dim=2, keepdim=True)) # foreground pixels, [N, P, 1]
     
-    mask = torch.softmax(mask, dim=2) # [N, P, K]
+    # mask = torch.softmax(mask, dim=2) # [N, P, K]
+    mask = mask / (mask.sum(dim=2, keepdim=True)+1e-8) # [N, P, K]
     mask = mask*fg_px.float() # [N, P, K]
     mask = torch.cat((mask, torch.logical_not(fg_px).float()), dim=-1) # [N, P, K+1]
     return mask
@@ -407,7 +409,7 @@ def adjusted_rand_index(true_mask, pred_mask, reduction='mean'):
     # true mask dim [N, P == num_pixels == H*W, K1 objects]
     # pred masks dim [N, num_rims, P == num_pixels == H*W], we will use single predictions masked by alpha
     for i in range(n_true_groups): # for number of num of objects 
-        delta[:,:,i] = pred_mask - true_mask[:,:,i].unsqueeze(-1)  # delta: [N, P, K1+1, K2+1]
+        delta[:,:,i] = (pred_mask - true_mask[:,:,i].unsqueeze(-1)).square()  # delta: [N, P, K1+1, K2+1]
     idx = torch.argmax(delta.sum(dim=1), dim=1)
     idx = F.one_hot(idx, n_true_groups)
     for i in range(n_true_groups):
@@ -424,8 +426,8 @@ def adjusted_rand_index(true_mask, pred_mask, reduction='mean'):
     n_points = torch.sum(true_mask_oh, dim=[1, 2]).to(torch.float32)
 
     nij = torch.einsum('bji,bjk->bki', pred_mask_oh, true_mask_oh)
-    a = torch.sum(nij, dim=1)
-    b = torch.sum(nij, dim=2)
+    a = torch.sum(nij, dim=1) # true
+    b = torch.sum(nij, dim=2) # pred
 
     rindex = torch.sum(nij * (nij - 1), dim=[1, 2])
     aindex = torch.sum(a * (a - 1), dim=1)

@@ -5,6 +5,9 @@ import random
 import pathlib
 import math
 from typing import Optional, Union
+from torchvision.utils import make_grid
+from random import randint
+import matplotlib.pyplot as plt
 
 import numpy as np
 import torch
@@ -227,3 +230,16 @@ class AnomalyDetector():
         self.put(datapoint)
         return False # normal
     
+def _plot_mask(mask):
+    """
+    mask: [P, K]
+    """
+    P, K = mask.shape
+    mask = mask.view(int(math.sqrt(P)), int(math.sqrt(P)), K)
+    mask = mask.permute(2, 0, 1) # [K, H, W]
+    mask = mask.unsqueeze(1)
+    mask = make_grid(mask, nrow=K, normalize=True, pad_value=0.5)
+    plt.imshow(mask.cpu().permute(1, 2, 0))
+    plt.savefig('mask'+f'{randint(0,20000)}'+'.png')
+
+    return None
