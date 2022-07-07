@@ -85,23 +85,22 @@ class MovingSprites(data.Dataset):
 
 def main():
     TRAIN = False
-    train_set = MovingSprites(
+    dataset = MovingSprites(
         root='./data',
-        train=True,
+        train=True if TRAIN else False,
     )
-    test_set = MovingSprites(
-        root='./data',
-        train=False,
-    )
-    print(train_set if TRAIN else test_set)
-    dataloader = data.DataLoader(train_set if TRAIN else test_set, batch_size=1, shuffle=True, num_workers=0)
+    print(dataset)
+    dataloader = data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=0)
     for idx, samples in enumerate(tqdm(dataloader)):
         # print(samples.shape)
         ...
         break
-    video = train_set[torch.randint(0, len(train_set), (4,))].view(-1, 3, 64, 64) # video.size() = (20, 3, 64, 64)
-    video, ind_video = test_set[torch.randint(0, len(train_set), (4,))].view(-1, 3, 64, 64) # video.size() = (20, 3, 64, 64), ind_video.size() = (3, 20, 3, 64, 64)
-    show = make_grid(video, nrow=20, pad_value=255)
+    if TRAIN:
+        video = dataset[torch.randint(0, len(dataset), (4,))].view(-1, 3, 64, 64) # video.size() = (20, 3, 64, 64)
+        show = make_grid(video, nrow=20, pad_value=255)
+    else:
+        ind_video = dataset[torch.randint(0, len(dataset), (1,))][1].view(-1, 3, 64, 64) # video.size() = (20, 3, 64, 64), ind_video.size() = (3, 20, 3, 64, 64)
+        show = make_grid(ind_video, nrow=20, pad_value=255)
     fig, ax = plt.subplots()
     ax.imshow(show.numpy().transpose(1, 2, 0))
     ax.set_xticks([])
