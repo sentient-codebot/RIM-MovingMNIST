@@ -302,9 +302,33 @@ def get_mot_metrics(pred_file, gt_file, exclude_bg=True, start_step=2, stop_step
 #     ind_images = ind_images.norm(dim=2) # Shape [N, K, H, W]
 #     bg_layers = ind_images.max(dim=(-1,-2))[0] < 0.1 * ind_images.max() # Shape [N, K]
     
+def get_seg_mask(ind_images):
+    """get segmentation mask for every pixel from individual predictions/target
+    ??!??!?!?!! background?
 
-def adjusted_rand_index(true_mask, pred_mask, exclude_bg=True, reduction='mean'):
-    """adjusted rand index implemented by https://gist.github.com/vadimkantorov/bd1616a3a9eea89658ea3efb1f9a1d5d
+    Arguments:
+        ind_preds -- individual prediction mask, after being applied with alpha mask. [N, K, C, H, W]
+        
+    Returns:
+        seg_mask -- [N, P, K] batch size, num modules, num pixels. Normalized in K dim. P == H*W
+    """
+    mask = ind_images.flatten(start_dim=-2) # [N, K, C, P]
+    mask = mask.permute(0, 3, 1, 2) # [N, P, K, C]
+    mask = mask.norm(dim=3)/math.sqrt(3.) # [N, P, K]. normalized over K already or not?
+    
+    max_intensity = mask.max()
+    fg_px = torch.logical_not(torch.all(mask < 0.1 * max_intensity, dim=2, keepdim=True)) # foreground pixels, [N, P, 1]
+    
+    mask = torch.softmax(mask, dim=2) # [N, P, K]
+    mask = mask*fg_px.float() # [N, P, K]
+    mask = torch.cat((mask, torch.logical_not(fg_px).float()), dim=-1) # [N, P, K+1]
+    return mask
+    
+
+def _adjusted_rand_index_(true_mask, pred_mask, exclude_bg=True, reduction='mean'):
+    """deprecated, use the implementation below
+    
+    adjusted rand index implemented by https://gist.github.com/vadimkantorov/bd1616a3a9eea89658ea3efb1f9a1d5d
     Adapted for PyTorch from https://github.com/deepmind/multi_object_datasets/blob/master/segmentation_metrics.py
 
     ## Args:
@@ -359,30 +383,43 @@ def adjusted_rand_index(true_mask, pred_mask, exclude_bg=True, reduction='mean')
         ari = ari
     return ari
 
-def adjusted_rand_index_original(true_mask, pred_mask, device):
-    _, n_points, n_true_groups = true_mask.shape #every objects 
+def adjusted_rand_index(true_mask, pred_mask, reduction='mean'):
+    """calculate adjusted rand index for RIMs -- adapted version
+    
+    warning: joining groups will make the resulting ARI an unfair measure, because it changes the partition, while ARI measures the partition. -- Nan
+    
+
+    Arguments:
+        true_mask -- [N, P, K1+1]
+        pred_mask -- [N, P, K2+1]
+        device -- _description_
+
+    Returns:
+        ari -- [N]
+    """
+    device = true_mask.device
+    bs, n_points, n_true_groups = true_mask.shape #every objects 
     n_pred_groups = pred_mask.shape[-1]
     assert not (n_points <= n_true_groups and n_points <= n_pred_groups), ("adjusted_rand_index requires n_groups < n_points. We don't handle the special cases that can occur when you have one cluster per datapoint.")
-    delta = torch.zeros((true_mask.shape[2], pred_mask.shape), requires_grad=False).to(device)
-    idx = np.zeros((true_mask.shape[2],pred_mask.shape[1]))  # num of objects x num of rims
-    unified_pred_mask = torch.zeros(true_mask.shape, requires_grad=False).to(device) 
+    delta = torch.zeros((bs, n_points, n_true_groups, n_pred_groups), requires_grad=False).to(device)
+    # idx = np.zeros((bs, n_true_groups, n_pred_groups))  # num of objects x num of rims
+    unified_pred_mask = torch.zeros_like(true_mask)
     # true mask dim [N, P == num_pixels == H*W, K1 objects]
     # pred masks dim [N, num_rims, P == num_pixels == H*W], we will use single predictions masked by alpha
-    for i in range(true_mask.shape[2]): # for number of num of objects 
-        delta[i] = pred_mask - true_mask[:,:,i]   # prediction single object masked by alpha - true object 
-        for j in range(pred_mask.shape[1]):
-            if torch.sum(torch.abs(delta[i, :, j])) < torch.sum(true_mask[:, j]):
-                idx[i,j] = 1
-        for j in range(pred_mask.shape[1]):
-            unified_pred_mask[:, :, i] += idx[i, j]*pred_mask[:, j]
-       
+    for i in range(n_true_groups): # for number of num of objects 
+        delta[:,:,i] = pred_mask - true_mask[:,:,i].unsqueeze(-1)  # delta: [N, P, K1+1, K2+1]
+    idx = torch.argmax(delta.sum(dim=1), dim=1)
+    idx = F.one_hot(idx, n_true_groups)
+    for i in range(n_true_groups):
+        for j in range(n_pred_groups):
+            unified_pred_mask[:, :, i] += idx[:,j,i].view(-1,1)*pred_mask[:,:,j]
       # there is a more efficient way to do it but I don't have time , this should work fine 
 
 
     true_group_ids = torch.argmax(true_mask, -1) # along which axis the maximum are computed using -1? does it return the position of the pixel with the greater value?
     pred_group_ids = torch.argmax(unified_pred_mask, -1)
-    true_mask_oh = true_mask.to(torch.float32) 
-    pred_mask_oh = F.one_hot(pred_group_ids, n_pred_groups)
+    true_mask_oh = true_mask.to(torch.float32) # Shape [N, P, K1+1]
+    pred_mask_oh = F.one_hot(pred_group_ids, n_true_groups).float() # Shape [N, P, K1+1]
 
     n_points = torch.sum(true_mask_oh, dim=[1, 2]).to(torch.float32)
 
@@ -397,11 +434,17 @@ def adjusted_rand_index_original(true_mask, pred_mask, device):
     max_rindex = (aindex + bindex) / 2
     ari = (rindex - expected_rindex) / (max_rindex - expected_rindex)
 
-    _all_equal = lambda values: torch.all(torch.equal(values, values[..., :1]), dim=-1)
-    both_single_cluster = torch.logical_and(_all_equal(true_group_ids), _all_equal(pred_group_ids))
-    return torch.where(both_single_cluster, torch.ones_like(ari), ari)
-
-
+    _is_single_cluster = lambda values: torch.all(values==values[..., :1], dim=-1) # whethere there is only one non-empty subset of the pixels
+    both_single_cluster = torch.logical_and(_is_single_cluster(true_group_ids), _is_single_cluster(pred_group_ids))
+    ari = torch.where(both_single_cluster, torch.ones_like(ari), ari) # [N,]
+    
+    if reduction=='mean':
+        ari = ari.mean()
+    elif reduction=='sum':
+        ari = ari.sum()
+    else:
+        ari = ari
+    return ari
     
 def main():
     # test mot metrics

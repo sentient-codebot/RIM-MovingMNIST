@@ -15,7 +15,7 @@ from utils.util import set_seed, make_dir
 from statistics import mean
 from utils.visualize import VecStack, make_grid_video, plot_heatmap, mplfig_to_video
 from utils.logging import log_stats, enable_logging, setup_wandb_columns
-from utils.metric import f1_score, gen_masks, get_mot_metrics, adjusted_rand_index
+from utils.metric import f1_score, gen_masks, get_mot_metrics, get_seg_mask, adjusted_rand_index
 from utils.metric import consistency_measure
 from tqdm import tqdm
 import wandb
@@ -179,8 +179,8 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
                 
             # frame-wise metrics
             if 'SEP' in args.decoder_type and calc_csty:
-                obj_pred_frame = model.hidden_features['individual_output'].norm(dim=-3).flatten(start_dim=-2).permute(0,2,1)
-                obj_gt_frame = obj_frames[:,:,frame,...].norm(dim=-3).flatten(start_dim=-2).permute(0,2,1) # ind_digits [N, K, T, C, H, W] -> [N, H*W, K]                
+                obj_pred_frame = get_seg_mask(model.hidden_features['individual_output'])
+                obj_gt_frame = get_seg_mask(obj_frames[:,:,frame,...]) # ind_digits [N, K, T, C, H, W] -> [N, H*W, K]                
                 ari_frame.append(adjusted_rand_index(obj_gt_frame, obj_pred_frame, reduction='mean').item())
             
             f1_frame = f1_score(next_target, preds)
