@@ -70,6 +70,7 @@ class InputAttention(Attention):
                  num_shared_query_proj=1,
                  hard_argmax=False,
                  key_norm=True,
+                 cell_switch=(),
                  ):
         super().__init__(dropout)
         self.num_heads = num_heads
@@ -95,6 +96,7 @@ class InputAttention(Attention):
         
         self.hard_argmax = hard_argmax
         self.key_norm = key_norm
+        self.cell_switch = cell_switch
 
     def forward(self, x, h):
         """attention_input_x_h
@@ -119,6 +121,11 @@ class InputAttention(Attention):
             query, key.transpose(-1, -2)) / math.sqrt(self.kdim)
         attention_scores = torch.mean(attention_scores, dim=1)
         # (batch_size, num_query, num_key) NOTE for each input, rims compete with each other
+        
+        # cell switch
+        for cell_idx in self.cell_switch:
+            attention_scores[:, cell_idx, :] = float('-inf')
+        
         attention_probs = nn.Softmax(dim=1)(attention_scores)
 
         # For each rim, give them normalized summation weights (for each rim, the weights all sum to 1) NOTE is this necessary?

@@ -148,7 +148,7 @@ class WrappedDecoder(nn.Module):
 
     Input:
         `hidden`: (BS, K, d_slot) """
-    def __init__(self, hidden_size, decoder='interp', mem_efficient=False):
+    def __init__(self, hidden_size, decoder='interp', mem_efficient=False, cell_switch=()):
         super().__init__()
         if decoder == 'synmot':
             self.decoder = make_synmot_decoder(hidden_size)
@@ -162,6 +162,7 @@ class WrappedDecoder(nn.Module):
         self.pos_embed = SoftPositionEmbed(hidden_size, (8,8))
         self.hidden_size = hidden_size
         self.mem_efficient = mem_efficient
+        self.cell_switch = cell_switch
 
     def forward(self, hidden):
         batch_size = hidden.shape[0]
@@ -179,6 +180,8 @@ class WrappedDecoder(nn.Module):
         channels, alpha_mask = unstack_and_split(dec_out, batch_size=batch_size, num_channels=self.out_channels) # (BS, K, *, H, W)
         channels = nn.Sigmoid()(channels)
         alpha_mask = torch.nn.Softmax(dim=1)(alpha_mask) # (BS, <K>, 1, H, W)
+        for cell_idx in self.cell_switch:
+            alpha_mask[:, cell_idx, :, :] = float('-inf')
         masked_channels = channels*alpha_mask
         fused = torch.sum(masked_channels, dim=1)
 

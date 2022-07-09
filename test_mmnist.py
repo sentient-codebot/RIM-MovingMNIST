@@ -188,12 +188,14 @@ def test(model, test_loader, args, loss_fn, writer, rollout=True, epoch=0, log_c
 
             prediction[:, frame+1, :, :, :] = preds
             if frame >= rollout_start:
-                ind_pred[:, :, frame-rollout_start, :, :, :] = model.hidden_features['individual_output']
+                if 'individual_output' in model.hidden_features:
+                    ind_pred[:, :, frame-rollout_start, :, :, :] = model.hidden_features['individual_output']
             if do_logging:
                 blocked_prediction[:, 0, frame+1, :, :, :] = preds # dim == 6
-                blocked_prediction[:, 1:, frame+1, :, :, :] = model.hidden_features['individual_output']
                 unmasked_ind_preds[:, 0, frame+1, :, :, :] = preds # dim == 6
-                unmasked_ind_preds[:, 1:, frame+1, :, :, :] = model.hidden_features['individual_output_unmasked']
+                if 'individual_output' in model.hidden_features:
+                    blocked_prediction[:, 1:, frame+1, :, :, :] = model.hidden_features['individual_output']
+                    unmasked_ind_preds[:, 1:, frame+1, :, :, :] = model.hidden_features['individual_output_unmasked']
                 if recons is not None:
                     reconstruction.append(recons) # [BS, C, H, W]
                     if not args.decode_hidden:

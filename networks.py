@@ -120,11 +120,12 @@ class SharedBasicDecoder(nn.Module):
     
     Inputs:
         `x`: hidden state of shape [N, M, embedding_size]"""
-    def __init__(self, embedding_size, out_channels):
+    def __init__(self, embedding_size, out_channels, cell_switch=()):
         super().__init__()
         self.embedding_size = embedding_size
         self.out_channels = out_channels # 1 or 3
         self.cnn = BasicDecoder(embedding_size, out_channels+1)
+        self.cell_switch = cell_switch
         
     def forward(self, x):
         x = x.permute(1, 0, 2) # Shape: [M, N, embedding_size] -> [M, N, embedding_size]
@@ -136,6 +137,8 @@ class SharedBasicDecoder(nn.Module):
             mask_list.append(out_tensor[:, -1:, :, :])
         channels = torch.stack(out_list, dim=1) # Shape: [N, M, C, H, W]
         mask = torch.stack(mask_list, dim=1) # Shape: [N, M, 1, H, W]
+        for cell_idx in self.cell_switch:
+            mask[:, cell_idx, :, :, :] = float('-inf')
         mask = mask/torch.sum(mask, dim=1, keepdim=True) # Normalization. Shape: [N, M, 1, H, W]
         
         fused = torch.sum(channels*mask, dim=1) # Shape: [N, C, H, W]
@@ -422,6 +425,8 @@ class BallModel(nn.Module):
         self.decoder_type = args.decoder_type
         self.use_compositional_MLP = args.use_compositional_MLP
         
+        self.cell_switch = args.cell_switch
+        
 
         if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR', 'MSPRITES']:
             self.encoder = SynMOTEncoder(
@@ -478,12 +483,12 @@ class BallModel(nn.Module):
         if args.decoder_type == "CAT_BASIC":
             self.decoder = BasicDecoder(embedding_size=self.embedding_size, out_channels=out_channels) # Shape: [batch_size, num_units*hidden_size] -> [batch_size, 1, 64, 64]
         elif args.decoder_type == "SEP_BASIC":
-            self.decoder = SharedBasicDecoder(embedding_size=self.embedding_size, out_channels=out_channels)
+            self.decoder = SharedBasicDecoder(embedding_size=self.embedding_size, out_channels=out_channels, cell_switch=self.cell_switch)
         elif args.decoder_type == "SEP_SBD":
             if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR', 'MSPRITES'] and False:
                 self.decoder = SharedBroadcastDecoder(self.embedding_size, 3)
             else:
-                self.decoder = WrappedDecoder(self.embedding_size, decoder=_sbd_decoder, mem_efficient=self.args.sbd_mem_efficient) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
+                self.decoder = WrappedDecoder(self.embedding_size, decoder=_sbd_decoder, mem_efficient=self.args.sbd_mem_efficient, cell_switch=self.cell_switch) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
         else:
             raise NotImplementedError("Not implemented decoder type: {}".format(args.decoder_type))
 
@@ -512,6 +517,7 @@ class BallModel(nn.Module):
                                         hard_input_attention=self.args.hard_input_attention,
                                         null_input_type=self.args.null_input_type,
                                         input_attention_key_norm=self.args.input_attention_key_norm,
+                                        cell_switch=self.cell_switch,
                 )
             else:
                 raise NotImplementedError('Sparse RIM not updated with new args yet')
@@ -745,8 +751,8 @@ class BallModel(nn.Module):
         
         # DECODING
         # newly added, transform h_new back to slots
-        self.hidden_features['individual_output'] = torch.empty((h_new.shape[0],self.num_hidden,1,64,64)).to(x.device)
-        self.hidden_features['individual_output_unmasked'] = torch.empty((h_new.shape[0],self.num_hidden,1,64,64)).to(x.device)
+        # self.hidden_features['individual_output'] = torch.empty((h_new.shape[0],self.num_hidden,1,64,64)).to(x.device)
+        # self.hidden_features['individual_output_unmasked'] = torch.empty((h_new.shape[0],self.num_hidden,1,64,64)).to(x.device)
         curr_dec_out_ = None
         curr_alpha_mask = None
         object_mask = None

@@ -178,6 +178,7 @@ def argument_parser():
     parser.add_argument("--use_past_slots", type=str2bool, default=False, help='use past slots as initialization.')
     parser.add_argument('--sa_eval_sm_temp', type=float, default=1.0)
     parser.add_argument('--sa_key_norm', type=str2bool, default=True)
+    parser.add_argument('--cell_switch',type=tuple, default=())
     #   RNN common settings
     parser.add_argument('--rnn_cell', type=str, default='GRU',
                         metavar='dynamics of RIMCell/SCOFFCell', help='one of LSTM or GRU')              

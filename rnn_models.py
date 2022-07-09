@@ -44,6 +44,7 @@ class RIMCell(nn.Module):
         hard_input_attention = False, 
         null_input_type = 'zero',
         input_attention_key_norm = True,
+        cell_switch = None,
     ):
         super().__init__()
         if comm_value_size != hidden_size:
@@ -118,6 +119,9 @@ class RIMCell(nn.Module):
 
         self.do_logging = False
         self.hidden_features = {}
+        
+        if cell_switch is None:
+            self.cell_switch = []
 
     def transpose_for_scores(self, x, num_attention_heads, attention_head_size):
         new_x_shape = x.size()[:-1] + (num_attention_heads, attention_head_size)
@@ -164,7 +168,11 @@ class RIMCell(nn.Module):
 
         # Block gradient through inactive units
         mask = mask.unsqueeze(2).detach()
-        h_new = blocked_grad.apply(hs, mask)
+        h_new = blocked_grad.apply(hs, mask) # [N, K, d_h]
+        
+        # Cell switch
+        for cell_idx in self.cell_switch:
+            h_new[:, cell_idx, :] = 0.
 
         # Compute communication attention
         if not self.use_sw:
