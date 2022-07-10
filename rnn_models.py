@@ -120,8 +120,7 @@ class RIMCell(nn.Module):
         self.do_logging = False
         self.hidden_features = {}
         
-        if cell_switch is None:
-            self.cell_switch = []
+        self.cell_switch = cell_switch if cell_switch is not None else ()
 
     def transpose_for_scores(self, x, num_attention_heads, attention_head_size):
         new_x_shape = x.size()[:-1] + (num_attention_heads, attention_head_size)
