@@ -9,6 +9,7 @@ class NormReLU(nn.Module):
 
     """
     def __init__(self, dim):
+        super().__init__()
         self.relu = nn.ReLU()
         self.dim = dim
     
