@@ -3,7 +3,26 @@ from numpy import broadcast
 import torch
 import torch.nn as nn
 from .pos_embed import SoftPositionEmbed
-from ..networks import NormReLU
+
+class NormReLU(nn.Module):
+    """function similar to Softmax, first activate with relu, then normalize by their sum
+
+    """
+    def __init__(self, dim):
+        self.relu = nn.ReLU()
+        self.dim = dim
+    
+    def forward(self, x):
+        """forward function of NormReLU
+
+        Arguments:
+            x -- tensor of dimension (*) >= self.dim
+        """
+        x = self.relu(x)
+        x_sum = torch.sum(x, dim=self.dim, keepdim=True)
+        x = x/(1e-8+x_sum)
+        
+        return x
 
 class LayerNorm(nn.Module):
     def __init__(self):
