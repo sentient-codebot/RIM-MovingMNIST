@@ -1,7 +1,4 @@
-from base64 import encode
-from multiprocessing.sharedctypes import Value
 from tempfile import gettempdir
-from turtle import forward, st
 import torch
 import torch.nn as nn
 from rnn_models import RIMCell, RIM, SparseRIMCell, LayerNorm, Flatten, UnFlatten, Interpolate, SCOFFCell, AltSCOFFCell
@@ -120,12 +117,13 @@ class SharedBasicDecoder(nn.Module):
     
     Inputs:
         `x`: hidden state of shape [N, M, embedding_size]"""
-    def __init__(self, embedding_size, out_channels, cell_switch=()):
+    def __init__(self, embedding_size, out_channels, cell_switch=(), norm_method=None):
         super().__init__()
         self.embedding_size = embedding_size
         self.out_channels = out_channels # 1 or 3
         self.cnn = BasicDecoder(embedding_size, out_channels+1)
         self.cell_switch = cell_switch
+        self.norm_method = norm_method if norm_method is not None else 'default'
         
     def forward(self, x):
         x = x.permute(1, 0, 2) # Shape: [M, N, embedding_size] -> [M, N, embedding_size]
@@ -483,12 +481,19 @@ class BallModel(nn.Module):
         if args.decoder_type == "CAT_BASIC":
             self.decoder = BasicDecoder(embedding_size=self.embedding_size, out_channels=out_channels) # Shape: [batch_size, num_units*hidden_size] -> [batch_size, 1, 64, 64]
         elif args.decoder_type == "SEP_BASIC":
-            self.decoder = SharedBasicDecoder(embedding_size=self.embedding_size, out_channels=out_channels, cell_switch=self.cell_switch)
+            self.decoder = SharedBasicDecoder(embedding_size=self.embedding_size, 
+                                              out_channels=out_channels, 
+                                              cell_switch=self.cell_switch,
+                                              norm_method=self.args.dec_norm_method)
         elif args.decoder_type == "SEP_SBD":
             if self.args.task in ['SPRITESMOT', 'VMDS', 'VOR', 'MSPRITES'] and False:
                 self.decoder = SharedBroadcastDecoder(self.embedding_size, 3)
             else:
-                self.decoder = WrappedDecoder(self.embedding_size, decoder=_sbd_decoder, mem_efficient=self.args.sbd_mem_efficient, cell_switch=self.cell_switch) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
+                self.decoder = WrappedDecoder(self.embedding_size, 
+                                              decoder=_sbd_decoder, 
+                                              mem_efficient=self.args.sbd_mem_efficient, 
+                                              cell_switch=self.cell_switch,
+                                              norm_method=self.args.dec_norm_method) # Shape: [batch_size, num_units, hidden_size] -> [batch_size, 1, 64, 64]
         else:
             raise NotImplementedError("Not implemented decoder type: {}".format(args.decoder_type))
 
@@ -907,6 +912,26 @@ def conv2d_output_size(
     
     return (n, c_out, h_out, w_out)
         
+        
+class NormReLU(nn.Module):
+    """function similar to Softmax, first activate with relu, then normalize by their sum
+
+    """
+    def __init__(self, dim):
+        self.relu = nn.ReLU()
+        self.dim = dim
+    
+    def forward(self, x):
+        """forward function of NormReLU
+
+        Arguments:
+            x -- tensor of dimension (*) >= self.dim
+        """
+        x = self.relu(x)
+        x_sum = torch.sum(x, dim=self.dim, keepdim=True)
+        x = x/(1e-8+x_sum)
+        
+        return x
 
 if __name__ == "__main__":
     main()

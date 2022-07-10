@@ -169,6 +169,7 @@ def argument_parser():
     #   decoder Settings
     parser.add_argument('--decode_hidden', type=str2bool, default=True)
     parser.add_argument('--decoder_type', type=str2decoder, default='CAT_BASIC')
+    parser.add_argument('--dec_norm_method', type=str, default='default')
     #   SlotAttention settings
     parser.add_argument('--use_slot_attention', type=str2bool, default=False)
     parser.add_argument('--num_slots', type=int, default=None)

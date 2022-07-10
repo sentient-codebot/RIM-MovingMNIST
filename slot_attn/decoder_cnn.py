@@ -3,6 +3,7 @@ from numpy import broadcast
 import torch
 import torch.nn as nn
 from .pos_embed import SoftPositionEmbed
+from ..networks import NormReLU
 
 class LayerNorm(nn.Module):
     def __init__(self):
@@ -148,7 +149,7 @@ class WrappedDecoder(nn.Module):
 
     Input:
         `hidden`: (BS, K, d_slot) """
-    def __init__(self, hidden_size, decoder='interp', mem_efficient=False, cell_switch=()):
+    def __init__(self, hidden_size, decoder='interp', mem_efficient=False, cell_switch=(), norm_method='default'):
         super().__init__()
         if decoder == 'synmot':
             self.decoder = make_synmot_decoder(hidden_size)
@@ -163,6 +164,11 @@ class WrappedDecoder(nn.Module):
         self.hidden_size = hidden_size
         self.mem_efficient = mem_efficient
         self.cell_switch = cell_switch
+        self.norm_method = 'default' if norm_method is None else norm_method
+        if self.norm_method == 'normrelu':
+            self.norm = NormReLU(dim=1)
+        else:
+            self.norm = torch.nn.Softmax(dim=1)
 
     def forward(self, hidden):
         batch_size = hidden.shape[0]
@@ -179,9 +185,9 @@ class WrappedDecoder(nn.Module):
             dec_out = self.decoder(hidden) # (BS*K, 2, 64, 64)
         channels, alpha_mask = unstack_and_split(dec_out, batch_size=batch_size, num_channels=self.out_channels) # (BS, K, *, H, W)
         channels = nn.Sigmoid()(channels)
-        alpha_mask = torch.nn.Softmax(dim=1)(alpha_mask) # (BS, <K>, 1, H, W)
         for cell_idx in self.cell_switch:
             alpha_mask[:, cell_idx, :, :] = float('-inf')
+        alpha_mask = self.norm(alpha_mask) # (BS, <K>, 1, H, W)
         masked_channels = channels*alpha_mask
         fused = torch.sum(masked_channels, dim=1)
 

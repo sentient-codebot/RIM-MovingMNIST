@@ -90,16 +90,23 @@ def main():
         train=True if TRAIN else False,
     )
     print(dataset)
-    dataloader = data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=0)
+    dataloader = data.DataLoader(dataset, batch_size=32, shuffle=False, num_workers=0)
     for idx, samples in enumerate(tqdm(dataloader)):
         # print(samples.shape)
         ...
         break
+    samples = list(dataloader)[-1]
     if TRAIN:
+        # video = dataset[1249].view(-1, 3, 64, 64) # video.size() = (20, 3, 64, 64)
         video = dataset[torch.randint(0, len(dataset), (4,))].view(-1, 3, 64, 64) # video.size() = (20, 3, 64, 64)
         show = make_grid(video, nrow=20, pad_value=255)
     else:
-        ind_video = dataset[torch.randint(0, len(dataset), (1,))][1].view(-1, 3, 64, 64) # video.size() = (20, 3, 64, 64), ind_video.size() = (3, 20, 3, 64, 64)
+        # ind_video = samples[1][0].view(-1,3,64,64)
+        # ind_video = dataset[1249,][1].view(-1, 3, 64, 64) # video.size() = (20, 3, 64, 64), ind_video.size() = (3, 20, 3, 64, 64)
+        foobar = dataset[torch.randint(0, len(dataset), (1,))]
+        foo = foobar[0].view(-1, 3, 64, 64) 
+        bar = foobar[1].view(-1, 3, 64, 64) # video.size() = (20, 3, 64, 64), ind_video.size() = (3, 20, 3, 64, 64)
+        ind_video = torch.cat((foo, bar), dim=0)
         show = make_grid(ind_video, nrow=20, pad_value=255)
     fig, ax = plt.subplots()
     ax.imshow(show.numpy().transpose(1, 2, 0))
@@ -107,6 +114,7 @@ def main():
     ax.set_yticks([])
     ax.set_xlabel('Frames')
     ax.set_ylabel('Samples' if TRAIN else 'Objects')
+    plt.savefig('ms_demo.png', dpi=360)
     plt.show()
     
     pass
