@@ -125,7 +125,7 @@ def argument_parser():
 
     # Training Settings
     parser.add_argument('--num_workers', type=int, default=None)
-    parser.add_argument('--dataset_dir', type=str, default='')
+    parser.add_argument('--dataset_dir', type=str, default='data')
     parser.add_argument('--batch_size', type=int, default=50, metavar='N',
                         help='ADD')
     parser.add_argument('--spotlight_bias',type=str2bool, default=False)
