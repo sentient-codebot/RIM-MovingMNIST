@@ -121,6 +121,7 @@ class RIMCell(nn.Module):
         self.hidden_features = {}
         
         self.cell_switch = cell_switch if cell_switch is not None else ()
+        self.do_comm = True
 
     def transpose_for_scores(self, x, num_attention_heads, attention_head_size):
         new_x_shape = x.size()[:-1] + (num_attention_heads, attention_head_size)
@@ -176,7 +177,10 @@ class RIMCell(nn.Module):
         # Compute communication attention
         if not self.use_sw:
             context = self.communication_attention(h_new, mask.squeeze(2))
-            h_new = h_new + context
+            if self.do_comm:
+                h_new = h_new + context
+            else:
+                h_new = h_new + 0. * context
         else:
             M, h_new = self.communication_attention(M, h_new, mask.squeeze(2))
 
