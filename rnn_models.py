@@ -175,12 +175,14 @@ class RIMCell(nn.Module):
             h_new[:, cell_idx, :] = 0.
 
         # Compute communication attention
+        self.communication_attention.do_comm = self.do_comm
         if not self.use_sw:
             context = self.communication_attention(h_new, mask.squeeze(2))
-            if self.do_comm:
-                h_new = h_new + context
-            else:
-                h_new = h_new + 0. * context
+            h_new = h_new + context
+            # if self.do_comm:
+            #     h_new = h_new + context
+            # else:
+            #     h_new = h_new + 0. * context
         else:
             M, h_new = self.communication_attention(M, h_new, mask.squeeze(2))
 

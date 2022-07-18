@@ -510,6 +510,8 @@ class CommAttention(Attention):
         self.output_fc = GroupLinearLayer(
             num_heads * hidden_size, hidden_size, num_blocks)
         self.dropout = nn.Dropout(p=dropout)
+        
+        self.do_comm = True
 
     def forward(self, h, mask):
         key = self.key(h)
@@ -531,6 +533,10 @@ class CommAttention(Attention):
         # inactive modules have zero-value query -> no context for them
         probs = probs * mask.unsqueeze(3)
         probs = self.dropout(probs)
+        if not self.do_comm:
+            probs = torch.zeros_like(probs)
+            for idx in probs.shape[1]:
+                probs[:,:,idx,idx] = 1.
 
         context = torch.matmul(probs, value)
         context = context.permute(0, 2, 1, 3).contiguous()
