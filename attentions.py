@@ -535,7 +535,7 @@ class CommAttention(Attention):
         probs = self.dropout(probs)
         if not self.do_comm:
             probs = torch.zeros_like(probs)
-            for idx in probs.shape[1]:
+            for idx in range(probs.shape[2]):
                 probs[:,:,idx,idx] = 1.
 
         context = torch.matmul(probs, value)
