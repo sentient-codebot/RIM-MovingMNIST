@@ -296,6 +296,9 @@ def setup_model(args):
     start_epoch = 1
     train_batch_idx = 0
     best_mse = 1000.
+    
+    # model options
+    model.rnn_model.do_comm = args.do_comm
 
     # load encoder+slot_attention
     if args.load_trained_slot_attention:

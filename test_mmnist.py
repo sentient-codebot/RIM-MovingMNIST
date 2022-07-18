@@ -501,7 +501,11 @@ def main():
     return None
         
 def setup_model(args) -> torch.nn.Module:
+    # initialize
     model = BallModel(args).to(args.device)
+    
+    # model options
+    model.rnn_model.do_comm = args.do_comm
     
     if args.should_resume:
         if os.path.exists(f"{args.folder_save}/best_model/best.pt"):
