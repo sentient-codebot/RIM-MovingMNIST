@@ -1,6 +1,7 @@
 """Script to parse all the command-line arguments"""
 import argparse
 import json
+from multiprocessing.sharedctypes import Value
 import os
 from xmlrpc.client import Boolean
 
@@ -98,6 +99,15 @@ def mmnist_num_obj(string):
             return [int(foo) for foo in foo]
     return _to_int(list__)
 
+def str2inttuple(string):
+    out = []
+    for s in string:
+        try:
+            out.append(int(s))
+        except ValueError:
+            pass
+    return tuple(out)
+
 def argument_parser():
     """Function to parse all the arguments"""
 
@@ -179,7 +189,7 @@ def argument_parser():
     parser.add_argument("--use_past_slots", type=str2bool, default=False, help='use past slots as initialization.')
     parser.add_argument('--sa_eval_sm_temp', type=float, default=1.0)
     parser.add_argument('--sa_key_norm', type=str2bool, default=True)
-    parser.add_argument('--cell_switch',type=tuple, default=())
+    parser.add_argument('--cell_switch',type=str2inttuple, default=())
     #   RNN common settings
     parser.add_argument('--rnn_cell', type=str, default='GRU',
                         metavar='dynamics of RIMCell/SCOFFCell', help='one of LSTM or GRU')              
